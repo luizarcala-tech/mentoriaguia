@@ -2292,13 +2292,6 @@ async function doSignup(){
     errEl.textContent='Este e-mail já está cadastrado. Faça login.'; errEl.classList.add('show'); return;
   }
 
-  // Save to registrations queue
-  const regs = DB.get('registrations') || [];
-  const exists = regs.find(r => r.email === email);
-  if(exists){
-    errEl.textContent='Já existe uma solicitação para este e-mail.'; errEl.classList.add('show'); return;
-  }
-
   const newReg = {
     id: 'r'+Date.now(),
     name, email,
@@ -2310,21 +2303,36 @@ async function doSignup(){
     status: 'pending'
   };
 
-  // Save to Supabase
+  // Tenta Supabase — se e-mail já existe lá, atualiza; se não, insere
   try {
-    await sbFetch('registrations', 'POST', {
-      id: newReg.id,
-      name: newReg.name,
-      email: newReg.email,
-      password: newReg.password,
-      plan: newReg.plan,
-      goal: newReg.goal,
-      role: newReg.role,
-      status: 'pending'
-    });
+    const existing = await sbFetch('registrations?email=eq.'+encodeURIComponent(email)+'&select=id');
+    if(existing && existing.length > 0){
+      // Atualiza registro existente com novos dados
+      await sbFetch('registrations?email=eq.'+encodeURIComponent(email), 'PATCH', {
+        name: newReg.name,
+        password: newReg.password,
+        plan: newReg.plan,
+        goal: newReg.goal,
+        role: newReg.role,
+        status: 'pending'
+      });
+    } else {
+      await sbFetch('registrations', 'POST', {
+        id: newReg.id,
+        name: newReg.name,
+        email: newReg.email,
+        password: newReg.password,
+        plan: newReg.plan,
+        goal: newReg.goal,
+        role: newReg.role,
+        status: 'pending'
+      });
+    }
   } catch(e) {
-    // Fallback to localStorage
-    regs.push(newReg);
+    // Fallback localStorage — substitui se já existe
+    const regs = DB.get('registrations') || [];
+    const idx = regs.findIndex(r => r.email === email);
+    if(idx >= 0) regs[idx] = newReg; else regs.push(newReg);
     DB.set('registrations', regs);
   }
 

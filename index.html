@@ -566,16 +566,14 @@ DB.init();
 // Garante que o admin luizarcala@outlook.com sempre existe, mesmo com localStorage antigo
 (function ensureAdmin(){
   const users = DB.get('users') || [];
-  const exists = users.find(u => u.email === 'luizarcala@outlook.com');
-  if(!exists){
-    users.unshift({id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='});
-    DB.set('users', users);
-  } else if(!exists.password || exists.password !== 'QXJjYWxhQDIwMjY=') {
-    exists.password = 'QXJjYWxhQDIwMjY=';
-    exists.active = true;
-    exists.role = 'admin';
-    DB.set('users', users);
+  const idx = users.findIndex(u => u.email === 'luizarcala@outlook.com');
+  const admin = {id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='};
+  if(idx === -1){
+    users.unshift(admin);
+  } else {
+    users[idx] = {...users[idx], ...admin};
   }
+  DB.set('users', users);
 })();
 
 // ══════════════════════════════════════════════
@@ -2239,41 +2237,19 @@ function switchAuthTab(tab){
   document.getElementById('signup-pending').style.display = 'none';
 }
 
-async function doLogin(){
+function doLogin(){
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-err');
-  const btn   = document.querySelector('#pane-login .auth-btn');
-
   errEl.classList.remove('show');
+
   if(!email || !pass){
     errEl.textContent='Preencha e-mail e senha.';
     errEl.classList.add('show'); return;
   }
 
-  btn.textContent='Verificando...'; btn.disabled=true;
-
-  // 1. Busca no localStorage (sempre funciona, admin garantido)
-  const localUsers = DB.get('users') || [];
-  let user = localUsers.find(u => u.email === email) || null;
-
-  // 2. Se não achou localmente, tenta Supabase com timeout
-  if(!user){
-    try {
-      const rows = await Promise.race([
-        sbFetch('users?email=eq.'+encodeURIComponent(email)+'&select=*'),
-        new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),5000))
-      ]);
-      if(rows && rows[0]){
-        user = rows[0];
-        // Salva localmente para próximo login ser instantâneo
-        localUsers.push(user);
-        DB.set('users', localUsers);
-      }
-    } catch(e){ user = null; }
-  }
-
-  btn.textContent='Entrar na plataforma'; btn.disabled=false;
+  const users = DB.get('users') || [];
+  const user = users.find(u => u.email === email);
 
   if(!user){
     errEl.textContent='E-mail não encontrado. Solicite acesso na aba "Criar conta".';
@@ -2288,7 +2264,6 @@ async function doLogin(){
     errEl.classList.add('show'); return;
   }
 
-  // Login OK
   DB.set('session', {userId:user.id, role:user.role, name:user.name, email:user.email});
   bootApp(user);
 }
@@ -2377,27 +2352,12 @@ function bootApp(user){
   switchRole(role);
 }
 
-async function checkSession(){
+function checkSession(){
   const session = DB.get('session');
   if(session){
-    // First check localStorage
     const users = DB.get('users') || [];
-    let user = users.find(u => u.id === session.userId);
-    // If not found locally, try Supabase
-    if(!user){
-      try {
-        const rows = await Promise.race([
-          sbFetch('users?id=eq.'+session.userId+'&select=*'),
-          new Promise((_,r)=>setTimeout(()=>r(new Error('t')),3000))
-        ]);
-        if(rows && rows[0]){
-          user = rows[0];
-          users.push(user);
-          DB.set('users', users);
-        }
-      } catch(e){}
-    }
-    if(user && (user.active === true || user.active === 1)){
+    const user = users.find(u => u.id === session.userId);
+    if(user && user.active){
       bootApp(user);
       return;
     }

@@ -1,0 +1,2359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Sacramento&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arcala Insight — Plataforma de Mentoria</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--bg1:#0f0f0f;--bg2:#141414;--bg3:#1a1a1a;
+  --border:#1f1f1f;--border2:#2a2a2a;
+  --gold:#f0c040;--gold-bg:#1a1500;--gold-border:#3a2a00;
+  --text:#f0f0f0;--text2:#aaa;--text3:#666;--text4:#444;
+  --green:#4ecb71;--green-bg:#0a1f0a;--green-border:#1a3a1a;
+  --red:#e24b4a;--red-bg:#1f0a0a;--red-border:#3a1a1a;
+  --blue:#5b9cf0;--blue-bg:#0a0f1f;--blue-border:#1a1a3a;
+  --amber:#f0a040;--amber-bg:#1a1000;--amber-border:#3a2500;
+  --radius:10px;--radius-sm:7px;
+}
+body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* ─── TOPBAR ─── */
+.topbar{
+  position:fixed;top:0;left:0;right:0;z-index:200;
+  background:rgba(10,10,10,0.95);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);
+  height:54px;display:flex;align-items:center;padding:0 20px;gap:16px;
+}
+.logo{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.08em;white-space:nowrap}
+.logo-gold{color:var(--gold)}
+.logo-sep{color:var(--text4);margin:0 8px}
+.topbar-spacer{flex:1}
+.role-switcher{display:flex;gap:3px;background:var(--bg3);padding:3px;border-radius:20px}
+.role-btn{padding:5px 14px;border-radius:17px;border:none;font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--text3);background:none;letter-spacing:.03em}
+.role-btn.active{background:var(--gold);color:#0a0a0a}
+.user-info{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3)}
+.avatar-xs{width:26px;height:26px;border-radius:50%;background:var(--gold);color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;font-family:'Space Mono',monospace;flex-shrink:0}
+
+/* ─── LAYOUT ─── */
+.layout{display:flex;padding-top:54px;min-height:100vh}
+
+/* ─── SIDEBAR ─── */
+.sidebar{
+  width:210px;flex-shrink:0;
+  background:var(--bg1);border-right:1px solid var(--border);
+  position:fixed;top:54px;bottom:0;overflow-y:auto;
+  display:flex;flex-direction:column;padding:12px 8px;gap:2px;
+}
+.sidebar-section{font-size:9px;letter-spacing:.12em;color:var(--text4);padding:12px 10px 5px;font-weight:700;text-transform:uppercase}
+.nav-item{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 10px;border-radius:var(--radius-sm);
+  font-size:12px;color:var(--text3);cursor:pointer;
+  transition:all .15s;border:none;background:none;width:100%;text-align:left;
+  font-family:'Sora',sans-serif;
+}
+.nav-item:hover{color:var(--text);background:var(--bg3)}
+.nav-item.active{color:var(--gold);background:var(--gold-bg)}
+.nav-icon{font-size:13px;width:16px;text-align:center;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--bg3);color:var(--gold);font-size:8px;font-weight:700;padding:2px 5px;border-radius:8px;font-family:'Space Mono',monospace}
+.nav-item.active .nav-badge{background:rgba(240,192,64,.2)}
+
+/* ─── CONTENT ─── */
+.content{margin-left:210px;flex:1;padding:28px 32px;max-width:1200px}
+
+/* ─── PAGES ─── */
+.page{display:none}
+.page.active{display:block}
+.page-header{margin-bottom:24px}
+.page-title{font-size:20px;font-weight:700;color:var(--text);margin-bottom:3px}
+.page-sub{font-size:12px;color:var(--text3)}
+
+/* ─── CARDS / PANELS ─── */
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px}
+.panel-title{font-size:12px;font-weight:600;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.panel-title-dot{width:5px;height:5px;border-radius:50%;background:var(--gold);flex-shrink:0}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.kpi-label{font-size:10px;color:var(--text3);letter-spacing:.07em;margin-bottom:7px;text-transform:uppercase}
+.kpi-value{font-size:24px;font-weight:700;color:var(--text);font-family:'Space Mono',monospace}
+.kpi-sub{font-size:10px;color:var(--gold);margin-top:3px}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+
+.section-label{font-size:10px;letter-spacing:.1em;color:var(--text3);margin-bottom:12px;font-weight:700;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ─── BUTTONS ─── */
+.btn{padding:8px 18px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:'Sora',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-gold{background:var(--gold);color:#0a0a0a}
+.btn-gold:hover{background:#f0d060}
+.btn-gold:disabled{opacity:.5;cursor:not-allowed}
+.btn-outline{background:none;border:1px solid var(--border2);color:var(--text2)}
+.btn-outline:hover{border-color:#555;color:var(--text)}
+.btn-red{background:var(--red-bg);border:1px solid var(--red-border);color:var(--red)}
+.btn-green{background:var(--green-bg);border:1px solid var(--green-border);color:var(--green)}
+.btn-sm{padding:5px 12px;font-size:11px}
+.btn-xs{padding:3px 9px;font-size:10px}
+
+/* ─── FORMS ─── */
+.form-row{display:grid;gap:12px;margin-bottom:14px}
+.form-row.cols-2{grid-template-columns:1fr 1fr}
+.form-row.cols-3{grid-template-columns:1fr 1fr 1fr}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field-label{font-size:10px;color:var(--text3);letter-spacing:.07em;font-weight:600;text-transform:uppercase}
+.field input,.field select,.field textarea{
+  background:var(--bg3);border:1px solid var(--border);color:var(--text);
+  font-family:'Sora',sans-serif;font-size:12px;padding:9px 12px;
+  border-radius:var(--radius-sm);transition:border-color .15s;outline:none;width:100%;
+}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--gold)}
+.field select option{background:var(--bg2)}
+.field textarea{resize:vertical;min-height:72px;line-height:1.5}
+input.inline-inp{
+  background:var(--bg3);border:1px solid var(--border);color:var(--text);
+  font-family:'Sora',sans-serif;font-size:12px;padding:8px 11px;
+  border-radius:var(--radius-sm);outline:none;
+}
+input.inline-inp:focus{border-color:var(--gold)}
+
+/* ─── STATUS PILLS ─── */
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:3px 9px;border-radius:20px;letter-spacing:.05em;font-family:'Space Mono',monospace;white-space:nowrap}
+.pill-active{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.pill-pending{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border)}
+.pill-locked{background:var(--bg3);color:var(--text4);border:1px solid var(--border)}
+.pill-mentor{background:#0a0f1f;color:#5b9cf0;border:1px solid #1a1a3a}
+.pill-mentorado{background:#1a0a1f;color:#c090f0;border:1px solid #2a1a3a}
+.pill-admin{background:#1f0a0a;color:var(--red);border:1px solid var(--red-border)}
+
+/* ─── TABLES ─── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{padding:9px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--border)}
+td{padding:11px 14px;border-bottom:1px solid var(--border);color:var(--text2);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+
+/* ─── TOGGLE ─── */
+.toggle{width:38px;height:20px;border-radius:10px;background:var(--bg3);border:1px solid var(--border2);position:relative;cursor:pointer;transition:all .2s;flex-shrink:0}
+.toggle::after{content:'';width:14px;height:14px;border-radius:50%;background:#555;position:absolute;top:2px;left:2px;transition:all .2s}
+.toggle.on{background:var(--green-bg);border-color:var(--green-border)}
+.toggle.on::after{left:20px;background:var(--green)}
+
+/* ─── AI PANEL ─── */
+.ai-panel{background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:var(--radius);padding:18px 20px}
+.ai-header{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.ai-badge{background:var(--gold);color:#0a0a0a;font-size:9px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.1em;font-family:'Space Mono',monospace}
+.ai-rec{background:rgba(0,0,0,.3);border-left:3px solid var(--gold);border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:12px 16px;margin-bottom:10px;font-size:12px;color:var(--text2);line-height:1.7}
+.ai-rec:last-child{margin-bottom:0}
+.ai-tag{display:inline-block;background:rgba(240,192,64,.15);color:var(--gold);font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:6px;letter-spacing:.05em}
+.ai-loading{color:var(--gold);font-size:12px;font-family:'Space Mono',monospace;display:flex;align-items:center;gap:8px}
+.spinner{width:14px;height:14px;border:2px solid var(--gold-border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── COMPETÊNCIAS ─── */
+.comp-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)}
+.comp-row:last-child{border-bottom:none}
+.comp-name{font-size:11px;color:var(--text2);width:150px;flex-shrink:0;line-height:1.3}
+.comp-scales{flex:1;display:flex;flex-direction:column;gap:3px}
+.dot-row{display:flex;gap:4px}
+.dot{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--text4);cursor:pointer;transition:all .12s;background:var(--bg1)}
+.dot:hover{border-color:var(--gold)}
+.dot.me-fill{background:var(--gold);border-color:var(--gold);color:#0a0a0a;font-weight:700}
+.dot.mentor-fill{background:#3266ad;border-color:#3266ad;color:#fff;font-weight:700}
+.comp-diff{font-size:10px;font-family:'Space Mono',monospace;width:32px;text-align:right;flex-shrink:0}
+.diff-p{color:var(--green)}
+.diff-n{color:var(--red)}
+.diff-z{color:var(--text4)}
+
+/* ─── SWOT ─── */
+.swot-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.swot-q{border-radius:var(--radius);padding:14px 16px;min-height:170px}
+.sq-f{background:var(--green-bg);border:1px solid var(--green-border)}
+.sq-fr{background:var(--red-bg);border:1px solid var(--red-border)}
+.sq-o{background:var(--blue-bg);border:1px solid var(--blue-border)}
+.sq-a{background:var(--amber-bg);border:1px solid var(--amber-border)}
+.swot-label{font-size:9px;font-weight:700;letter-spacing:.12em;margin-bottom:10px;text-transform:uppercase}
+.sl-f{color:var(--green)}.sl-fr{color:var(--red)}.sl-o{color:var(--blue)}.sl-a{color:var(--amber)}
+.swot-sel{width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:var(--text);font-family:'Sora',sans-serif;font-size:11px;padding:6px 9px;border-radius:6px;margin-bottom:8px;cursor:pointer}
+.swot-tags{display:flex;flex-wrap:wrap;gap:4px}
+.stag{display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 9px;border-radius:20px;cursor:default}
+.stag-f{background:rgba(78,203,113,.15);color:var(--green)}
+.stag-fr{background:rgba(226,75,74,.15);color:var(--red)}
+.stag-o{background:rgba(91,156,240,.15);color:var(--blue)}
+.stag-a{background:rgba(240,160,64,.15);color:var(--amber)}
+.stag-x{cursor:pointer;opacity:.6;font-size:12px}
+.stag-x:hover{opacity:1}
+
+/* ─── DISC ─── */
+.disc-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.disc-card{border-radius:var(--radius);padding:16px;cursor:pointer;transition:all .2s;border:2px solid transparent}
+.disc-D{background:var(--red-bg)}
+.disc-I{background:var(--amber-bg)}
+.disc-S{background:var(--green-bg)}
+.disc-C{background:var(--blue-bg)}
+.disc-D:hover,.disc-D.sel{border-color:var(--red)}
+.disc-I:hover,.disc-I.sel{border-color:var(--amber)}
+.disc-S:hover,.disc-S.sel{border-color:var(--green)}
+.disc-C:hover,.disc-C.sel{border-color:var(--blue)}
+.disc-letter{font-size:22px;font-weight:700;font-family:'Space Mono',monospace;margin-bottom:3px}
+.disc-D .disc-letter{color:var(--red)}.disc-I .disc-letter{color:var(--amber)}
+.disc-S .disc-letter{color:var(--green)}.disc-C .disc-letter{color:var(--blue)}
+.disc-dname{font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px}
+.disc-desc{font-size:10px;color:var(--text3);line-height:1.4}
+
+/* ─── PEER 360 ─── */
+.peer-q-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:10px}
+.peer-q-text{font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.5}
+.scale-row{display:flex;gap:5px;align-items:center}
+.scale-num{width:26px;height:26px;border-radius:5px;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text4);cursor:pointer;transition:all .12s;font-family:'Space Mono',monospace}
+.scale-num:hover{border-color:var(--gold);color:var(--gold)}
+.scale-num.s-sel{background:var(--gold);border-color:var(--gold);color:#0a0a0a;font-weight:700}
+.scale-label{font-size:9px;color:var(--text4);margin-left:4px}
+
+/* ─── KANBAN ─── */
+.kanban{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.kanban-col{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+.kanban-title{font-size:10px;font-weight:700;letter-spacing:.1em;margin-bottom:10px;text-transform:uppercase}
+.k-todo .kanban-title{color:var(--text3)}
+.k-doing .kanban-title{color:var(--gold)}
+.k-done .kanban-title{color:var(--green)}
+.k-item{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 11px;font-size:11px;color:var(--text2);margin-bottom:7px;line-height:1.4}
+.k-doing .k-item{background:var(--gold-bg);border-color:var(--gold-border);color:var(--gold)}
+.k-done .k-item{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+
+/* ─── WEEK PLAN ─── */
+.week-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px}
+.week-row:last-child{border-bottom:none}
+.wk-num{color:var(--text4);width:30px;font-family:'Space Mono',monospace;font-size:10px;flex-shrink:0}
+.wk-phase{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;font-family:'Space Mono',monospace;flex-shrink:0}
+.ph-G{background:var(--gold-bg);color:var(--gold)}
+.ph-U{background:var(--blue-bg);color:var(--blue)}
+.ph-I{background:var(--green-bg);color:var(--green)}
+.ph-A{background:var(--amber-bg);color:var(--amber)}
+.wk-desc{flex:1;color:var(--text2)}
+.wk-cur{color:var(--gold);background:var(--gold-bg);border-radius:20px;padding:2px 7px;font-size:9px;font-weight:700;font-family:'Space Mono',monospace;flex-shrink:0}
+.wk-done-check{color:var(--green);font-size:13px;flex-shrink:0}
+.wk-pend{color:var(--text4);flex-shrink:0;font-size:11px}
+
+/* ─── ADMIN SPECIFIC ─── */
+.admin-bar{background:var(--red-bg);border-bottom:2px solid var(--red-border);padding:6px 20px 6px 230px;font-size:10px;color:var(--red);font-weight:700;letter-spacing:.08em;position:fixed;top:54px;left:0;right:0;z-index:150;display:none}
+.admin-bar.show{display:block}
+.admin-bar+.layout{padding-top:26px}
+
+/* ─── NPS ─── */
+.nps-row{display:flex;gap:5px;margin:10px 0}
+.nps-num{width:32px;height:32px;border-radius:6px;border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;font-family:'Space Mono',monospace;cursor:pointer;transition:all .12s;color:var(--text3)}
+.nps-num:hover{border-color:var(--gold);color:var(--gold)}
+.nps-num.nps-sel{font-weight:700}
+.nps-0,.nps-1,.nps-2,.nps-3,.nps-4,.nps-5,.nps-6{border-color:var(--red-border)}
+.nps-sel.nps-0,.nps-sel.nps-1,.nps-sel.nps-2,.nps-sel.nps-3,.nps-sel.nps-4,.nps-sel.nps-5,.nps-sel.nps-6{background:var(--red-bg);color:var(--red)}
+.nps-7,.nps-8{border-color:var(--gold-border)}
+.nps-sel.nps-7,.nps-sel.nps-8{background:var(--gold-bg);color:var(--gold)}
+.nps-9,.nps-10{border-color:var(--green-border)}
+.nps-sel.nps-9,.nps-sel.nps-10{background:var(--green-bg);color:var(--green)}
+
+/* ─── VISAO FUTURO ─── */
+.vf-step{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:14px}
+.vf-step-num{font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.1em;margin-bottom:6px;font-family:'Space Mono',monospace}
+.vf-step-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px}
+
+/* ─── 360 PUBLIC ─── */
+.pub360-header{text-align:center;padding:40px 20px 24px;border-bottom:1px solid var(--border);margin-bottom:28px}
+.pub360-logo{font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--gold);margin-bottom:4px}
+.pub360-name{font-size:18px;font-weight:700;color:var(--text);margin-bottom:4px}
+.pub360-sub{font-size:12px;color:var(--text3)}
+
+/* ─── TOAST ─── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius-sm);padding:12px 18px;font-size:12px;color:var(--text);z-index:999;animation:fadeIn .2s ease;max-width:320px}
+.toast.err{border-left-color:var(--red)}
+.toast.suc{border-left-color:var(--green)}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ─── CHART CANVAS ─── */
+.chart-wrap{position:relative;width:100%}
+
+/* ─── MISC ─── */
+.avatar-md{width:38px;height:38px;border-radius:50%;background:var(--gold-bg);border:1.5px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;font-family:'Space Mono',monospace}
+.phase-dots{display:flex;gap:3px}
+.ph-dot{width:7px;height:7px;border-radius:50%;background:var(--bg3);border:1px solid var(--border2)}
+.ph-dot.done{background:var(--gold);border-color:var(--gold)}
+.ph-dot.cur{background:var(--gold);border-color:var(--gold);box-shadow:0 0 5px rgba(240,192,64,.5)}
+.divider{height:1px;background:var(--border);margin:18px 0}
+.tag-new{background:var(--gold-bg);color:var(--gold);border:1px solid var(--gold-border);font-size:9px;padding:2px 7px;border-radius:20px;font-weight:700;font-family:'Space Mono',monospace}
+
+/* ─── scrollbar ─── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ─── AUTH SCREEN ─── */
+.auth-screen{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;align-items:center;justify-content:center;}
+.auth-card{width:420px;background:var(--bg1);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+.auth-tabs{display:flex;border-bottom:1px solid var(--border);}
+.auth-tab{flex:1;padding:14px;text-align:center;font-size:13px;font-weight:600;cursor:pointer;color:var(--text3);border:none;background:none;font-family:'Sora',sans-serif;transition:all .15s;}
+.auth-tab.active{color:var(--gold);border-bottom:2px solid var(--gold);}
+.auth-body{padding:28px;}
+.auth-logo{text-align:center;margin-bottom:24px;}
+.auth-logo-text{font-family:'Sacramento',cursive;font-size:32px;color:rgba(215,215,215,.9);line-height:1.2;display:block;}
+.auth-logo-sub{font-size:11px;color:var(--text4);letter-spacing:.08em;margin-top:4px;}
+.auth-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;}
+.auth-sub{font-size:12px;color:var(--text3);margin-bottom:20px;line-height:1.5;}
+.auth-field{margin-bottom:14px;}
+.auth-label{font-size:10px;color:var(--text3);letter-spacing:.07em;font-weight:600;text-transform:uppercase;display:block;margin-bottom:5px;}
+.auth-input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:'Sora',sans-serif;font-size:13px;padding:10px 14px;border-radius:8px;outline:none;transition:border-color .15s;}
+.auth-input:focus{border-color:var(--gold);}
+.auth-select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:'Sora',sans-serif;font-size:13px;padding:10px 14px;border-radius:8px;outline:none;}
+.auth-select option{background:var(--bg2);}
+.auth-btn{width:100%;padding:11px;background:var(--gold);color:#0a0a0a;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s;margin-top:4px;}
+.auth-btn:hover{background:#f0d060;}
+.auth-btn:disabled{opacity:.5;cursor:not-allowed;}
+.auth-err{font-size:12px;color:var(--red);background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:none;}
+.auth-err.show{display:block;}
+.auth-ok{font-size:12px;color:var(--green);background:var(--green-bg);border:1px solid var(--green-border);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:none;}
+.auth-ok.show{display:block;}
+.auth-divider{height:1px;background:var(--border);margin:16px 0;}
+.auth-link{font-size:12px;color:var(--text3);text-align:center;}
+.auth-link span{color:var(--gold);cursor:pointer;font-weight:600;}
+.auth-pending{text-align:center;padding:20px 0;}
+.auth-pending-icon{font-size:32px;margin-bottom:12px;}
+.auth-pending-title{font-size:15px;font-weight:600;color:var(--text);margin-bottom:8px;}
+.auth-pending-desc{font-size:12px;color:var(--text3);line-height:1.6;}
+
+/* ─── CONFIRM MODAL ─── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;display:none;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);padding:24px 28px;width:360px;max-width:90vw;}
+.modal-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;}
+.modal-msg{font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:20px;}
+.modal-btns{display:flex;gap:10px;justify-content:flex-end;}
+</style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div class="auth-screen" id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Entrar</button>
+      <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Criar conta</button>
+    </div>
+    <div class="auth-body">
+      <div class="auth-logo">
+        <span class="auth-logo-text">AI<br>Arcala<br>Insight</span>
+        <div class="auth-logo-sub">Plataforma de Mentoria</div>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="pane-login">
+        <div class="auth-title">Acesse sua conta</div>
+        <div class="auth-sub">Entre com seu e-mail e senha cadastrados.</div>
+        <div style="background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:11px;color:var(--text2);line-height:1.8">
+          <strong style="color:var(--gold)">Conta admin:</strong><br>
+          luizarcala@outlook.com<br>
+          <strong style="color:var(--gold)">Contas demo:</strong><br>
+          Mentor: ana.mentor@arcala.com / mentor123<br>
+          Mentorado: lucas.mendes@petro.com / mentee123
+        </div>
+        <div class="auth-err" id="login-err"></div>
+        <div class="auth-field">
+          <label class="auth-label">E-mail</label>
+          <input class="auth-input" type="email" id="login-email" placeholder="seu@email.com">
+        </div>
+        <div class="auth-field">
+          <label class="auth-label">Senha</label>
+          <input class="auth-input" type="password" id="login-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="auth-btn" onclick="doLogin()">Entrar na plataforma</button>
+      </div>
+
+      <!-- SIGNUP -->
+      <div id="pane-signup" style="display:none">
+        <div id="signup-form">
+          <div class="auth-title">Solicitar acesso</div>
+          <div class="auth-sub">Preencha seus dados. Seu acesso será liberado pelo administrador após a análise.</div>
+          <div class="auth-err" id="signup-err"></div>
+          <div class="auth-field">
+            <label class="auth-label">Nome completo</label>
+            <input class="auth-input" type="text" id="signup-name" placeholder="Seu nome completo">
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">E-mail</label>
+            <input class="auth-input" type="email" id="signup-email" placeholder="seu@email.com">
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">Senha</label>
+            <input class="auth-input" type="password" id="signup-pass" placeholder="Mínimo 6 caracteres">
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">Plano de interesse</label>
+            <select class="auth-select" id="signup-plan">
+              <option value="">Selecione...</option>
+              <option>Ciclo único — 12 semanas</option>
+              <option>Renovável trimestral</option>
+              <option>Trial — 2 semanas</option>
+              <option>Acesso institucional</option>
+            </select>
+          </div>
+          <div class="auth-field">
+            <label class="auth-label">Objetivo principal</label>
+            <select class="auth-select" id="signup-goal">
+              <option value="">Selecione...</option>
+              <option>Desenvolvimento de liderança executiva</option>
+              <option>Transição de carreira</option>
+              <option>Ascensão ao C-level</option>
+              <option>Marca pessoal e posicionamento</option>
+              <option>Gestão de equipes e times</option>
+              <option>Ser mentor na plataforma</option>
+            </select>
+          </div>
+          <button class="auth-btn" onclick="doSignup()">Solicitar acesso</button>
+        </div>
+
+        <!-- PENDING STATE -->
+        <div id="signup-pending" style="display:none">
+          <div class="auth-pending">
+            <div class="auth-pending-icon">✦</div>
+            <div class="auth-pending-title">Solicitação enviada!</div>
+            <div class="auth-pending-desc">
+              Sua solicitação foi registrada e será analisada pelo administrador.<br><br>
+              Você receberá acesso assim que for aprovado. Em caso de dúvidas, entre em contato pelo e-mail da plataforma.
+            </div>
+            <div class="auth-divider"></div>
+            <button class="auth-btn" style="margin-top:8px" onclick="switchAuthTab('login')">Voltar ao login</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">Confirmar ação</div>
+    <div class="modal-msg" id="modal-msg">Tem certeza?</div>
+    <div class="modal-btns">
+      <button class="btn btn-outline btn-sm" onclick="modalCancel()">Cancelar</button>
+      <button class="btn btn-red btn-sm" id="modal-confirm-btn" onclick="modalConfirm()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADMIN BAR -->
+<div class="admin-bar" id="admin-bar">⬡ MODO ADMINISTRADOR — Gestão de usuários e acessos</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">
+    <span style="font-family:'Sacramento',cursive;font-size:15px;color:rgba(215,215,215,0.88);line-height:1.2;display:inline-flex;flex-direction:column;letter-spacing:0.02em">
+      <span style="font-size:12px;padding-left:6px">AI</span>
+      <span style="font-size:16px">Arcala</span>
+      <span style="font-size:13px;padding-left:3px">Insight</span>
+    </span>
+    <span class="logo-sep">|</span>
+    <span style="color:var(--text3);font-weight:400;font-size:10px">Plataforma de Mentoria</span>
+  </div>
+  <div class="topbar-spacer"></div>
+  <div class="role-switcher" id="role-switcher">
+    <button class="role-btn" onclick="switchRole('admin')" id="rb-admin">Admin</button>
+    <button class="role-btn active" onclick="switchRole('mentor')" id="rb-mentor">Mentor</button>
+    <button class="role-btn" onclick="switchRole('mentorado')" id="rb-mentorado">Mentorado</button>
+  </div>
+  <div class="user-info">
+    <div class="avatar-xs" id="top-av">AI</div>
+    <span id="top-name">Arcala Insight</span>
+    <button class="nav-pill" onclick="logout()" style="font-size:11px;padding:4px 10px;border-radius:20px;background:none;border:1px solid var(--border2);color:var(--text4);cursor:pointer;font-family:'Sora',sans-serif;margin-left:8px;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text4)'">Sair</button>
+  </div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="content" id="content-area"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// DATABASE (localStorage-backed)
+// ══════════════════════════════════════════════
+const DB = {
+  get(k){ try{ return JSON.parse(localStorage.getItem('arcala_'+k)||'null') }catch(e){return null} },
+  set(k,v){ localStorage.setItem('arcala_'+k, JSON.stringify(v)) },
+  init(){
+    if(!this.get('users')) this.set('users', [
+      {id:'u1',name:'Luiz Arcala',email:'luiz@arcala.com',role:'admin',active:true,created:'2026-01-15',plan:'Admin',password:'YWRtaW4xMjM='},
+      {id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='},
+      {id:'u2',name:'Lucas Mendes',email:'lucas.mendes@petro.com',role:'mentorado',mentor:'u3',active:true,created:'2026-02-01',plan:'Ciclo único — 12 semanas',phase:'I',week:6,password:'bWVudGVlMTIz'},
+      {id:'u3',name:'Ana Paula Mentor',email:'ana.mentor@arcala.com',role:'mentor',active:true,created:'2026-01-20',plan:'Mentor',mentorados:['u2','u4','u5'],password:'bWVudG9yMTIz'},
+      {id:'u4',name:'Ana Carvalho',email:'ana.carvalho@vale.com',role:'mentorado',mentor:'u3',active:true,created:'2026-02-10',plan:'Renovável trimestral',phase:'U',week:3},
+      {id:'u5',name:'Roberto Lima',email:'roberto.lima@ambev.com',role:'mentorado',mentor:'u3',active:true,created:'2026-01-28',plan:'Ciclo único — 12 semanas',phase:'A',week:11},
+      {id:'u6',name:'Marina Ferreira',email:'marina@ml.com',role:'mentorado',mentor:null,active:false,created:'2026-04-20',plan:'Trial — 2 semanas',phase:'G',week:0},
+      {id:'u7',name:'Thiago Neto',email:'thiago.neto@bndes.gov.br',role:'mentorado',mentor:null,active:false,created:'2026-04-25',plan:'Aguardando',phase:'G',week:0},
+    ]);
+    if(!this.get('registrations')) this.set('registrations',[
+      {id:'r1',name:'Pedro Alvarez',email:'pedro@startup.com',plan:'Ciclo único',goal:'Liderança executiva',date:'2026-04-27',status:'pending',role:'mentorado'},
+      {id:'r2',name:'Camila Braga',email:'camila.braga@natura.com',plan:'Renovável trimestral',goal:'Marca pessoal e LinkedIn',date:'2026-04-28',status:'pending',role:'mentorado'},
+      {id:'r3',name:'João Paulo Coach',email:'jp.coach@gmail.com',plan:'Mentor',goal:'Ser mentor na plataforma',date:'2026-04-29',status:'pending',role:'mentor'},
+    ]);
+    if(!this.get('competencias')) this.set('competencias',[
+      {name:'Liderança estratégica',me:3,mentor:4},
+      {name:'Comunicação executiva',me:4,mentor:4},
+      {name:'Gestão de stakeholders',me:2,mentor:3},
+      {name:'Visão de negócio',me:4,mentor:5},
+      {name:'Tomada de decisão',me:3,mentor:3},
+      {name:'Influência sem autoridade',me:2,mentor:2},
+      {name:'Presença executiva',me:3,mentor:4},
+    ]);
+    if(!this.get('swot')) this.set('swot',{f:[],fr:[],o:[],a:[]});
+    if(!this.get('disc')) this.set('disc',null);
+    if(!this.get('nps_history')) this.set('nps_history',[
+      {cycle:'Q4 2025',score:8.7,responses:12},
+      {cycle:'Q1 2026',score:9.1,responses:18},
+      {cycle:'Q2 2026',score:9.4,responses:7},
+    ]);
+    if(!this.get('vf')) this.set('vf',{profissional:'',vida:'',contribuicao:'',legado:'',acoes:''});
+    if(!this.get('peer360')) this.set('peer360',[
+      {avaliador:'Gestor Direto',relacao:'Líder',respostas:[4,4,3,4,4],obs:'Excelente entrega, poderia ser mais proativo em comunicar riscos',done:true},
+      {avaliador:'Colega de Área',relacao:'Par',respostas:[5,4,4,3,4],obs:'Muito colaborativo e técnico. Recomendo para posições sênior',done:true},
+      {avaliador:'Subordinado',relacao:'Subordinado',respostas:[3,4,5,3,3],obs:'Bom mentor interno, mas poderia dar mais autonomia',done:true},
+    ]);
+    if(!this.get('grow_sessions')) this.set('grow_sessions',[]);
+    if(!this.get('microplano')) this.set('microplano',{
+      objetivo:'Consolidar posicionamento estratégico e construir narrativa executiva para o comitê',
+      okrs:[
+        {desc:'Liderar um projeto de alta visibilidade transversal',kr:'Apresentação para board até semana 9',done:false},
+        {desc:'Desenvolver marca pessoal como referência estratégica',kr:'5 posts LinkedIn com >500 impressões',done:true},
+      ],
+      kanban:{
+        todo:['Visão de Futuro com mentor','SWOT revisado conjunto','Mapeamento de stakeholders C-level'],
+        doing:['OKR trimestral formalizado','LinkedIn reposicionamento','Memo estratégico para liderança'],
+        done:['Kick-off realizado','Termo de mentoria assinado','Autodiagnóstico 360° inicial'],
+      }
+    });
+  }
+};
+DB.init();
+
+// Garante que o admin luizarcala@outlook.com sempre existe, mesmo com localStorage antigo
+(function ensureAdmin(){
+  const users = DB.get('users') || [];
+  const exists = users.find(u => u.email === 'luizarcala@outlook.com');
+  if(!exists){
+    users.unshift({id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='});
+    DB.set('users', users);
+  } else if(!exists.password || exists.password !== 'QXJjYWxhQDIwMjY=') {
+    exists.password = 'QXJjYWxhQDIwMjY=';
+    exists.active = true;
+    exists.role = 'admin';
+    DB.set('users', users);
+  }
+})();
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let currentRole = 'mentor';
+let currentPage = '';
+let charts = {};
+let swotData = DB.get('swot');
+let discSel = DB.get('disc');
+
+// ══════════════════════════════════════════════
+// ROLE SWITCHING
+// ══════════════════════════════════════════════
+function switchRole(role){
+  currentRole = role;
+  document.querySelectorAll('.role-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('rb-'+role).classList.add('active');
+  const bar = document.getElementById('admin-bar');
+  bar.classList.toggle('show', role==='admin');
+
+  const avMap = {admin:'AD',mentor:'AP',mentorado:'LM'};
+  const nameMap = {admin:'Admin Arcala',mentor:'Ana Paula — Mentor',mentorado:'Lucas Mendes'};
+  document.getElementById('top-av').textContent = avMap[role];
+  document.getElementById('top-name').textContent = nameMap[role];
+
+  renderSidebar();
+  const defaults = {admin:'admin-users',mentor:'dash',mentorado:'minha-jornada'};
+  showPage(defaults[role]);
+}
+
+// ══════════════════════════════════════════════
+// SIDEBAR
+// ══════════════════════════════════════════════
+const MENUS = {
+  admin:[
+    {section:'Administração'},
+    {id:'admin-users',icon:'◉',label:'Usuários & Acessos'},
+    {id:'admin-regs',icon:'◈',label:'Cadastros Pendentes',badge:'3'},
+    {id:'admin-nps',icon:'◎',label:'NPS & Métricas'},
+    {section:'Sistema'},
+    {id:'admin-config',icon:'◫',label:'Configurações'},
+  ],
+  mentor:[
+    {section:'Visão Geral'},
+    {id:'dash',icon:'◈',label:'Dashboard'},
+    {section:'Metodologia GUIA'},
+    {id:'comp',icon:'◎',label:'Radar Competências',badge:'G·U'},
+    {id:'swot',icon:'◫',label:'SWOT Pessoal',badge:'U'},
+    {id:'disc',icon:'◌',label:'Assessment DISC',badge:'U'},
+    {id:'peer360',icon:'◷',label:'Feedback 360°',badge:'I'},
+    {id:'microplano',icon:'◱',label:'Microplanos',badge:'I'},
+    {id:'vf',icon:'◈',label:'Visão de Futuro',badge:'U'},
+    {section:'Inteligência'},
+    {id:'ia-main',icon:'✦',label:'Análise Integrada IA'},
+    {id:'nps-dash',icon:'◊',label:'NPS & Progresso'},
+  ],
+  mentorado:[
+    {section:'Minha Jornada'},
+    {id:'minha-jornada',icon:'◈',label:'Início'},
+    {section:'Instrumentos'},
+    {id:'comp',icon:'◎',label:'Competências',badge:'G·U'},
+    {id:'swot',icon:'◫',label:'SWOT Pessoal',badge:'U'},
+    {id:'disc',icon:'◌',label:'Meu Perfil DISC',badge:'U'},
+    {id:'vf',icon:'◈',label:'Visão de Futuro',badge:'U'},
+    {id:'microplano',icon:'◱',label:'Meu Microplano',badge:'I'},
+    {section:'Avaliações'},
+    {id:'peer360',icon:'◷',label:'Feedback 360°',badge:'I'},
+    {section:'IA'},
+    {id:'ia-main',icon:'✦',label:'Recomendações IA'},
+  ]
+};
+
+function renderSidebar(){
+  const sb = document.getElementById('sidebar');
+  const menu = MENUS[currentRole];
+  sb.innerHTML = menu.map(item=>{
+    if(item.section) return `<div class="sidebar-section">${item.section}</div>`;
+    return `<button class="nav-item" id="nav-${item.id}" onclick="showPage('${item.id}')">
+      <span class="nav-icon">${item.icon}</span>
+      ${item.label}
+      ${item.badge?`<span class="nav-badge">${item.badge}</span>`:''}
+    </button>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+// PAGE ROUTER
+// ══════════════════════════════════════════════
+function showPage(id){
+  currentPage = id;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const nav = document.getElementById('nav-'+id);
+  if(nav) nav.classList.add('active');
+
+  const pages = {
+    'dash': renderDash,
+    'admin-users': renderAdminUsers,
+    'admin-regs': renderAdminRegs,
+    'admin-nps': renderAdminNPS,
+    'admin-config': renderAdminConfig,
+    'comp': renderComp,
+    'swot': renderSWOT,
+    'disc': renderDISC,
+    'peer360': renderPeer360,
+    'microplano': renderMicroplano,
+    'vf': renderVF,
+    'ia-main': renderIAMain,
+    'nps-dash': renderNPSDash,
+    'minha-jornada': renderMinhaJornada,
+  };
+
+  destroyCharts();
+  const fn = pages[id];
+  if(fn) fn();
+  else document.getElementById('content-area').innerHTML = `<div class="page-header"><div class="page-title">${id}</div><div class="page-sub">Em construção</div></div>`;
+}
+
+function destroyCharts(){
+  Object.values(charts).forEach(c=>{ try{ c.destroy() }catch(e){} });
+  charts = {};
+}
+
+// ══════════════════════════════════════════════
+// DASHBOARD MENTOR
+// ══════════════════════════════════════════════
+function renderDash(){
+  const users = DB.get('users');
+  const mentorados = users.filter(u=>u.role==='mentorado'&&u.active);
+  const nps = DB.get('nps_history');
+  const lastNPS = nps[nps.length-1];
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Dashboard do Mentor</div>
+    <div class="page-sub">Visão geral dos mentorados ativos — Ciclo Q2 2026</div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Mentorados Ativos</div><div class="kpi-value">${mentorados.length}</div><div class="kpi-sub">▲ 2 este ciclo</div></div>
+    <div class="kpi"><div class="kpi-label">Sessões Realizadas</div><div class="kpi-value">34</div><div class="kpi-sub">Q2 2026</div></div>
+    <div class="kpi"><div class="kpi-label">NPS Médio</div><div class="kpi-value">${lastNPS.score}</div><div class="kpi-sub">▲ 0.3 vs Q1</div></div>
+    <div class="kpi"><div class="kpi-label">Taxa de Conclusão</div><div class="kpi-value">87%</div><div class="kpi-sub">Ciclos encerrados</div></div>
+  </div>
+
+  <div class="section-label">Mentorados em acompanhamento</div>
+  <div id="md-list"></div>
+  `;
+
+  const list = document.getElementById('md-list');
+  const phases = ['G','U','I','A'];
+  list.innerHTML = mentorados.map(m=>{
+    const phaseIdx = phases.indexOf(m.phase||'G');
+    const dots = [0,1,2,3].map(i=>{
+      const cls = i<phaseIdx?'done':i===phaseIdx?'cur':'';
+      return `<div class="ph-dot ${cls}"></div>`;
+    }).join('');
+    return `<div class="panel" style="display:flex;align-items:center;gap:14px;margin-bottom:10px;padding:12px 16px;">
+      <div class="avatar-md">${initials(m.name)}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${m.name}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${m.email} · ${m.plan}</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${m.phase||'G'}</div>
+        <div class="phase-dots" style="justify-content:center;margin-top:4px">${dots}</div>
+        <div style="font-size:9px;color:var(--text4);margin-top:2px">S${m.week||0}/12</div>
+      </div>
+      <div class="pill pill-active">ATIVO</div>
+      <button class="btn btn-outline btn-xs" onclick="alert('Abrindo sessão com ${m.name}')">Ver sessão</button>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+// ADMIN — USERS
+// ══════════════════════════════════════════════
+function renderAdminUsers(){
+  const users = DB.get('users');
+  const searchId = 'usr-search-'+Date.now();
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Usuários & Acessos</div>
+    <div class="page-sub">Controle completo de cadastros, roles e permissões de acesso</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Total Usuários</div><div class="kpi-value">${users.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Mentores</div><div class="kpi-value">${users.filter(u=>u.role==='mentor').length}</div></div>
+    <div class="kpi"><div class="kpi-label">Mentorados Ativos</div><div class="kpi-value">${users.filter(u=>u.role==='mentorado'&&u.active).length}</div></div>
+    <div class="kpi"><div class="kpi-label">Aguardando</div><div class="kpi-value">${users.filter(u=>!u.active).length}</div><div class="kpi-sub" style="color:var(--amber)">Liberação pendente</div></div>
+  </div>
+
+  <div class="panel" style="margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div class="panel-title" style="margin-bottom:0;flex:1"><div class="panel-title-dot"></div> Cadastro de usuário</div>
+    </div>
+    <div class="form-row cols-3">
+      <div class="field"><label class="field-label">Nome completo</label><input type="text" id="nu-name" placeholder="Nome completo"></div>
+      <div class="field"><label class="field-label">E-mail</label><input type="email" id="nu-email" placeholder="email@dominio.com"></div>
+      <div class="field"><label class="field-label">Role</label><select id="nu-role"><option value="mentorado">Mentorado</option><option value="mentor">Mentor</option></select></div>
+    </div>
+    <div class="form-row cols-3">
+      <div class="field"><label class="field-label">Plano</label><select id="nu-plan"><option>Ciclo único — 12 semanas</option><option>Renovável trimestral</option><option>Trial — 2 semanas</option><option>Acesso institucional</option></select></div>
+      <div class="field"><label class="field-label">Mentor responsável</label><select id="nu-mentor"><option value="">— Sem mentor —</option>${users.filter(u=>u.role==='mentor').map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select></div>
+      <div class="field"><label class="field-label">Ativar imediatamente</label><select id="nu-active"><option value="1">Sim — acesso liberado</option><option value="0">Não — aguardar</option></select></div>
+    </div>
+    <button class="btn btn-gold" onclick="addUser()">➕ Cadastrar usuário</button>
+  </div>
+
+  <div class="panel">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <div class="panel-title" style="margin-bottom:0;flex:1"><div class="panel-title-dot"></div> Todos os usuários</div>
+      <input class="inline-inp" id="${searchId}" placeholder="🔍 Buscar..." style="width:200px;" oninput="filterUsers('${searchId}')">
+    </div>
+    <div class="table-wrap">
+      <table id="users-table">
+        <thead><tr>
+          <th>Usuário</th><th>Role</th><th>Plano</th><th>Criado em</th><th>Fase</th><th>Acesso</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </div>
+  </div>`;
+  renderUsersTable(users);
+}
+
+function renderUsersTable(users){
+  const tbody = document.getElementById('users-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = users.map((u,i)=>{
+    const rolePill = {admin:'pill-admin',mentor:'pill-mentor',mentorado:'pill-mentorado'}[u.role];
+    return `<tr>
+      <td><div style="display:flex;align-items:center;gap:10px;">
+        <div class="avatar-xs" style="width:30px;height:30px;font-size:10px;">${initials(u.name)}</div>
+        <div><div style="font-size:12px;font-weight:600;color:var(--text)">${u.name}</div><div style="font-size:10px;color:var(--text3)">${u.email}</div></div>
+      </div></td>
+      <td><span class="pill ${rolePill}">${u.role.toUpperCase()}</span></td>
+      <td style="font-size:11px">${u.plan||'—'}</td>
+      <td style="font-size:11px;color:var(--text3)">${u.created||'—'}</td>
+      <td style="font-size:12px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${u.phase||'—'}</td>
+      <td>
+        <div class="toggle ${u.active?'on':''}" onclick="toggleUserAccess('${u.id}',this)" title="${u.active?'Revogar acesso':'Liberar acesso'}"></div>
+      </td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-xs" onclick="editUser('${u.id}')">Editar</button>
+          <button class="btn btn-red btn-xs" onclick="deleteUser('${u.id}')">Remover</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filterUsers(searchId){
+  const q = document.getElementById(searchId).value.toLowerCase();
+  const users = DB.get('users').filter(u=>
+    u.name.toLowerCase().includes(q)||u.email.toLowerCase().includes(q)||u.role.includes(q)
+  );
+  renderUsersTable(users);
+}
+
+function addUser(){
+  const name = document.getElementById('nu-name').value.trim();
+  const email = document.getElementById('nu-email').value.trim();
+  const role = document.getElementById('nu-role').value;
+  const plan = document.getElementById('nu-plan').value;
+  const mentor = document.getElementById('nu-mentor').value;
+  const active = document.getElementById('nu-active').value==='1';
+  if(!name||!email){ toast('Preencha nome e e-mail','err'); return; }
+  const users = DB.get('users');
+  if(users.find(u=>u.email===email)){ toast('E-mail já cadastrado','err'); return; }
+  users.push({id:'u'+Date.now(),name,email,role,plan,mentor:mentor||null,active,created:today(),phase:'G',week:0});
+  DB.set('users',users);
+  toast(`${name} cadastrado com sucesso!${active?' Acesso liberado.':' Aguardando liberação.'}`, 'suc');
+  renderAdminUsers();
+}
+
+function toggleUserAccess(id, el){
+  const users = DB.get('users');
+  const u = users.find(u=>u.id===id);
+  if(!u) return;
+  u.active = !u.active;
+  DB.set('users',users);
+  el.classList.toggle('on');
+  toast(`Acesso ${u.active?'liberado':'revogado'} para ${u.name}`, u.active?'suc':'err');
+}
+
+function editUser(id){
+  const u = DB.get('users').find(u=>u.id===id);
+  if(!u) return;
+  const name = prompt('Nome:', u.name);
+  if(name===null) return;
+  const users = DB.get('users');
+  users.find(u=>u.id===id).name = name.trim()||u.name;
+  DB.set('users',users);
+  toast('Usuário atualizado','suc');
+  renderAdminUsers();
+}
+
+function deleteUser(id){
+  const users = DB.get('users');
+  const u = users.find(u=>u.id===id);
+  if(!u) return;
+  showConfirm(
+    'Remover usuário',
+    `Tem certeza que deseja remover "${u.name}" permanentemente? Esta ação não pode ser desfeita.`,
+    'Remover',
+    ()=>{
+      const updated = DB.get('users').filter(u=>u.id!==id);
+      DB.set('users', updated);
+      toast('Usuário removido com sucesso','suc');
+      renderAdminUsers();
+    }
+  );
+}
+
+// ══════════════════════════════════════════════
+// ADMIN — REGISTRATIONS
+// ══════════════════════════════════════════════
+function renderAdminRegs(){
+  const regs = DB.get('registrations');
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Cadastros Pendentes</div>
+    <div class="page-sub">Solicitações de acesso aguardando aprovação manual</div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Pendentes</div><div class="kpi-value" style="color:var(--amber)">${regs.filter(r=>r.status==='pending').length}</div></div>
+    <div class="kpi"><div class="kpi-label">Aprovados</div><div class="kpi-value" style="color:var(--green)">${regs.filter(r=>r.status==='approved').length}</div></div>
+    <div class="kpi"><div class="kpi-label">Recusados</div><div class="kpi-value" style="color:var(--red)">${regs.filter(r=>r.status==='rejected').length}</div></div>
+    <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value">${regs.length}</div></div>
+  </div>
+  <div class="panel">
+    <div class="panel-title"><div class="panel-title-dot"></div> Fila de aprovação</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Solicitante</th><th>Role</th><th>Plano</th><th>Objetivo</th><th>Data</th><th>Status</th><th>Ação</th></tr></thead>
+        <tbody>${regs.map((r,i)=>`
+          <tr>
+            <td><div style="font-size:12px;font-weight:600;color:var(--text)">${r.name}</div><div style="font-size:10px;color:var(--text3)">${r.email}</div></td>
+            <td><span class="pill ${r.role==='mentor'?'pill-mentor':'pill-mentorado'}">${r.role.toUpperCase()}</span></td>
+            <td style="font-size:11px">${r.plan}</td>
+            <td style="font-size:11px;color:var(--text3)">${r.goal}</td>
+            <td style="font-size:11px;color:var(--text3)">${r.date}</td>
+            <td><span class="pill ${r.status==='pending'?'pill-pending':r.status==='approved'?'pill-active':'pill-locked'}">${r.status.toUpperCase()}</span></td>
+            <td><div style="display:flex;gap:5px;">
+              ${r.status==='pending'?`
+                <button class="btn btn-green btn-xs" onclick="approveReg('${r.id}')">✓ Aprovar</button>
+                <button class="btn btn-red btn-xs" onclick="rejectReg('${r.id}')">✗ Recusar</button>
+              `:`<span style="font-size:10px;color:var(--text4)">Processado</span>`}
+            </div></td>
+          </tr>
+        `).join('')}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function approveReg(id){
+  const regs = DB.get('registrations');
+  const reg = regs.find(r=>r.id===id);
+  if(!reg) return;
+  reg.status='approved';
+  DB.set('registrations',regs);
+  // Add to users
+  const users = DB.get('users');
+  users.push({id:'u'+Date.now(),name:reg.name,email:reg.email,role:reg.role,plan:reg.plan,active:true,created:today(),phase:'G',week:0});
+  DB.set('users',users);
+  toast(`${reg.name} aprovado e acesso liberado!`,'suc');
+  renderAdminRegs();
+}
+
+function rejectReg(id){
+  const regs = DB.get('registrations');
+  const r = regs.find(r=>r.id===id);
+  if(!r) return;
+  showConfirm(
+    'Recusar solicitação',
+    `Recusar o acesso de "${r.name}"? O cadastro ficará marcado como recusado.`,
+    'Recusar',
+    ()=>{
+      const regs2 = DB.get('registrations');
+      const r2 = regs2.find(x=>x.id===id);
+      if(r2) r2.status='rejected';
+      DB.set('registrations', regs2);
+      toast('Solicitação recusada','suc');
+      renderAdminRegs();
+    }
+  );
+}
+
+// ══════════════════════════════════════════════
+// ADMIN — NPS
+// ══════════════════════════════════════════════
+function renderAdminNPS(){
+  const nps = DB.get('nps_history');
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">NPS & Métricas da Plataforma</div>
+    <div class="page-sub">Evolução histórica do Net Promoter Score por ciclo</div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">NPS Atual</div><div class="kpi-value" style="color:var(--green)">${nps[nps.length-1].score}</div><div class="kpi-sub">Q2 2026</div></div>
+    <div class="kpi"><div class="kpi-label">Respostas</div><div class="kpi-value">${nps[nps.length-1].responses}</div><div class="kpi-sub">Ciclo em curso</div></div>
+    <div class="kpi"><div class="kpi-label">Melhor Ciclo</div><div class="kpi-value">${Math.max(...nps.map(n=>n.score))}</div></div>
+    <div class="kpi"><div class="kpi-label">Média Histórica</div><div class="kpi-value">${(nps.reduce((a,n)=>a+n.score,0)/nps.length).toFixed(1)}</div></div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Evolução NPS por ciclo</div>
+      <div class="chart-wrap" style="height:220px;"><canvas id="nps-chart" role="img" aria-label="NPS histórico por ciclo"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Histórico detalhado</div>
+      <table><thead><tr><th>Ciclo</th><th>Score</th><th>Respostas</th><th>Zona</th></tr></thead>
+      <tbody>${nps.map(n=>`<tr>
+        <td style="font-size:12px">${n.cycle}</td>
+        <td style="font-size:14px;font-weight:700;color:${n.score>=9?'var(--green)':n.score>=7?'var(--gold)':'var(--red)'};font-family:'Space Mono',monospace">${n.score}</td>
+        <td style="font-size:12px;color:var(--text3)">${n.responses} resp.</td>
+        <td><span class="pill ${n.score>=9?'pill-active':n.score>=7?'pill-pending':'pill-admin'}">${n.score>=9?'PROMOTOR':n.score>=7?'NEUTRO':'DETRATOR'}</span></td>
+      </tr>`).join('')}</tbody></table>
+      <div class="divider"></div>
+      <div class="section-label" style="margin-bottom:10px">Registrar novo NPS</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;">
+        <div class="field" style="margin-bottom:0;flex:1"><label class="field-label">Ciclo</label><input type="text" id="nps-cycle" placeholder="Q3 2026"></div>
+        <div class="field" style="margin-bottom:0;width:80px"><label class="field-label">Score</label><input type="number" id="nps-score" min="0" max="10" step="0.1" placeholder="9.0"></div>
+        <div class="field" style="margin-bottom:0;width:80px"><label class="field-label">Respostas</label><input type="number" id="nps-resp" placeholder="15"></div>
+        <button class="btn btn-gold btn-sm" onclick="addNPS()" style="margin-bottom:0">Salvar</button>
+      </div>
+    </div>
+  </div>`;
+
+  setTimeout(()=>{
+    const ctx = document.getElementById('nps-chart');
+    if(ctx) charts.nps = new Chart(ctx,{
+      type:'line',
+      data:{
+        labels:nps.map(n=>n.cycle),
+        datasets:[{label:'NPS',data:nps.map(n=>n.score),borderColor:'#f0c040',backgroundColor:'rgba(240,192,64,.1)',pointBackgroundColor:'#f0c040',borderWidth:2,tension:.4,fill:true}]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:10,ticks:{color:'#666'},grid:{color:'#1a1a1a'}},x:{ticks:{color:'#888'},grid:{display:false}}}}
+    });
+  },100);
+}
+
+function addNPS(){
+  const cycle = document.getElementById('nps-cycle').value.trim();
+  const score = parseFloat(document.getElementById('nps-score').value);
+  const responses = parseInt(document.getElementById('nps-resp').value)||0;
+  if(!cycle||isNaN(score)){ toast('Preencha ciclo e score','err'); return; }
+  const nps = DB.get('nps_history');
+  nps.push({cycle,score,responses});
+  DB.set('nps_history',nps);
+  toast('NPS registrado!','suc');
+  renderAdminNPS();
+}
+
+// ══════════════════════════════════════════════
+// ADMIN CONFIG
+// ══════════════════════════════════════════════
+function renderAdminConfig(){
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header"><div class="page-title">Configurações</div><div class="page-sub">Parâmetros da plataforma</div></div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Planos disponíveis</div>
+      <div style="font-size:12px;color:var(--text2);line-height:2">
+        ✦ Ciclo único — 12 semanas<br>
+        ✦ Renovável trimestral<br>
+        ✦ Trial — 2 semanas<br>
+        ✦ Acesso institucional<br>
+        ✦ Mentor (acesso completo)
+      </div>
+      <div class="divider"></div>
+      <div style="font-size:11px;color:var(--text3)">Controle de pagamentos: <span style="color:var(--amber)">Manual (MVP)</span><br>Integração Stripe: planejada para v2</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Link de cadastro público</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px">Compartilhe este link para novos cadastros. As solicitações chegam em "Cadastros Pendentes" para sua aprovação.</div>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;font-size:11px;font-family:'Space Mono',monospace;color:var(--text2);word-break:break-all">
+        https://arcala.insight/cadastro
+      </div>
+      <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="toast('Link copiado!','suc')">Copiar link</button>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════
+// COMPETÊNCIAS
+// ══════════════════════════════════════════════
+function renderComp(){
+  const data = DB.get('competencias');
+  const isMentor = currentRole==='mentor';
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Radar de Competências</div>
+    <div class="page-sub">Avaliação cruzada Mentor × Mentorado — clique nos pontos para calibrar</div>
+  </div>
+  <div style="display:flex;gap:12px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Autoavaliação (mentorado)</div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#3266ad"></div>Avaliação do mentor</div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Competências — calibração</div>
+      <div id="comp-list"></div>
+      ${isMentor?`<div class="divider"></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input class="inline-inp" id="new-comp" placeholder="Nova competência..." style="flex:1;">
+        <button class="btn btn-outline btn-sm" onclick="addComp()">+ Adicionar</button>
+      </div>`:``}
+      <div style="margin-top:14px;display:flex;gap:8px;">
+        <button class="btn btn-gold btn-sm" onclick="analyzeCompWithIA()">✦ Analisar com IA ↗</button>
+        <button class="btn btn-outline btn-sm" onclick="exportCompReport()">Exportar</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Visualização radar</div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="radar-chart" role="img" aria-label="Radar de competências"></canvas></div>
+    </div>
+  </div>
+  <div id="comp-ia-result" style="margin-top:16px;display:none;"></div>`;
+  renderCompList();
+  setTimeout(initRadarChart,150);
+}
+
+function renderCompList(){
+  const data = DB.get('competencias');
+  const isMentor = currentRole==='mentor';
+  const el = document.getElementById('comp-list');
+  if(!el) return;
+  el.innerHTML = data.map((c,ci)=>{
+    const meDots = [1,2,3,4,5].map(n=>`<div class="dot ${n<=c.me?'me-fill':''}" onclick="setCompVal(${ci},'me',${n})" title="Mentorado: ${n}">${n}</div>`).join('');
+    const mentorDots = [1,2,3,4,5].map(n=>`<div class="dot ${n<=c.mentor?'mentor-fill':''}" onclick="${isMentor?`setCompVal(${ci},'mentor',${n})`:'void(0)'}" title="Mentor: ${n}" style="${!isMentor?'cursor:default':''}">${n}</div>`).join('');
+    const diff = c.me-c.mentor;
+    return `<div class="comp-row">
+      <div class="comp-name">${c.name}</div>
+      <div class="comp-scales">
+        <div class="dot-row">${meDots}</div>
+        <div class="dot-row">${mentorDots}</div>
+      </div>
+      <div class="comp-diff ${diff>0?'diff-p':diff<0?'diff-n':'diff-z'}">${diff>0?'+'+diff:diff}</div>
+    </div>`;
+  }).join('');
+}
+
+function setCompVal(ci, role, val){
+  const data = DB.get('competencias');
+  data[ci][role] = val;
+  DB.set('competencias',data);
+  renderCompList();
+  updateRadarChart();
+}
+
+function addComp(){
+  const inp = document.getElementById('new-comp');
+  const name = inp.value.trim();
+  if(!name) return;
+  const data = DB.get('competencias');
+  data.push({name,me:3,mentor:3});
+  DB.set('competencias',data);
+  inp.value='';
+  renderCompList();
+  updateRadarChart();
+  toast('Competência adicionada','suc');
+}
+
+function initRadarChart(){
+  const ctx = document.getElementById('radar-chart');
+  if(!ctx) return;
+  const data = DB.get('competencias');
+  charts.radar = new Chart(ctx,{
+    type:'radar',
+    data:{
+      labels:data.map(c=>c.name.split(' ').slice(0,2).join(' ')),
+      datasets:[
+        {label:'Mentorado',data:data.map(c=>c.me),borderColor:'#f0c040',backgroundColor:'rgba(240,192,64,.15)',pointBackgroundColor:'#f0c040',borderWidth:2},
+        {label:'Mentor',data:data.map(c=>c.mentor),borderColor:'#3266ad',backgroundColor:'rgba(50,102,173,.12)',pointBackgroundColor:'#3266ad',borderWidth:2}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{r:{min:0,max:5,ticks:{stepSize:1,color:'#555',font:{size:9}},grid:{color:'#222'},pointLabels:{color:'#888',font:{size:10}}}}}
+  });
+}
+
+function updateRadarChart(){
+  if(!charts.radar) return;
+  const data = DB.get('competencias');
+  charts.radar.data.labels = data.map(c=>c.name.split(' ').slice(0,2).join(' '));
+  charts.radar.data.datasets[0].data = data.map(c=>c.me);
+  charts.radar.data.datasets[1].data = data.map(c=>c.mentor);
+  charts.radar.update();
+}
+
+async function analyzeCompWithIA(){
+  const data = DB.get('competencias');
+  const gaps = data.filter(c=>c.me<c.mentor).map(c=>`${c.name} (mentorado:${c.me}/mentor:${c.mentor})`).join(', ');
+  const strengths = data.filter(c=>c.me>=4).map(c=>c.name).join(', ');
+  showIALoading('comp-ia-result','Analisando radar de competências');
+  const prompt = `Você é um estrategista de desenvolvimento humano e executive coach.
+Analise o radar de competências deste profissional em processo de mentoria:
+
+GAPS (mentorado abaixo da avaliação do mentor): ${gaps||'Nenhum gap crítico'}
+PONTOS FORTES (auto: ≥4): ${strengths||'A mapear'}
+
+Gere:
+1. DIAGNÓSTICO PRECISO: O que os dados revelam sobre o momento de carreira (2-3 frases)
+2. ALAVANCA PRINCIPAL: A única competência que, desenvolvida agora, gera mais impacto
+3. PLANO 30-60-90: Uma ação específica e executável para cada horizonte
+4. PERGUNTA PROVOCADORA: Uma pergunta que o mentor deve fazer na próxima sessão
+
+Seja direto, específico e executável. Sem clichês.`;
+  const result = await callAI(prompt);
+  showIAResult('comp-ia-result', result, 'Análise de Competências');
+}
+
+function exportCompReport(){
+  const data = DB.get('competencias');
+  let txt = 'RADAR DE COMPETÊNCIAS — Arcala Insight\n';
+  txt += '==========================================\n\n';
+  data.forEach(c=>{ txt+=`${c.name}: Mentorado=${c.me}/5 | Mentor=${c.mentor}/5 | Gap=${c.me-c.mentor}\n`; });
+  downloadText(txt,'radar-competencias.txt');
+  toast('Relatório exportado','suc');
+}
+
+// ══════════════════════════════════════════════
+// SWOT
+// ══════════════════════════════════════════════
+const SWOT_OPTIONS = {
+  f:['Comunicação executiva','Pensamento estratégico','Gestão de stakeholders','Capacidade analítica','Liderança de equipes','Visão de negócio','Resiliência','Networking','Domínio técnico','Orientação a resultados','Inteligência emocional','Capacidade de influência','Gestão de projetos','Tomada de decisão'],
+  fr:['Delegação insuficiente','Dificuldade com conflitos','Visibilidade limitada','Gestão do tempo','Presença executiva','Inglês profissional','Gestão financeira','Tolerância à ambiguidade','Influência sem autoridade','Comunicação ascendente','Gestão de equipes remotas'],
+  o:['Mercado em expansão','Lacuna de líderes sênior','Digitalização do setor','Redes profissionais ativas','Mentoria e capacitação','Internacionalização','ESG e sustentabilidade','Fusões e aquisições','Transformação digital','Novos mercados geográficos'],
+  a:['Automação da função','Concorrência por posições','Reestruturações corporativas','Instabilidade econômica','Mudança de liderança','Obsolescência tecnológica','Burnout','Crise setorial'],
+};
+
+function renderSWOT(){
+  swotData = DB.get('swot');
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">SWOT Pessoal</div>
+    <div class="page-sub">Mapeamento estratégico da trajetória profissional</div>
+  </div>
+  <div class="swot-grid" id="swot-grid"></div>
+  <div style="margin-top:16px;display:flex;gap:10px;">
+    <button class="btn btn-gold" onclick="analyzeSWOTWithIA()">✦ Análise estratégica com IA ↗</button>
+    <button class="btn btn-outline" onclick="clearSWOT()">Limpar tudo</button>
+  </div>
+  <div id="swot-ia-result" style="margin-top:16px;display:none;"></div>`;
+  renderSWOTGrid();
+}
+
+function renderSWOTGrid(){
+  const types = [
+    {k:'f',label:'FORÇAS',cls:'sq-f sl-f',tcls:'stag-f'},
+    {k:'fr',label:'FRAQUEZAS',cls:'sq-fr sl-fr',tcls:'stag-fr'},
+    {k:'o',label:'OPORTUNIDADES',cls:'sq-o sl-o',tcls:'stag-o'},
+    {k:'a',label:'AMEAÇAS',cls:'sq-a sl-a',tcls:'stag-a'},
+  ];
+  const grid = document.getElementById('swot-grid');
+  if(!grid) return;
+  grid.innerHTML = types.map(t=>{
+    const opts = SWOT_OPTIONS[t.k].map(o=>`<option value="${o}">${o}</option>`).join('');
+    const tags = (swotData[t.k]||[]).map(v=>`<span class="stag ${t.tcls}">${v}<span class="stag-x" onclick="removeSwotTag('${t.k}','${v}')">×</span></span>`).join('');
+    return `<div class="swot-q ${t.cls}">
+      <div class="swot-label ${t.cls.split(' ')[1]}">${t.label}</div>
+      <select class="swot-sel" onchange="addSwotTag('${t.k}',this)">
+        <option value="">+ Adicionar ${t.label.toLowerCase()}...</option>${opts}
+      </select>
+      <div class="swot-tags" id="swot-tags-${t.k}">${tags}</div>
+    </div>`;
+  }).join('');
+}
+
+function addSwotTag(type, sel){
+  const val = sel.value; if(!val) return;
+  if(!swotData[type]) swotData[type]=[];
+  if(swotData[type].includes(val)){ sel.value=''; return; }
+  swotData[type].push(val);
+  DB.set('swot',swotData);
+  sel.value='';
+  renderSWOTGrid();
+}
+
+function removeSwotTag(type, val){
+  swotData[type] = (swotData[type]||[]).filter(v=>v!==val);
+  DB.set('swot',swotData);
+  renderSWOTGrid();
+}
+
+function clearSWOT(){
+  if(!confirm('Limpar todo o SWOT?')) return;
+  swotData={f:[],fr:[],o:[],a:[]};
+  DB.set('swot',swotData);
+  renderSWOTGrid();
+  toast('SWOT limpo','suc');
+}
+
+async function analyzeSWOTWithIA(){
+  const s = DB.get('swot');
+  showIALoading('swot-ia-result','Processando análise estratégica');
+  const prompt = `Você é um estrategista sênior de carreira e desenvolvimento executivo.
+
+SWOT PESSOAL do profissional em mentoria:
+FORÇAS: ${(s.f||[]).join(', ')||'Não mapeado'}
+FRAQUEZAS: ${(s.fr||[]).join(', ')||'Não mapeado'}
+OPORTUNIDADES: ${(s.o||[]).join(', ')||'Não mapeado'}
+AMEAÇAS: ${(s.a||[]).join(', ')||'Não mapeado'}
+
+Produza:
+1. SÍNTESE ESTRATÉGICA: Leitura integrada do SWOT (3-4 frases precisas, sem clichês)
+2. INTERSECÇÃO CRÍTICA: Qual força + qual oportunidade criam a alavanca de crescimento mais poderosa agora?
+3. RISCO PRIORITÁRIO: A combinação fraqueza + ameaça que exige ação imediata
+4. ESTRATÉGIA RECOMENDADA: Uma estratégia de 90 dias em 3 movimentos concretos e mensuráveis
+5. MÉTRICAS DE SUCESSO: Como saberemos em 12 semanas que funcionou?
+
+Escreva como um consultor que cobra caro e entrega resultados. Direto ao ponto.`;
+  const result = await callAI(prompt);
+  showIAResult('swot-ia-result', result, 'Análise Estratégica SWOT');
+}
+
+// ══════════════════════════════════════════════
+// DISC
+// ══════════════════════════════════════════════
+const DISC_DATA = {
+  D:{name:'Dominância',color:'var(--red)',desc:'Direto, orientado a resultados, decisivo, competitivo. Trabalha bem sob pressão e foca em conquistas concretas.',traits:['Assertivo','Competitivo','Focado em resultados','Independente','Direto'],devs:['Desenvolver escuta ativa — sua velocidade de decisão pode suprimir contribuições valiosas da equipe','Calibrar a comunicação para diferentes perfis, especialmente os mais colaborativos','Construir alianças estratégicas — o C-level exige influência horizontal, não só autoridade vertical']},
+  I:{name:'Influência',color:'var(--amber)',desc:'Entusiasta, otimista, persuasivo, sociável. Energiza equipes e cria conexões com facilidade.',traits:['Persuasivo','Otimista','Colaborativo','Criativo','Comunicativo'],devs:['Fortalecer foco em execução e follow-up — ótimas ideias precisam de entrega consistente','Desenvolver disciplina analítica para complementar a visão com dados concretos','Aprender a trabalhar com perfis C — intuição e rigor analítico são complementares']},
+  S:{name:'Estabilidade',color:'var(--green)',desc:'Paciente, confiável, consistente, empático e leal. Âncora da equipe em momentos de pressão.',traits:['Paciente','Empático','Confiável','Metódico','Leal'],devs:['Desenvolver assertividade — evitar conflitos pode ser lido como falta de posicionamento','Acelerar tomada de decisão em contextos de ambiguidade, essencial em posições executivas','Expandir visibilidade — seu trabalho consistente precisa ser comunicado proativamente']},
+  C:{name:'Conformidade',color:'var(--blue)',desc:'Analítico, criterioso, sistemático, preciso. Orientado à qualidade e à exatidão dos processos.',traits:['Analítico','Criterioso','Sistemático','Perfeccionista','Detalhista'],devs:['Desenvolver tolerância à ambiguidade — decisões executivas raramente têm 100% das informações','Simplificar a comunicação para diferentes audiências — seu valor precisa ser acessível','Aumentar velocidade de entrega — o perfeccionismo pode se tornar bloqueio à execução']},
+};
+
+const DISC_BLOCKS = [
+  {id:1,instruction:"Em situações de pressão e desafio no trabalho, eu costumo:",opts:[{text:"Agir rapidamente e tomar decisões firmes, mesmo com informações incompletas",disc:"D"},{text:"Motivar e engajar as pessoas ao meu redor com entusiasmo",disc:"I"},{text:"Manter a calma e buscar estabilidade antes de agir",disc:"S"},{text:"Analisar todos os dados disponíveis antes de decidir",disc:"C"}]},
+  {id:2,instruction:"Quando trabalho em equipe, as pessoas geralmente me descrevem como:",opts:[{text:"Direto, assertivo e focado em resultados concretos",disc:"D"},{text:"Comunicativo, animado e que gosta de colaborar",disc:"I"},{text:"Confiável, paciente e sempre disposto a ajudar",disc:"S"},{text:"Metódico, detalhista e comprometido com a qualidade",disc:"C"}]},
+  {id:3,instruction:"Diante de um problema complexo no trabalho, minha primeira reação é:",opts:[{text:"Identificar rapidamente a solução e agir para resolver",disc:"D"},{text:"Conversar com outras pessoas e buscar apoio e ideias",disc:"I"},{text:"Seguir processos estabelecidos e buscar consenso",disc:"S"},{text:"Levantar todas as informações e fazer uma análise criteriosa",disc:"C"}]},
+  {id:4,instruction:"No ambiente de trabalho, o que mais me motiva é:",opts:[{text:"Superar desafios, atingir metas e ter autonomia para decidir",disc:"D"},{text:"Trabalhar em equipe, ter reconhecimento e influenciar pessoas",disc:"I"},{text:"Ter estabilidade, trabalhar em harmonia e ser parte de um grupo coeso",disc:"S"},{text:"Ter clareza nas regras, fazer um trabalho preciso e bem feito",disc:"C"}]},
+  {id:5,instruction:"Quando preciso convencer alguém de uma ideia, eu costumo:",opts:[{text:"Apresentar os fatos e argumentar com firmeza e objetividade",disc:"D"},{text:"Usar entusiasmo, storytelling e criar conexão emocional",disc:"I"},{text:"Construir confiança gradualmente e mostrar consistência",disc:"S"},{text:"Apresentar dados, evidências e uma análise detalhada",disc:"C"}]},
+  {id:6,instruction:"Em reuniões e discussões em grupo, meu comportamento típico é:",opts:[{text:"Ir direto ao ponto, tomar posições claras e pressionar por decisões",disc:"D"},{text:"Participar ativamente, compartilhar ideias e animar o grupo",disc:"I"},{text:"Ouvir com atenção e contribuir de forma equilibrada e ponderada",disc:"S"},{text:"Fazer perguntas técnicas, checar detalhes e garantir precisão",disc:"C"}]},
+  {id:7,instruction:"Quando cometo um erro no trabalho, minha reação mais comum é:",opts:[{text:"Assumir rapidamente e focar em como corrigir e seguir em frente",disc:"D"},{text:"Conversar sobre isso, buscar apoio e aprender com os outros",disc:"I"},{text:"Refletir com cuidado e garantir que não vai se repetir",disc:"S"},{text:"Analisar em detalhes o que houve e documentar o aprendizado",disc:"C"}]},
+];
+
+let discPage = 0;
+let discAnswers = Array(DISC_BLOCKS.length).fill(null).map(()=>({most:null,least:null}));
+let discShuffled = DISC_BLOCKS.map(b=>({...b,opts:[...b.opts].sort(()=>Math.random()-.5)}));
+let discScores = null;
+
+function renderDISC(){
+  discSel = DB.get('disc');
+  discPage = 0;
+  discAnswers = Array(DISC_BLOCKS.length).fill(null).map(()=>({most:null,least:null}));
+  discShuffled = DISC_BLOCKS.map(b=>({...b,opts:[...b.opts].sort(()=>Math.random()-.5)}));
+  discScores = null;
+
+  const saved = DB.get('disc');
+  const savedScores = DB.get('disc_scores');
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Assessment DISC</div>
+    <div class="page-sub">Metodologia de domínio público (Marston, 1928) — responda as situações e identifique seu perfil comportamental</div>
+  </div>
+  <div id="disc-assessment-wrap"></div>
+  <div id="disc-result-wrap" style="display:none;"></div>`;
+
+  if(saved && savedScores){
+    renderDISCResult(saved, savedScores);
+  } else {
+    renderDISCAssessment();
+  }
+}
+
+function renderDISCAssessment(){
+  const wrap = document.getElementById('disc-assessment-wrap');
+  if(!wrap) return;
+  const block = discShuffled[discPage];
+  const ans = discAnswers[discPage];
+  const pct = Math.round((discPage/DISC_BLOCKS.length)*100);
+
+  wrap.innerHTML = `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 18px;margin-bottom:16px;font-size:11px;color:var(--text3);line-height:1.6">
+      Para cada situação, selecione a opção que <strong style="color:var(--gold)">mais</strong> se parece com você e a que <strong style="color:var(--blue)">menos</strong> se parece. Responda pelo comportamento habitual no trabalho.
+    </div>
+    <div style="display:flex;gap:14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Mais se parece comigo</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#3266ad"></div>Menos se parece comigo</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:5px">
+      <span>Situação ${discPage+1} de ${DISC_BLOCKS.length}</span><span>${pct}%</span>
+    </div>
+    <div style="height:4px;background:var(--border2);border-radius:2px;margin-bottom:16px;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:var(--gold);border-radius:2px;transition:width .3s"></div>
+    </div>
+    <div class="panel" style="margin-bottom:14px;">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;letter-spacing:.05em;font-weight:600">SITUAÇÃO ${discPage+1}</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">${block.instruction}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="disc-opts">
+        ${block.opts.map((opt,i)=>{
+          let bg='var(--bg3)';let border='var(--border)';let badge='';let badgeStyle='';
+          if(ans.most===i){bg='var(--gold-bg)';border='var(--gold-border)';badge='+';badgeStyle='background:var(--gold);border-color:var(--gold);color:#0a0a0a;'}
+          else if(ans.least===i){bg='#0a0f1f';border='#1a1a3a';badge='−';badgeStyle='background:#3266ad;border-color:#3266ad;color:#fff;'}
+          return `<div onclick="discSelectOpt(${i})" style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid ${border};background:${bg};cursor:pointer;transition:all .12s;">
+            <div style="width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px;${badgeStyle}">${badge}</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.4;flex:1">${opt.text}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div id="disc-warn" style="font-size:11px;color:var(--red);background:var(--red-bg);border:1px solid var(--red-border);border-radius:var(--radius-sm);padding:6px 12px;margin-bottom:10px;display:none">
+      Selecione "mais" e "menos" antes de continuar.
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button class="btn btn-outline btn-sm" onclick="discNavigate(-1)" ${discPage===0?'disabled':''}>← Anterior</button>
+      <button class="btn btn-gold btn-sm" onclick="discNavigate(1)">${discPage===DISC_BLOCKS.length-1?'Ver meu resultado →':'Próximo →'}</button>
+      ${discSel?`<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="renderDISCResult('${discSel}',DB.get('disc_scores'))">Ver resultado salvo</button>`:''}
+    </div>`;
+}
+
+function discSelectOpt(i){
+  const ans = discAnswers[discPage];
+  if(ans.most===null && ans.least===null){ ans.most=i; }
+  else if(ans.most===i){ ans.most=null; }
+  else if(ans.least===i){ ans.least=null; }
+  else if(ans.most===null){ if(ans.least!==i) ans.most=i; }
+  else if(ans.least===null){ if(ans.most!==i) ans.least=i; }
+  else { ans.most=i; ans.least=null; }
+  renderDISCAssessment();
+}
+
+function discNavigate(dir){
+  if(dir===1){
+    const ans = discAnswers[discPage];
+    if(ans.most===null || ans.least===null){
+      document.getElementById('disc-warn').style.display='block';
+      return;
+    }
+    if(discPage===DISC_BLOCKS.length-1){
+      const scores = calcDISCScores();
+      const winner = Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
+      discSel = winner;
+      discScores = scores;
+      DB.set('disc', winner);
+      DB.set('disc_scores', scores);
+      toast(`Perfil ${winner} — ${DISC_DATA[winner].name} identificado!`,'suc');
+      renderDISCResult(winner, scores);
+      return;
+    }
+  }
+  discPage = Math.max(0, Math.min(DISC_BLOCKS.length-1, discPage+dir));
+  renderDISCAssessment();
+}
+
+function calcDISCScores(){
+  const scores = {D:0,I:0,S:0,C:0};
+  discAnswers.forEach((ans,pi)=>{
+    const block = discShuffled[pi];
+    if(ans.most!==null) scores[block.opts[ans.most].disc]+=2;
+    if(ans.least!==null) scores[block.opts[ans.least].disc]-=1;
+  });
+  Object.keys(scores).forEach(k=>{ if(scores[k]<0) scores[k]=0; });
+  return scores;
+}
+
+function renderDISCResult(winner, scores){
+  document.getElementById('disc-assessment-wrap').style.display='none';
+  const wrap = document.getElementById('disc-result-wrap');
+  wrap.style.display='block';
+  const d = DISC_DATA[winner];
+  const total = scores ? Object.values(scores).reduce((a,b)=>a+b,0)||1 : 4;
+  const order = ['D','I','S','C'];
+  const colorMap = {D:'var(--red)',I:'var(--amber)',S:'var(--green)',C:'var(--blue)'};
+  const bgMap = {D:'var(--red-bg)',I:'var(--amber-bg)',S:'var(--green-bg)',C:'var(--blue-bg)'};
+  const borderMap = {D:'var(--red-border)',I:'var(--amber-border)',S:'var(--green-border)',C:'var(--blue-border)'};
+
+  wrap.innerHTML = `
+    <div style="margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
+        ${order.map(k=>{
+          const pct = scores ? Math.round((scores[k]/total)*100) : 0;
+          const isW = k===winner;
+          return `<div style="border-radius:var(--radius);padding:14px;text-align:center;background:${bgMap[k]};border:${isW?'2px':'1px'} solid ${isW?colorMap[k]:borderMap[k]};">
+            <div style="font-size:22px;font-weight:700;color:${colorMap[k]};font-family:'Space Mono',monospace">${k}</div>
+            <div style="font-size:10px;color:${colorMap[k]};margin-bottom:6px">${DISC_DATA[k].name}</div>
+            <div style="font-size:16px;font-weight:700;color:${colorMap[k]};font-family:'Space Mono',monospace">${pct}%</div>
+            <div style="height:4px;background:var(--border2);border-radius:2px;margin-top:6px;overflow:hidden">
+              <div style="width:${pct}%;height:100%;background:${colorMap[k]};border-radius:2px"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <div class="ai-panel" style="margin-bottom:14px;">
+        <div class="ai-header">
+          <div class="ai-badge">PERFIL IDENTIFICADO</div>
+          <span style="font-size:12px;color:var(--text3)">${winner} — ${d.name}</span>
+        </div>
+        <div class="ai-rec" style="margin-bottom:10px">${d.desc}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">
+          ${d.traits.map(t=>`<span style="font-size:10px;padding:3px 9px;border-radius:20px;background:rgba(0,0,0,.25);color:${colorMap[winner]}">${t}</span>`).join('')}
+        </div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;margin-bottom:8px">DESENVOLVIMENTO PRIORITÁRIO</div>
+        ${d.devs.map(dev=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);line-height:1.5"><span style="color:var(--gold);flex-shrink:0">→</span>${dev}</div>`).join('')}
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-gold btn-sm" onclick="analyzeDISCWithIA()">✦ Análise de carreira com IA ↗</button>
+          <button class="btn btn-outline btn-sm" onclick="discRestart()">Refazer assessment</button>
+        </div>
+      </div>
+      <div id="disc-ia-result" style="display:none;"></div>
+    </div>`;
+}
+
+function discRestart(){
+  discPage=0;
+  discAnswers=Array(DISC_BLOCKS.length).fill(null).map(()=>({most:null,least:null}));
+  discShuffled=DISC_BLOCKS.map(b=>({...b,opts:[...b.opts].sort(()=>Math.random()-.5)}));
+  document.getElementById('disc-result-wrap').style.display='none';
+  document.getElementById('disc-assessment-wrap').style.display='block';
+  renderDISCAssessment();
+}
+
+function selectDisc(k){
+  discSel = k;
+  DB.set('disc',k);
+}
+
+function showDiscResult(k){}
+
+async function analyzeDISCWithIA(){
+  if(!discSel){ toast('Realize o assessment primeiro','err'); return; }
+  const d = DISC_DATA[discSel];
+  showIALoading('disc-ia-result','Analisando implicações do perfil');
+  const prompt = `Você é um executive coach especializado em desenvolvimento de líderes para o C-level.
+
+O profissional em mentoria tem PERFIL DISC predominante: ${discSel} — ${d.name}
+Características: ${d.traits.join(', ')}
+
+Produza uma análise executiva com:
+1. COMO ESTE PERFIL ACELERA A CARREIRA: Três vantagens competitivas específicas no contexto corporativo atual
+2. COMO ESTE PERFIL PODE TRAVAR A ASCENSÃO: As duas armadilhas mais comuns para este perfil no caminho ao C-level
+3. DESENVOLVIMENTO PRIORITÁRIO: As duas competências que este perfil precisa desenvolver conscientemente (com exemplos práticos)
+4. COMO O MENTOR DEVE TRABALHAR COM ESTE PERFIL: Abordagem recomendada para maximizar resultados nas sessões
+5. AÇÃO DESTA SEMANA: Uma ação específica para este perfil agir fora de sua zona de conforto
+
+Seja preciso e direto. Sem texto genérico.`;
+  const result = await callAI(prompt);
+  showIAResult('disc-ia-result', result, `Análise DISC — Perfil ${discSel}`);
+}
+
+// ══════════════════════════════════════════════
+// PEER 360
+// ══════════════════════════════════════════════
+const PEER_QUESTIONS = [
+  'Como você avalia a qualidade da comunicação executiva deste profissional?',
+  'Como você avalia a capacidade de liderança e mobilização de equipes?',
+  'Como você avalia a colaboração e influência nos projetos conjuntos?',
+  'Como você avalia a entrega de resultados e cumprimento de compromissos?',
+  'Como você avalia o pensamento estratégico e visão de negócio?',
+];
+
+function renderPeer360(){
+  const peers = DB.get('peer360');
+  const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
+  const avg = dims.map((_,di)=>{
+    const vals = peers.filter(p=>p.done&&p.respostas[di]!=null).map(p=>p.respostas[di]);
+    return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : 0;
+  });
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Feedback 360°</div>
+    <div class="page-sub">Avaliação por pares, líderes e subordinados — consolidação e análise</div>
+  </div>
+  <div class="grid-2">
+    <div>
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Convidar avaliador</div>
+        <div class="field"><label class="field-label">Nome do avaliador</label><input type="text" id="peer-name" placeholder="Nome completo"></div>
+        <div class="field"><label class="field-label">E-mail</label><input type="email" id="peer-email" placeholder="email@empresa.com"></div>
+        <div class="field"><label class="field-label">Relação com o mentorado</label>
+          <select id="peer-rel"><option>Líder direto</option><option>Par / mesmo nível</option><option>Subordinado direto</option><option>Cliente interno</option><option>Parceiro externo</option></select>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-gold btn-sm" onclick="sendPeer360()">Enviar formulário ↗</button>
+          <button class="btn btn-outline btn-sm" onclick="simulatePeerResponse()">Simular resposta</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><div class="panel-title-dot"></div> Respostas recebidas (${peers.filter(p=>p.done).length}/${peers.length})</div>
+        ${peers.map((p,pi)=>`
+        <div class="peer-q-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="font-size:11px;font-weight:600;color:var(--text)">${p.avaliador} <span style="font-weight:400;color:var(--text3)">— ${p.relacao}</span></div>
+            <span class="pill ${p.done?'pill-active':'pill-pending'}">${p.done?'RECEBIDO':'PENDENTE'}</span>
+          </div>
+          ${p.done?`<div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-style:italic">"${p.obs}"</div>
+          <div style="display:flex;gap:8px;">${dims.map((d,di)=>`<div style="text-align:center"><div style="font-size:9px;color:var(--text4);margin-bottom:2px">${d.substring(0,4)}</div><div style="font-size:13px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${p.respostas[di]}</div></div>`).join('')}</div>`
+          :'<div style="font-size:11px;color:var(--text4)">Aguardando resposta...</div>'}
+        </div>`).join('')}
+      </div>
+    </div>
+    <div>
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Resultado consolidado</div>
+        <div class="chart-wrap" style="height:230px;"><canvas id="chart360" role="img" aria-label="Resultado 360 graus por dimensão"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title"><div class="panel-title-dot"></div> Médias por dimensão</div>
+        ${dims.map((d,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
+          <div style="font-size:11px;color:var(--text2);width:100px">${d}</div>
+          <div style="flex:1;background:var(--bg3);border-radius:4px;height:6px;overflow:hidden">
+            <div style="width:${avg[i]*20}%;background:var(--gold);height:100%;border-radius:4px;transition:width .3s"></div>
+          </div>
+          <div style="font-size:13px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace;width:30px;text-align:right">${avg[i]}</div>
+        </div>`).join('')}
+        <div style="margin-top:14px;">
+          <button class="btn btn-gold btn-sm" onclick="analyze360WithIA()">✦ Análise integrada com IA ↗</button>
+        </div>
+      </div>
+      <div id="peer360-ia" style="margin-top:14px;display:none;"></div>
+    </div>
+  </div>`;
+
+  setTimeout(()=>{
+    const ctx = document.getElementById('chart360');
+    if(ctx) charts.c360 = new Chart(ctx,{
+      type:'bar',
+      data:{labels:dims,datasets:[{label:'Média 360°',data:avg.map(v=>parseFloat(v)),backgroundColor:'rgba(240,192,64,.3)',borderColor:'#f0c040',borderWidth:1,borderRadius:4}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:5,ticks:{stepSize:1,color:'#666'},grid:{color:'#1a1a1a'}},x:{ticks:{color:'#888'},grid:{display:false}}}}
+    });
+  },150);
+}
+
+function sendPeer360(){
+  const name = document.getElementById('peer-name').value.trim();
+  const email = document.getElementById('peer-email').value.trim();
+  if(!name||!email){ toast('Preencha nome e e-mail','err'); return; }
+  const peers = DB.get('peer360');
+  peers.push({avaliador:name,relacao:document.getElementById('peer-rel').value,respostas:[],obs:'',done:false});
+  DB.set('peer360',peers);
+  toast(`Formulário enviado para ${email}!`,'suc');
+  renderPeer360();
+}
+
+function simulatePeerResponse(){
+  const peers = DB.get('peer360');
+  const pending = peers.find(p=>!p.done);
+  if(!pending){ toast('Nenhum avaliador pendente','err'); return; }
+  pending.done=true;
+  pending.respostas=[Math.floor(Math.random()*2)+3,Math.floor(Math.random()*2)+3,Math.floor(Math.random()*2)+3,Math.floor(Math.random()*2)+3,Math.floor(Math.random()*2)+3];
+  pending.obs='Profissional dedicado com grande potencial. Recomendo desenvolvimento de visão sistêmica.';
+  DB.set('peer360',peers);
+  toast('Resposta simulada recebida!','suc');
+  renderPeer360();
+}
+
+async function analyze360WithIA(){
+  const peers = DB.get('peer360').filter(p=>p.done);
+  const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
+  const avgs = dims.map((_,di)=>{
+    const vals = peers.map(p=>p.respostas[di]).filter(v=>v!=null);
+    return vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1):0;
+  });
+  const comments = peers.map(p=>`[${p.relacao}]: "${p.obs}"`).join('\n');
+  showIALoading('peer360-ia','Analisando feedbacks 360°');
+  const prompt = `Você é um especialista em avaliação 360° e desenvolvimento de lideranças executivas.
+
+RESULTADO 360° DO PROFISSIONAL:
+${dims.map((d,i)=>`${d}: ${avgs[i]}/5`).join('\n')}
+
+COMENTÁRIOS RECEBIDOS:
+${comments}
+
+Produza:
+1. LEITURA DOS DADOS: O que os números revelam sobre a percepção de impacto deste profissional (2-3 frases)
+2. MAIOR ATIVO PERCEBIDO: A dimensão que mais contribui para a reputação executiva atual
+3. GAP CRÍTICO: A dimensão com maior impacto negativo no potencial de ascensão
+4. CONTRADIÇÕES: Há divergências entre avaliadores de diferentes níveis hierárquicos? O que isso revela?
+5. PLANO DE AÇÃO: Três ações concretas para as próximas 4 semanas baseadas nestes dados
+6. PERGUNTA PARA A PRÓXIMA SESSÃO: A pergunta mais poderosa para o mentor fazer ao mentorado
+
+Seja analítico e específico. Trate os dados como evidências, não como impressões.`;
+  const result = await callAI(prompt);
+  showIAResult('peer360-ia', result, 'Análise 360°');
+}
+
+// ══════════════════════════════════════════════
+// MICROPLANO
+// ══════════════════════════════════════════════
+function renderMicroplano(){
+  const mp = DB.get('microplano');
+  const weeks = [
+    {num:'S1',ph:'G',desc:'Kick-off · Termo de mentoria · Alinhamento de objetivos',st:'done'},
+    {num:'S2',ph:'U',desc:'Autodiagnóstico 360° · Radar de competências',st:'done'},
+    {num:'S3',ph:'U',desc:'SWOT pessoal · Sessão de Visão de Futuro',st:'done'},
+    {num:'S4',ph:'I',desc:'OKRs definidos · Quebra em microplanos',st:'done'},
+    {num:'S5',ph:'I',desc:'Sessão GROW #1 · Kanban ativado',st:'done'},
+    {num:'S6',ph:'I',desc:'Sessão GROW #2 · Revisão de progresso',st:'cur'},
+    {num:'S7',ph:'I',desc:'Sessão GROW #3 · 360° ativado',st:'pend'},
+    {num:'S8',ph:'I',desc:'Sessão GROW #4 · Ajustes de microplano',st:'pend'},
+    {num:'S9',ph:'I',desc:'Consolidação fase I · Mapeamento de gaps',st:'pend'},
+    {num:'S10',ph:'A',desc:'Revisão KRs · NPS mentoria',st:'pend'},
+    {num:'S11',ph:'A',desc:'Entrevista de aprendizado gravada',st:'pend'},
+    {num:'S12',ph:'A',desc:'Encerramento ou renovação · Plano próximos 90 dias',st:'pend'},
+  ];
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Microplanos — Fase I</div>
+    <div class="page-sub">Quebra do OKR em planos de 4 semanas com modelo GROW</div>
+  </div>
+  <div class="grid-2" style="margin-bottom:16px;">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Objetivo do ciclo</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:12px">${mp.objetivo}</div>
+      <div class="section-label" style="margin-bottom:10px">OKRs mapeados</div>
+      ${mp.okrs.map((o,i)=>`
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div class="toggle ${o.done?'on':''}" style="margin-top:2px" onclick="toggleOKR(${i},this)"></div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:${o.done?'var(--green)':'var(--text)'};">${o.desc}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">KR: ${o.kr}</div>
+        </div>
+      </div>`).join('')}
+      <div style="margin-top:12px;">
+        <button class="btn btn-outline btn-xs" onclick="addOKR()">+ Novo OKR</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Cronograma 12 semanas</div>
+      <div id="week-list">${weeks.map(w=>`
+        <div class="week-row">
+          <div class="wk-num">${w.num}</div>
+          <div class="wk-phase ph-${w.ph}">${w.ph}</div>
+          <div class="wk-desc">${w.desc}</div>
+          ${w.st==='done'?'<div class="wk-done-check">✓</div>':w.st==='cur'?'<div class="wk-cur">ATUAL</div>':'<div class="wk-pend">—</div>'}
+        </div>`).join('')}</div>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Kanban de Atividades</div>
+    <div class="kanban">
+      <div class="kanban-col k-todo">
+        <div class="kanban-title">A Fazer</div>
+        ${mp.kanban.todo.map(t=>`<div class="k-item">${t}</div>`).join('')}
+        <button class="btn btn-outline btn-xs" style="width:100%;margin-top:6px" onclick="addKanban('todo')">+ Adicionar</button>
+      </div>
+      <div class="kanban-col k-doing">
+        <div class="kanban-title">Em Progresso</div>
+        ${mp.kanban.doing.map(t=>`<div class="k-item">${t}</div>`).join('')}
+        <button class="btn btn-outline btn-xs" style="width:100%;margin-top:6px" onclick="addKanban('doing')">+ Adicionar</button>
+      </div>
+      <div class="kanban-col k-done">
+        <div class="kanban-title">Concluído</div>
+        ${mp.kanban.done.map(t=>`<div class="k-item">${t}</div>`).join('')}
+      </div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="panel-title"><div class="panel-title-dot"></div> Sessão GROW — Semana atual</div>
+    <div class="grid-2">
+      <div>
+        <div class="field"><label class="field-label" style="color:var(--gold)">G — Goal: Qual o objetivo desta sessão?</label><textarea id="grow-g" placeholder="Ex: Finalizar o memo estratégico para apresentar ao comitê..."></textarea></div>
+        <div class="field"><label class="field-label" style="color:var(--blue)">R — Reality: Situação atual?</label><textarea id="grow-r" placeholder="Ex: Ainda não formalizei a proposta, tenho os dados mas falta estrutura..."></textarea></div>
+      </div>
+      <div>
+        <div class="field"><label class="field-label" style="color:var(--green)">O — Options: Quais caminhos possíveis?</label><textarea id="grow-o" placeholder="Ex: 1. Adaptar template existente, 2. Consultoria com mentor, 3. Draft rápido e iteração..."></textarea></div>
+        <div class="field"><label class="field-label" style="color:var(--amber)">W — Will: O que você vai fazer?</label><textarea id="grow-w" placeholder="Ex: Até sexta, primeiro draft do memo para revisão do mentor..."></textarea></div>
+      </div>
+    </div>
+    <button class="btn btn-gold btn-sm" onclick="saveGROW()">Salvar sessão GROW</button>
+  </div>`;
+}
+
+function toggleOKR(i, el){
+  const mp = DB.get('microplano');
+  mp.okrs[i].done = !mp.okrs[i].done;
+  DB.set('microplano',mp);
+  el.classList.toggle('on');
+  toast(mp.okrs[i].done?'OKR marcado como concluído!':'OKR reaberto','suc');
+  renderMicroplano();
+}
+
+function addOKR(){
+  const desc = prompt('Descreva o OKR:');
+  if(!desc) return;
+  const kr = prompt('Qual o Key Result mensurável?');
+  if(!kr) return;
+  const mp = DB.get('microplano');
+  mp.okrs.push({desc,kr,done:false});
+  DB.set('microplano',mp);
+  toast('OKR adicionado!','suc');
+  renderMicroplano();
+}
+
+function addKanban(col){
+  const item = prompt('Nova atividade:');
+  if(!item) return;
+  const mp = DB.get('microplano');
+  mp.kanban[col].unshift(item);
+  DB.set('microplano',mp);
+  toast('Atividade adicionada!','suc');
+  renderMicroplano();
+}
+
+function saveGROW(){
+  const sessions = DB.get('grow_sessions')||[];
+  sessions.push({
+    date:today(),
+    goal:document.getElementById('grow-g').value,
+    reality:document.getElementById('grow-r').value,
+    options:document.getElementById('grow-o').value,
+    will:document.getElementById('grow-w').value,
+  });
+  DB.set('grow_sessions',sessions);
+  toast('Sessão GROW salva com sucesso!','suc');
+}
+
+// ══════════════════════════════════════════════
+// VISÃO DE FUTURO
+// ══════════════════════════════════════════════
+function renderVF(){
+  const vf = DB.get('vf');
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Visão de Futuro</div>
+    <div class="page-sub">Exercício de storytelling estratégico — "Um dia na vida daqui a 12 meses"</div>
+  </div>
+  <div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;font-size:12px;color:var(--text2);line-height:1.7">
+    <strong style="color:var(--gold)">Instrução:</strong> Imagine que são 12 meses a partir de hoje. Você acordou e está vivendo exatamente o futuro profissional que deseja. Descreva esse dia com o máximo de detalhe possível. Não se limite ao que parece "realista" — escreva o que seria verdadeiramente transformador.
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 01 — CARREIRA & POSIÇÃO</div>
+    <div class="vf-step-title">Como é seu trabalho? Qual posição você ocupa? O que você lidera?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-profissional" rows="4" placeholder="Descreva sua vida profissional ideal daqui a 12 meses...">${vf.profissional||''}</textarea></div>
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 02 — IMPACTO & CONTRIBUIÇÃO</div>
+    <div class="vf-step-title">Qual problema você resolveu? Que impacto gerou na organização e no mercado?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-contribuicao" rows="4" placeholder="Descreva o impacto que você gerou...">${vf.contribuicao||''}</textarea></div>
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 03 — VIDA & ENERGIA</div>
+    <div class="vf-step-title">Como você se sente? Como é o equilíbrio entre trabalho, família e propósito?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-vida" rows="4" placeholder="Descreva como você se sente e como é sua vida fora do trabalho...">${vf.vida||''}</textarea></div>
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 04 — LEGADO & RECONHECIMENTO</div>
+    <div class="vf-step-title">Como você é reconhecido? O que as pessoas dizem sobre você?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-legado" rows="4" placeholder="Descreva o reconhecimento e a reputação que você construiu...">${vf.legado||''}</textarea></div>
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 05 — PRIMEIROS PASSOS</div>
+    <div class="vf-step-title">O que você fez nas primeiras 4 semanas para começar a construir essa realidade?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-acoes" rows="4" placeholder="Descreva as 3-5 ações que você tomou imediatamente...">${vf.acoes||''}</textarea></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:16px;">
+    <button class="btn btn-gold" onclick="saveVF()">Salvar visão</button>
+    <button class="btn btn-outline" onclick="analyzeVFWithIA()">✦ Analisar e criar plano com IA ↗</button>
+  </div>
+  <div id="vf-ia-result" style="margin-top:16px;display:none;"></div>`;
+}
+
+function saveVF(){
+  DB.set('vf',{
+    profissional:document.getElementById('vf-profissional').value,
+    contribuicao:document.getElementById('vf-contribuicao').value,
+    vida:document.getElementById('vf-vida').value,
+    legado:document.getElementById('vf-legado').value,
+    acoes:document.getElementById('vf-acoes').value,
+  });
+  toast('Visão de futuro salva!','suc');
+}
+
+async function analyzeVFWithIA(){
+  saveVF();
+  const vf = DB.get('vf');
+  if(!vf.profissional&&!vf.contribuicao){ toast('Preencha pelo menos as duas primeiras dimensões','err'); return; }
+  showIALoading('vf-ia-result','Analisando sua visão de futuro');
+  const prompt = `Você é um coach executivo de alto desempenho especializado em transformação de carreiras.
+
+O profissional em mentoria descreveu sua Visão de Futuro para 12 meses:
+
+CARREIRA & POSIÇÃO: ${vf.profissional||'Não preenchido'}
+IMPACTO & CONTRIBUIÇÃO: ${vf.contribuicao||'Não preenchido'}
+VIDA & ENERGIA: ${vf.vida||'Não preenchido'}
+LEGADO & RECONHECIMENTO: ${vf.legado||'Não preenchido'}
+PRIMEIROS PASSOS: ${vf.acoes||'Não preenchido'}
+
+Produza:
+1. LEITURA DA VISÃO: O que essa visão revela sobre as ambições reais e os valores profundos deste profissional (sem julgamento, com curiosidade estratégica)
+2. COERÊNCIA INTERNA: Há contradições ou alinhamentos relevantes entre as dimensões?
+3. O QUE ESTÁ FALTANDO: O que a visão não menciona que provavelmente precisa ser construído?
+4. PLANO DE EXECUÇÃO — 3 HORIZONTES:
+   - 30 dias: 3 ações concretas e imediatas
+   - 90 dias: 2 movimentos estratégicos de médio prazo
+   - 12 meses: 1 marco definitivo de validação da visão
+5. RISCO PRINCIPAL: Qual é o maior obstáculo entre o ponto atual e essa visão?
+
+Seja honesto, provocativo quando necessário, e sempre orientado à ação.`;
+  const result = await callAI(prompt);
+  showIAResult('vf-ia-result', result, 'Análise da Visão de Futuro');
+}
+
+// ══════════════════════════════════════════════
+// IA MAIN
+// ══════════════════════════════════════════════
+function renderIAMain(){
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Análise Integrada com IA</div>
+    <div class="page-sub">Diagnóstico completo baseado em todos os instrumentos — DISC + SWOT + Competências + 360° + Visão de Futuro</div>
+  </div>
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Dados coletados neste ciclo</div>
+    <div class="grid-3" style="margin-bottom:14px;">
+      ${[
+        {label:'DISC',val:discSel||DB.get('disc')?`Perfil ${DB.get('disc')||discSel}`:'Pendente',ok:!!(DB.get('disc'))},
+        {label:'Radar',val:`${DB.get('competencias').length} competências`,ok:true},
+        {label:'SWOT',val:`${Object.values(DB.get('swot')||{}).flat().length} itens`,ok:Object.values(DB.get('swot')||{}).flat().length>0},
+        {label:'360°',val:`${DB.get('peer360').filter(p=>p.done).length} respostas`,ok:DB.get('peer360').filter(p=>p.done).length>0},
+        {label:'Visão',val:DB.get('vf')?.profissional?'Preenchida':'Pendente',ok:!!DB.get('vf')?.profissional},
+        {label:'GROW',val:`${(DB.get('grow_sessions')||[]).length} sessões`,ok:(DB.get('grow_sessions')||[]).length>0},
+      ].map(d=>`<div style="background:var(--bg3);border:1px solid ${d.ok?'var(--green-border)':'var(--border)'};border-radius:var(--radius-sm);padding:10px 14px;">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${d.label}</div>
+        <div style="font-size:12px;font-weight:600;color:${d.ok?'var(--green)':'var(--text3)'}">${d.val}</div>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-gold" onclick="runFullAnalysis()">✦ Gerar análise completa ↗</button>
+      <button class="btn btn-outline" onclick="runQuickInsight()">→ Insight rápido</button>
+    </div>
+  </div>
+  <div id="ia-main-result" style="display:none;"></div>
+  <div class="grid-3" style="margin-top:16px;">
+    <div class="panel">
+      <div class="ai-tag">30 DIAS</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:6px">Mapear 3 stakeholders críticos e agendar conversas estratégicas. Revisar presença LinkedIn com foco em posicionamento de autoridade.</div>
+    </div>
+    <div class="panel">
+      <div class="ai-tag">60 DIAS</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:6px">Liderar um projeto transversal de alta visibilidade. Construir narrativa de carreira para apresentação a board ou comitê executivo.</div>
+    </div>
+    <div class="panel">
+      <div class="ai-tag">90 DIAS</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:6px">Solicitar feedback estruturado da liderança sênior. Definir movimentos de carreira para os próximos 18 meses com o mentor.</div>
+    </div>
+  </div>`;
+}
+
+async function runFullAnalysis(){
+  const disc = DB.get('disc');
+  const comps = DB.get('competencias');
+  const swot = DB.get('swot');
+  const peers = DB.get('peer360').filter(p=>p.done);
+  const vf = DB.get('vf');
+  const gaps = comps.filter(c=>c.me<c.mentor).map(c=>c.name).join(', ');
+  const strengths = comps.filter(c=>c.me>=4).map(c=>c.name).join(', ');
+
+  showIALoading('ia-main-result','Processando todos os instrumentos');
+
+  const prompt = `Você é um estrategista sênior de desenvolvimento executivo. Produza um relatório diagnóstico completo baseado em todos os instrumentos de mentoria.
+
+PERFIL DISC: ${disc?`${disc} — ${DISC_DATA[disc]?.name}`:'Não realizado'}
+COMPETÊNCIAS — FORÇAS (≥4): ${strengths||'Não mapeado'}
+COMPETÊNCIAS — GAPS: ${gaps||'Nenhum gap crítico'}
+SWOT — Forças: ${(swot?.f||[]).join(', ')||'Não preenchido'}
+SWOT — Fraquezas: ${(swot?.fr||[]).join(', ')||'Não preenchido'}
+SWOT — Oportunidades: ${(swot?.o||[]).join(', ')||'Não preenchido'}
+SWOT — Ameaças: ${(swot?.a||[]).join(', ')||'Não preenchido'}
+360° — Avaliações: ${peers.length} respondentes
+VISÃO DE FUTURO: ${vf?.profissional||'Não preenchida'}
+
+Produza um relatório executivo estruturado com:
+
+# DIAGNÓSTICO INTEGRADO
+Síntese cruzada de todos os instrumentos — o que o conjunto de dados revela sobre este profissional?
+
+# POSICIONAMENTO ATUAL vs. ASPIRADO
+Onde o profissional está e onde quer chegar. Qual é o delta real?
+
+# ALAVANCAS PRIORITÁRIAS
+As 2-3 intervenções com maior retorno no desenvolvimento deste profissional nas próximas 12 semanas.
+
+# RISCOS E PONTOS CEGOS
+O que os dados sugerem que o profissional não vê sobre si mesmo?
+
+# PLANO DE DESENVOLVIMENTO — 12 SEMANAS
+Semanas 1-4: Ações específicas de fundação
+Semanas 5-8: Ações de aceleração e visibilidade
+Semanas 9-12: Consolidação e preparação para o próximo nível
+
+# MÉTRICA DE SUCESSO
+Como mensurar o progresso ao final do ciclo?
+
+Escreva com precisão clínica e orientação executiva. Evite jargões vazios.`;
+
+  const result = await callAI(prompt);
+  showIAResult('ia-main-result', result, 'Análise Integrada — Relatório Executivo');
+}
+
+async function runQuickInsight(){
+  showIALoading('ia-main-result','Gerando insight rápido');
+  const disc = DB.get('disc');
+  const gaps = DB.get('competencias').filter(c=>c.me<c.mentor).map(c=>c.name).join(', ');
+  const prompt = `Profissional em mentoria. DISC: ${disc||'não definido'}. Gaps de competência: ${gaps||'nenhum'}. Em 5 frases diretas, qual é a ação mais importante que este profissional deve tomar esta semana para avançar sua carreira? Seja específico, sem enrolação.`;
+  const result = await callAI(prompt);
+  showIAResult('ia-main-result', result, 'Insight Rápido');
+}
+
+// ══════════════════════════════════════════════
+// NPS DASHBOARD
+// ══════════════════════════════════════════════
+function renderNPSDash(){
+  const nps = DB.get('nps_history');
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header"><div class="page-title">NPS & Progresso</div><div class="page-sub">Avaliação de sentimento e evolução do ciclo</div></div>
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Como você avalia esta mentoria até agora? (0-10)</div>
+    <div class="nps-row" id="nps-row"></div>
+    <div class="field" style="margin-top:12px;"><label class="field-label">Comentário (opcional)</label><textarea id="nps-comment" rows="2" placeholder="O que está funcionando bem? O que poderia melhorar?"></textarea></div>
+    <button class="btn btn-gold btn-sm" onclick="submitNPS()">Enviar avaliação</button>
+  </div>
+  <div class="panel">
+    <div class="panel-title"><div class="panel-title-dot"></div> Histórico de NPS</div>
+    <div class="chart-wrap" style="height:200px;"><canvas id="nps-line" role="img" aria-label="Evolução do NPS"></canvas></div>
+  </div>`;
+
+  const row = document.getElementById('nps-row');
+  row.innerHTML = [0,1,2,3,4,5,6,7,8,9,10].map(n=>`<div class="nps-num nps-${n}" onclick="selectNPS(${n},this)">${n}</div>`).join('');
+  row.innerHTML += `<span style="font-size:10px;color:var(--text4);margin-left:8px">0 = Não recomendaria · 10 = Recomendaria com certeza</span>`;
+
+  setTimeout(()=>{
+    const ctx = document.getElementById('nps-line');
+    if(ctx) charts.npsLine = new Chart(ctx,{
+      type:'line',
+      data:{labels:nps.map(n=>n.cycle),datasets:[{label:'NPS',data:nps.map(n=>n.score),borderColor:'#f0c040',backgroundColor:'rgba(240,192,64,.08)',pointBackgroundColor:'#f0c040',borderWidth:2,tension:.4,fill:true}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:10,ticks:{color:'#666'},grid:{color:'#1a1a1a'}},x:{ticks:{color:'#888'},grid:{display:false}}}}
+    });
+  },100);
+}
+
+let selectedNPS = null;
+function selectNPS(n, el){
+  selectedNPS = n;
+  document.querySelectorAll('.nps-num').forEach(d=>d.classList.remove('nps-sel'));
+  el.classList.add('nps-sel');
+}
+
+function submitNPS(){
+  if(selectedNPS===null){ toast('Selecione uma nota','err'); return; }
+  toast(`Avaliação ${selectedNPS}/10 registrada. Obrigado!`,'suc');
+  selectedNPS = null;
+  document.querySelectorAll('.nps-num').forEach(d=>d.classList.remove('nps-sel'));
+}
+
+// ══════════════════════════════════════════════
+// MINHA JORNADA (mentorado)
+// ══════════════════════════════════════════════
+function renderMinhaJornada(){
+  const disc = DB.get('disc');
+  const comps = DB.get('competencias');
+  const swot = DB.get('swot');
+  const vfDone = !!(DB.get('vf')?.profissional);
+  const steps = [
+    {label:'Kick-off realizado',done:true,phase:'G'},
+    {label:'Radar de competências',done:comps.some(c=>c.me>0),phase:'U'},
+    {label:'SWOT pessoal',done:Object.values(swot||{}).flat().length>0,phase:'U'},
+    {label:'Assessment DISC',done:!!disc,phase:'U'},
+    {label:'Visão de Futuro',done:vfDone,phase:'U'},
+    {label:'Microplano ativo',done:true,phase:'I'},
+    {label:'Feedback 360° enviado',done:DB.get('peer360').length>3,phase:'I'},
+    {label:'Análise IA realizada',done:false,phase:'I'},
+    {label:'Revisão final',done:false,phase:'A'},
+  ];
+  const done = steps.filter(s=>s.done).length;
+  const pct = Math.round(done/steps.length*100);
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Minha Jornada de Mentoria</div>
+    <div class="page-sub">Ciclo Q2 2026 — Metodologia GUIA · Semana 6/12</div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Progresso</div><div class="kpi-value" style="color:var(--gold)">${pct}%</div><div class="kpi-sub">${done}/${steps.length} etapas</div></div>
+    <div class="kpi"><div class="kpi-label">Fase atual</div><div class="kpi-value" style="color:var(--green)">I</div><div class="kpi-sub">Implementação</div></div>
+    <div class="kpi"><div class="kpi-label">Próxima sessão</div><div class="kpi-value" style="font-size:16px">Sex</div><div class="kpi-sub">02 Mai · 09h00</div></div>
+    <div class="kpi"><div class="kpi-label">DISC identificado</div><div class="kpi-value" style="font-size:18px">${disc||'—'}</div><div class="kpi-sub">${disc?DISC_DATA[disc]?.name:'Não realizado'}</div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Progresso da jornada</div>
+      <div style="background:var(--bg3);border-radius:6px;height:8px;margin-bottom:18px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:var(--gold);border-radius:6px;transition:width .5s"></div>
+      </div>
+      ${steps.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
+        <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid ${s.done?'var(--green)':'var(--border2)'};background:${s.done?'var(--green-bg)':'transparent'};display:flex;align-items:center;justify-content:center;font-size:10px;color:${s.done?'var(--green)':'var(--text4)'};flex-shrink:0">${s.done?'✓':'○'}</div>
+        <div style="font-size:12px;color:${s.done?'var(--text)':'var(--text3)'}">${s.label}</div>
+        <div style="margin-left:auto;font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--bg3);color:var(--text4);font-family:'Space Mono',monospace">${s.phase}</div>
+      </div>`).join('')}
+    </div>
+    <div>
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Próximas ações desta semana</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+          1. Completar Sessão GROW #2 com mentor<br>
+          2. Publicar post de posicionamento no LinkedIn<br>
+          3. Enviar memo estratégico para revisão<br>
+          4. Responder autoavaliação de competências
+        </div>
+        <div class="divider"></div>
+        <button class="btn btn-gold btn-sm" onclick="runQuickInsight();showPage('ia-main')">✦ Pedir orientação à IA ↗</button>
+      </div>
+      <div class="ai-panel">
+        <div class="ai-header"><div class="ai-badge">INSIGHT DA SEMANA</div></div>
+        <div class="ai-rec">Você está na semana crítica da fase I — a implementação começa a revelar os gaps reais que o diagnóstico apenas antecipou. O que você executa agora determina o relatório de encerramento. Não deixe a perfeição paralisar a ação.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════
+// AI ENGINE
+// ══════════════════════════════════════════════
+async function callAI(prompt){
+  try{
+    const response = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        messages:[{role:'user',content:prompt}]
+      })
+    });
+    const data = await response.json();
+    if(data.content&&data.content[0]) return data.content[0].text;
+    return 'Erro ao processar resposta da IA.';
+  } catch(e){
+    return `Erro de conexão: ${e.message}. Verifique sua conexão e tente novamente.`;
+  }
+}
+
+function showIALoading(targetId, msg){
+  const el = document.getElementById(targetId);
+  if(!el) return;
+  el.style.display='block';
+  el.innerHTML = `<div class="ai-panel"><div class="ai-loading"><div class="spinner"></div> ${msg||'Processando com IA'}...</div></div>`;
+}
+
+function showIAResult(targetId, text, title){
+  const el = document.getElementById(targetId);
+  if(!el) return;
+  const paragraphs = text.split(/\n\n+/).filter(p=>p.trim());
+  el.innerHTML = `<div class="ai-panel">
+    <div class="ai-header"><div class="ai-badge">IA ARCALA</div><span style="font-size:11px;color:var(--text3)">${title||''}</span></div>
+    ${paragraphs.map(p=>`<div class="ai-rec">${formatAIText(p)}</div>`).join('')}
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="btn btn-outline btn-xs" onclick="copyAIResult('${targetId}')">Copiar</button>
+      <button class="btn btn-outline btn-xs" onclick="downloadAIResult('${targetId}','${title}')">Exportar .txt</button>
+    </div>
+  </div>`;
+}
+
+function formatAIText(text){
+  return text
+    .replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--gold)">$1</strong>')
+    .replace(/^#+ (.+)$/gm,'<div style="color:var(--gold);font-weight:700;font-size:13px;margin-bottom:6px">$1</div>')
+    .replace(/\n/g,'<br>');
+}
+
+function copyAIResult(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const text = el.innerText;
+  navigator.clipboard.writeText(text).then(()=>toast('Copiado!','suc')).catch(()=>toast('Erro ao copiar','err'));
+}
+
+function downloadAIResult(id, title){
+  const el = document.getElementById(id);
+  if(!el) return;
+  downloadText(el.innerText, (title||'analise-ia').replace(/\s/g,'-').toLowerCase()+'.txt');
+  toast('Exportado!','suc');
+}
+
+// ══════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════
+function initials(name){
+  return (name||'??').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+}
+
+function today(){
+  return new Date().toISOString().split('T')[0];
+}
+
+function toast(msg, type=''){
+  const t = document.createElement('div');
+  t.className = 'toast'+(type?' '+type:'');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
+function downloadText(content, filename){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content],{type:'text/plain'}));
+  a.download = filename;
+  a.click();
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+
+
+// ─── CONFIRM MODAL ───
+let _modalCallback = null;
+function showConfirm(title, msg, confirmLabel, cb, danger=true){
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-msg').textContent = msg;
+  const btn = document.getElementById('modal-confirm-btn');
+  btn.textContent = confirmLabel;
+  btn.className = 'btn btn-sm ' + (danger ? 'btn-red' : 'btn-gold');
+  _modalCallback = cb;
+  document.getElementById('confirm-modal').classList.add('show');
+}
+function modalConfirm(){
+  document.getElementById('confirm-modal').classList.remove('show');
+  if(_modalCallback) _modalCallback();
+  _modalCallback = null;
+}
+function modalCancel(){
+  document.getElementById('confirm-modal').classList.remove('show');
+  _modalCallback = null;
+}
+
+// ══════════════════════════════════════════════
+// AUTH SYSTEM
+// ══════════════════════════════════════════════
+function switchAuthTab(tab){
+  document.getElementById('tab-login').classList.toggle('active', tab==='login');
+  document.getElementById('tab-signup').classList.toggle('active', tab==='signup');
+  document.getElementById('pane-login').style.display = tab==='login'?'block':'none';
+  document.getElementById('pane-signup').style.display = tab==='signup'?'block':'none';
+  document.getElementById('signup-form').style.display = 'block';
+  document.getElementById('signup-pending').style.display = 'none';
+}
+
+function doLogin(){
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-err');
+  errEl.classList.remove('show');
+
+  if(!email || !pass){ errEl.textContent='Preencha e-mail e senha.'; errEl.classList.add('show'); return; }
+
+  const users = DB.get('users') || [];
+  const user = users.find(u => u.email === email);
+
+  if(!user){
+    errEl.textContent='E-mail não encontrado. Solicite acesso na aba "Criar conta".';
+    errEl.classList.add('show'); return;
+  }
+  if(user.password && user.password !== btoa(pass)){
+    errEl.textContent='Senha incorreta.';
+    errEl.classList.add('show'); return;
+  }
+  if(!user.active){
+    errEl.textContent='Seu acesso ainda não foi liberado pelo administrador. Aguarde a aprovação.';
+    errEl.classList.add('show'); return;
+  }
+
+  // Login OK — save session
+  DB.set('session', {userId: user.id, role: user.role, name: user.name, email: user.email});
+  bootApp(user);
+}
+
+function doSignup(){
+  const name  = document.getElementById('signup-name').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const pass  = document.getElementById('signup-pass').value;
+  const plan  = document.getElementById('signup-plan').value;
+  const goal  = document.getElementById('signup-goal').value;
+  const errEl = document.getElementById('signup-err');
+  errEl.classList.remove('show');
+
+  if(!name || !email || !pass){
+    errEl.textContent='Preencha nome, e-mail e senha.'; errEl.classList.add('show'); return;
+  }
+  if(pass.length < 6){
+    errEl.textContent='A senha deve ter no mínimo 6 caracteres.'; errEl.classList.add('show'); return;
+  }
+  if(!plan || !goal){
+    errEl.textContent='Selecione o plano e o objetivo.'; errEl.classList.add('show'); return;
+  }
+
+  const users = DB.get('users') || [];
+  if(users.find(u => u.email === email)){
+    errEl.textContent='Este e-mail já está cadastrado. Faça login.'; errEl.classList.add('show'); return;
+  }
+
+  // Save to registrations queue
+  const regs = DB.get('registrations') || [];
+  const exists = regs.find(r => r.email === email);
+  if(exists){
+    errEl.textContent='Já existe uma solicitação para este e-mail.'; errEl.classList.add('show'); return;
+  }
+
+  regs.push({
+    id: 'r'+Date.now(),
+    name, email,
+    password: btoa(pass),
+    plan: plan || 'Não informado',
+    goal: goal || 'Não informado',
+    role: goal === 'Ser mentor na plataforma' ? 'mentor' : 'mentorado',
+    date: today(),
+    status: 'pending'
+  });
+  DB.set('registrations', regs);
+
+  // Show pending state
+  document.getElementById('signup-form').style.display = 'none';
+  document.getElementById('signup-pending').style.display = 'block';
+}
+
+function bootApp(user){
+  // Hide auth screen
+  document.getElementById('auth-screen').style.display = 'none';
+
+  // Set role based on user
+  const role = user.role === 'admin' ? 'admin' : user.role === 'mentor' ? 'mentor' : 'mentorado';
+
+  // Update topbar avatar
+  document.getElementById('top-av').textContent = initials(user.name);
+  document.getElementById('top-name').textContent = user.name;
+
+  // Hide role switcher for non-admins
+  if(role !== 'admin'){
+    document.getElementById('role-switcher').style.display = 'none';
+  }
+
+  switchRole(role);
+}
+
+function checkSession(){
+  const session = DB.get('session');
+  if(session){
+    const users = DB.get('users') || [];
+    const user = users.find(u => u.id === session.userId);
+    if(user && user.active){
+      bootApp(user);
+      return;
+    }
+    DB.set('session', null);
+  }
+  // Show auth screen
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+function logout(){
+  DB.set('session', null);
+  document.getElementById('auth-screen').style.display = 'flex';
+  document.getElementById('role-switcher').style.display = 'flex';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-pass').value = '';
+  document.getElementById('login-err').classList.remove('show');
+  toast('Sessão encerrada','suc');
+}
+
+// Patch approveReg to copy password
+const _origApproveReg = approveReg;
+window.approveReg = function(id){
+  const regs = DB.get('registrations');
+  const reg = regs.find(r=>r.id===id);
+  if(!reg) return;
+  reg.status='approved';
+  DB.set('registrations',regs);
+  const users = DB.get('users');
+  users.push({
+    id:'u'+Date.now(),
+    name:reg.name,
+    email:reg.email,
+    password: reg.password || null,
+    role:reg.role,
+    plan:reg.plan,
+    active:true,
+    created:today(),
+    phase:'G',
+    week:0
+  });
+  DB.set('users',users);
+  toast(`${reg.name} aprovado e acesso liberado!`,'suc');
+  renderAdminRegs();
+};
+
+
+renderSidebar();
+checkSession();
+</script>
+</body>
+</html>

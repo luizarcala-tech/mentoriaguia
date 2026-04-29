@@ -2243,49 +2243,54 @@ async function doLogin(){
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-err');
+  const btn   = document.querySelector('#pane-login .auth-btn');
+
   errEl.classList.remove('show');
-
-  if(!email || !pass){ errEl.textContent='Preencha e-mail e senha.'; errEl.classList.add('show'); return; }
-
-  const btn = document.querySelector('#pane-login .auth-btn');
-  btn.textContent = 'Verificando...'; btn.disabled = true;
-
-  // Helper to finish login
-  function finishLogin(user){
-    if(!user){
-      errEl.textContent='E-mail não encontrado. Solicite acesso na aba "Criar conta".';
-      errEl.classList.add('show'); btn.textContent='Entrar na plataforma'; btn.disabled=false; return;
-    }
-    if(user.password && user.password !== btoa(pass)){
-      errEl.textContent='Senha incorreta.';
-      errEl.classList.add('show'); btn.textContent='Entrar na plataforma'; btn.disabled=false; return;
-    }
-    if(user.active === false){
-      errEl.textContent='Seu acesso ainda não foi liberado. Aguarde a aprovação.';
-      errEl.classList.add('show'); btn.textContent='Entrar na plataforma'; btn.disabled=false; return;
-    }
-    DB.set('session', {userId: user.id, role: user.role, name: user.name, email: user.email});
-    bootApp(user);
+  if(!email || !pass){
+    errEl.textContent='Preencha e-mail e senha.';
+    errEl.classList.add('show'); return;
   }
 
-  // Try Supabase first, always fallback to localStorage
-  let sbUser = null;
-  try {
-    const rows = await Promise.race([
-      sbFetch('users?email=eq.'+encodeURIComponent(email)+'&select=*'),
-      new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),4000))
-    ]);
-    sbUser = rows[0] || null;
-  } catch(e){ sbUser = null; }
+  btn.textContent='Verificando...'; btn.disabled=true;
 
-  if(sbUser){
-    finishLogin(sbUser);
-  } else {
-    // Always fallback to localStorage — ensures admin always works
-    const localUsers = DB.get('users') || [];
-    const localUser = localUsers.find(u => u.email === email);
-    finishLogin(localUser);
+  // 1. Busca no localStorage (sempre funciona, admin garantido)
+  const localUsers = DB.get('users') || [];
+  let user = localUsers.find(u => u.email === email) || null;
+
+  // 2. Se não achou localmente, tenta Supabase com timeout
+  if(!user){
+    try {
+      const rows = await Promise.race([
+        sbFetch('users?email=eq.'+encodeURIComponent(email)+'&select=*'),
+        new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),5000))
+      ]);
+      if(rows && rows[0]){
+        user = rows[0];
+        // Salva localmente para próximo login ser instantâneo
+        localUsers.push(user);
+        DB.set('users', localUsers);
+      }
+    } catch(e){ user = null; }
   }
+
+  btn.textContent='Entrar na plataforma'; btn.disabled=false;
+
+  if(!user){
+    errEl.textContent='E-mail não encontrado. Solicite acesso na aba "Criar conta".';
+    errEl.classList.add('show'); return;
+  }
+  if(user.password && user.password !== btoa(pass)){
+    errEl.textContent='Senha incorreta.';
+    errEl.classList.add('show'); return;
+  }
+  if(user.active === false || user.active === 0){
+    errEl.textContent='Seu acesso ainda não foi liberado pelo administrador.';
+    errEl.classList.add('show'); return;
+  }
+
+  // Login OK
+  DB.set('session', {userId:user.id, role:user.role, name:user.name, email:user.email});
+  bootApp(user);
 }
 
 function doSignup(){
@@ -2372,18 +2377,32 @@ function bootApp(user){
   switchRole(role);
 }
 
-function checkSession(){
+async function checkSession(){
   const session = DB.get('session');
   if(session){
+    // First check localStorage
     const users = DB.get('users') || [];
-    const user = users.find(u => u.id === session.userId);
-    if(user && user.active){
+    let user = users.find(u => u.id === session.userId);
+    // If not found locally, try Supabase
+    if(!user){
+      try {
+        const rows = await Promise.race([
+          sbFetch('users?id=eq.'+session.userId+'&select=*'),
+          new Promise((_,r)=>setTimeout(()=>r(new Error('t')),3000))
+        ]);
+        if(rows && rows[0]){
+          user = rows[0];
+          users.push(user);
+          DB.set('users', users);
+        }
+      } catch(e){}
+    }
+    if(user && (user.active === true || user.active === 1)){
       bootApp(user);
       return;
     }
     DB.set('session', null);
   }
-  // Show auth screen
   document.getElementById('auth-screen').style.display = 'flex';
 }
 

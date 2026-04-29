@@ -478,7 +478,32 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
 <script>
 // ══════════════════════════════════════════════
-// DATABASE (localStorage-backed)
+// SUPABASE CONFIG
+// ══════════════════════════════════════════════
+const SB_URL = 'https://pzpbtbbbwbjzlghducxs.supabase.co';
+const SB_KEY = 'sb_publishable_RA-nyoU6kfewivYiueNVpQ_NWMlvV09';
+
+async function sbFetch(path, method='GET', body=null, extraHeaders={}){
+  const headers = {
+    'apikey': SB_KEY,
+    'Authorization': 'Bearer ' + SB_KEY,
+    'Content-Type': 'application/json',
+    'Prefer': method==='POST' ? 'return=representation' : '',
+    ...extraHeaders
+  };
+  const opts = { method, headers };
+  if(body) opts.body = JSON.stringify(body);
+  const res = await fetch(SB_URL + '/rest/v1/' + path, opts);
+  if(!res.ok && res.status !== 406){
+    const err = await res.text();
+    throw new Error(err);
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
+}
+
+// ══════════════════════════════════════════════
+// DATABASE (localStorage-backed para dados locais)
 // ══════════════════════════════════════════════
 const DB = {
   get(k){ try{ return JSON.parse(localStorage.getItem('arcala_'+k)||'null') }catch(e){return null} },
@@ -665,7 +690,7 @@ function showPage(id){
 
   destroyCharts();
   const fn = pages[id];
-  if(fn) fn();
+  if(fn) Promise.resolve(fn()).catch(e=>console.error(e));
   else document.getElementById('content-area').innerHTML = `<div class="page-header"><div class="page-title">${id}</div><div class="page-sub">Em construção</div></div>`;
 }
 
@@ -727,8 +752,12 @@ function renderDash(){
 // ══════════════════════════════════════════════
 // ADMIN — USERS
 // ══════════════════════════════════════════════
-function renderAdminUsers(){
-  const users = DB.get('users');
+async function renderAdminUsers(){
+  let users = DB.get('users') || [];
+  try {
+    const sbUsers = await sbFetch('users?order=created_at.desc');
+    sbUsers.forEach(u => { if(!users.find(x=>x.email===u.email)) users.push(u); });
+  } catch(e) {}
   const searchId = 'usr-search-'+Date.now();
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
@@ -828,14 +857,18 @@ function addUser(){
   renderAdminUsers();
 }
 
-function toggleUserAccess(id, el){
-  const users = DB.get('users');
-  const u = users.find(u=>u.id===id);
-  if(!u) return;
-  u.active = !u.active;
-  DB.set('users',users);
+async function toggleUserAccess(id, el){
+  const isOn = el.classList.contains('on');
+  const newActive = !isOn;
   el.classList.toggle('on');
-  toast(`Acesso ${u.active?'liberado':'revogado'} para ${u.name}`, u.active?'suc':'err');
+  try {
+    await sbFetch(`users?id=eq.${id}`, 'PATCH', {active: newActive});
+  } catch(e) {
+    const users = DB.get('users')||[];
+    const u = users.find(u=>u.id===id);
+    if(u){ u.active=newActive; DB.set('users',users); }
+  }
+  toast(`Acesso ${newActive?'liberado':'revogado'}!`, newActive?'suc':'err');
 }
 
 function editUser(id){
@@ -870,8 +903,16 @@ function deleteUser(id){
 // ══════════════════════════════════════════════
 // ADMIN — REGISTRATIONS
 // ══════════════════════════════════════════════
-function renderAdminRegs(){
-  const regs = DB.get('registrations');
+async function renderAdminRegs(){
+  let regs = [];
+  try {
+    regs = await sbFetch('registrations?order=created_at.desc');
+    // Also merge any local ones
+    const local = DB.get('registrations') || [];
+    local.forEach(l => { if(!regs.find(r=>r.email===l.email)) regs.push(l); });
+  } catch(e) {
+    regs = DB.get('registrations') || [];
+  }
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
     <div class="page-title">Cadastros Pendentes</div>
@@ -2198,7 +2239,7 @@ function switchAuthTab(tab){
   document.getElementById('signup-pending').style.display = 'none';
 }
 
-function doLogin(){
+async function doLogin(){
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-err');
@@ -2206,25 +2247,48 @@ function doLogin(){
 
   if(!email || !pass){ errEl.textContent='Preencha e-mail e senha.'; errEl.classList.add('show'); return; }
 
-  const users = DB.get('users') || [];
-  const user = users.find(u => u.email === email);
+  const btn = document.querySelector('#pane-login .auth-btn');
+  btn.textContent = 'Verificando...'; btn.disabled = true;
 
-  if(!user){
-    errEl.textContent='E-mail não encontrado. Solicite acesso na aba "Criar conta".';
-    errEl.classList.add('show'); return;
-  }
-  if(user.password && user.password !== btoa(pass)){
-    errEl.textContent='Senha incorreta.';
-    errEl.classList.add('show'); return;
-  }
-  if(!user.active){
-    errEl.textContent='Seu acesso ainda não foi liberado pelo administrador. Aguarde a aprovação.';
-    errEl.classList.add('show'); return;
-  }
+  try {
+    // Check Supabase first
+    const users = await sbFetch(`users?email=eq.${encodeURIComponent(email)}&select=*`);
+    let user = users[0];
 
-  // Login OK — save session
-  DB.set('session', {userId: user.id, role: user.role, name: user.name, email: user.email});
-  bootApp(user);
+    // Fallback to localStorage (admin local)
+    if(!user){
+      const localUsers = DB.get('users') || [];
+      user = localUsers.find(u => u.email === email);
+    }
+
+    if(!user){
+      errEl.textContent='E-mail não encontrado. Solicite acesso na aba "Criar conta".';
+      errEl.classList.add('show'); btn.textContent='Entrar na plataforma'; btn.disabled=false; return;
+    }
+    if(user.password && user.password !== btoa(pass)){
+      errEl.textContent='Senha incorreta.';
+      errEl.classList.add('show'); btn.textContent='Entrar na plataforma'; btn.disabled=false; return;
+    }
+    if(!user.active){
+      errEl.textContent='Seu acesso ainda não foi liberado pelo administrador. Aguarde a aprovação.';
+      errEl.classList.add('show'); btn.textContent='Entrar na plataforma'; btn.disabled=false; return;
+    }
+
+    DB.set('session', {userId: user.id, role: user.role, name: user.name, email: user.email});
+    bootApp(user);
+  } catch(e) {
+    // Fallback to localStorage if Supabase fails
+    const localUsers = DB.get('users') || [];
+    const user = localUsers.find(u => u.email === email);
+    if(user && user.active && (!user.password || user.password === btoa(pass))){
+      DB.set('session', {userId: user.id, role: user.role, name: user.name, email: user.email});
+      bootApp(user);
+    } else {
+      errEl.textContent='Erro de conexão. Tente novamente.';
+      errEl.classList.add('show');
+    }
+    btn.textContent='Entrar na plataforma'; btn.disabled=false;
+  }
 }
 
 function doSignup(){
@@ -2258,7 +2322,7 @@ function doSignup(){
     errEl.textContent='Já existe uma solicitação para este e-mail.'; errEl.classList.add('show'); return;
   }
 
-  regs.push({
+  const newReg = {
     id: 'r'+Date.now(),
     name, email,
     password: btoa(pass),
@@ -2267,8 +2331,25 @@ function doSignup(){
     role: goal === 'Ser mentor na plataforma' ? 'mentor' : 'mentorado',
     date: today(),
     status: 'pending'
-  });
-  DB.set('registrations', regs);
+  };
+
+  // Save to Supabase
+  try {
+    await sbFetch('registrations', 'POST', {
+      id: newReg.id,
+      name: newReg.name,
+      email: newReg.email,
+      password: newReg.password,
+      plan: newReg.plan,
+      goal: newReg.goal,
+      role: newReg.role,
+      status: 'pending'
+    });
+  } catch(e) {
+    // Fallback to localStorage
+    regs.push(newReg);
+    DB.set('registrations', regs);
+  }
 
   // Show pending state
   document.getElementById('signup-form').style.display = 'none';
@@ -2321,28 +2402,54 @@ function logout(){
 
 // Patch approveReg to copy password
 const _origApproveReg = approveReg;
-window.approveReg = function(id){
-  const regs = DB.get('registrations');
-  const reg = regs.find(r=>r.id===id);
+window.approveReg = async function(id){
+  // Find reg in Supabase or local
+  let reg = null;
+  try {
+    const rows = await sbFetch(`registrations?id=eq.${id}&select=*`);
+    reg = rows[0];
+  } catch(e) {}
+  if(!reg){
+    const local = DB.get('registrations')||[];
+    reg = local.find(r=>r.id===id);
+  }
   if(!reg) return;
-  reg.status='approved';
-  DB.set('registrations',regs);
-  const users = DB.get('users');
-  users.push({
-    id:'u'+Date.now(),
-    name:reg.name,
-    email:reg.email,
-    password: reg.password || null,
-    role:reg.role,
-    plan:reg.plan,
-    active:true,
-    created:today(),
-    phase:'G',
-    week:0
-  });
-  DB.set('users',users);
-  toast(`${reg.name} aprovado e acesso liberado!`,'suc');
-  renderAdminRegs();
+
+  showConfirm(
+    'Aprovar acesso',
+    `Liberar acesso para "${reg.name}"?`,
+    'Aprovar',
+    async ()=>{
+      try {
+        // Update status in Supabase
+        await sbFetch(`registrations?id=eq.${id}`, 'PATCH', {status:'approved'});
+        // Create user in Supabase
+        await sbFetch('users', 'POST', {
+          id: 'u'+Date.now(),
+          name: reg.name,
+          email: reg.email,
+          password: reg.password || btoa('Arcala@2026'),
+          role: reg.role || 'mentorado',
+          plan: reg.plan || 'Ciclo único',
+          active: true,
+          phase: 'G',
+          week: 0
+        });
+      } catch(e) {
+        // Fallback localStorage
+        const regs = DB.get('registrations')||[];
+        const r = regs.find(x=>x.id===id);
+        if(r) r.status='approved';
+        DB.set('registrations',regs);
+        const users = DB.get('users')||[];
+        users.push({id:'u'+Date.now(),name:reg.name,email:reg.email,password:reg.password,role:reg.role||'mentorado',plan:reg.plan,active:true,created:today(),phase:'G',week:0});
+        DB.set('users',users);
+      }
+      toast(`${reg.name} aprovado! Acesso liberado.`,'suc');
+      renderAdminRegs();
+    },
+    false
+  );
 };
 
 

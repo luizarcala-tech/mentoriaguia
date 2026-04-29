@@ -984,7 +984,7 @@ function rejectReg(id){
 // ══════════════════════════════════════════════
 // ADMIN — NPS
 // ══════════════════════════════════════════════
-function renderAdminNPS(){
+async function renderAdminNPS(){
   const nps = DB.get('nps_history');
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
@@ -1035,7 +1035,7 @@ function renderAdminNPS(){
   },100);
 }
 
-function addNPS(){
+async function addNPS(){
   const cycle = document.getElementById('nps-cycle').value.trim();
   const score = parseFloat(document.getElementById('nps-score').value);
   const responses = parseInt(document.getElementById('nps-resp').value)||0;
@@ -2268,7 +2268,7 @@ function doLogin(){
   bootApp(user);
 }
 
-function doSignup(){
+async function doSignup(){
   const name  = document.getElementById('signup-name').value.trim();
   const email = document.getElementById('signup-email').value.trim();
   const pass  = document.getElementById('signup-pass').value;

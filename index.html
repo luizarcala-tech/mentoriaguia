@@ -20,7 +20,7 @@
   --amber:#f0a040;--amber-bg:#1a1000;--amber-border:#3a2500;
   --radius:10px;--radius-sm:7px;
 }
-body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+body{font-family:Sora,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
 
 /* ─── TOPBAR ─── */
 .topbar{
@@ -34,7 +34,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .logo-sep{color:var(--text4);margin:0 8px}
 .topbar-spacer{flex:1}
 .role-switcher{display:flex;gap:3px;background:var(--bg3);padding:3px;border-radius:20px}
-.role-btn{padding:5px 14px;border-radius:17px;border:none;font-family:'Sora',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--text3);background:none;letter-spacing:.03em}
+.role-btn{padding:5px 14px;border-radius:17px;border:none;font-family:Sora,sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;color:var(--text3);background:none;letter-spacing:.03em}
 .role-btn.active{background:var(--gold);color:#0a0a0a}
 .user-info{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text3)}
 .avatar-xs{width:26px;height:26px;border-radius:50%;background:var(--gold);color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;font-family:'Space Mono',monospace;flex-shrink:0}
@@ -55,7 +55,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
   padding:8px 10px;border-radius:var(--radius-sm);
   font-size:12px;color:var(--text3);cursor:pointer;
   transition:all .15s;border:none;background:none;width:100%;text-align:left;
-  font-family:'Sora',sans-serif;
+  font-family:Sora,sans-serif;
 }
 .nav-item:hover{color:var(--text);background:var(--bg3)}
 .nav-item.active{color:var(--gold);background:var(--gold-bg)}
@@ -91,7 +91,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .section-label::after{content:'';flex:1;height:1px;background:var(--border)}
 
 /* ─── BUTTONS ─── */
-.btn{padding:8px 18px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:'Sora',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn{padding:8px 18px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:Sora,sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
 .btn-gold{background:var(--gold);color:#0a0a0a}
 .btn-gold:hover{background:#f0d060}
 .btn-gold:disabled{opacity:.5;cursor:not-allowed}
@@ -110,7 +110,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .field-label{font-size:10px;color:var(--text3);letter-spacing:.07em;font-weight:600;text-transform:uppercase}
 .field input,.field select,.field textarea{
   background:var(--bg3);border:1px solid var(--border);color:var(--text);
-  font-family:'Sora',sans-serif;font-size:12px;padding:9px 12px;
+  font-family:Sora,sans-serif;font-size:12px;padding:9px 12px;
   border-radius:var(--radius-sm);transition:border-color .15s;outline:none;width:100%;
 }
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--gold)}
@@ -118,7 +118,7 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);min-he
 .field textarea{resize:vertical;min-height:72px;line-height:1.5}
 input.inline-inp{
   background:var(--bg3);border:1px solid var(--border);color:var(--text);
-  font-family:'Sora',sans-serif;font-size:12px;padding:8px 11px;
+  font-family:Sora,sans-serif;font-size:12px;padding:8px 11px;
   border-radius:var(--radius-sm);outline:none;
 }
 input.inline-inp:focus{border-color:var(--gold)}
@@ -181,7 +181,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .sq-a{background:var(--amber-bg);border:1px solid var(--amber-border)}
 .swot-label{font-size:9px;font-weight:700;letter-spacing:.12em;margin-bottom:10px;text-transform:uppercase}
 .sl-f{color:var(--green)}.sl-fr{color:var(--red)}.sl-o{color:var(--blue)}.sl-a{color:var(--amber)}
-.swot-sel{width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:var(--text);font-family:'Sora',sans-serif;font-size:11px;padding:6px 9px;border-radius:6px;margin-bottom:8px;cursor:pointer}
+.swot-sel{width:100%;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);color:var(--text);font-family:Sora,sans-serif;font-size:11px;padding:6px 9px;border-radius:6px;margin-bottom:8px;cursor:pointer}
 .swot-tags{display:flex;flex-wrap:wrap;gap:4px}
 .stag{display:inline-flex;align-items:center;gap:5px;font-size:10px;padding:3px 9px;border-radius:20px;cursor:default}
 .stag-f{background:rgba(78,203,113,.15);color:var(--green)}
@@ -297,7 +297,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .auth-screen{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;align-items:center;justify-content:center;}
 .auth-card{width:420px;background:var(--bg1);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
 .auth-tabs{display:flex;border-bottom:1px solid var(--border);}
-.auth-tab{flex:1;padding:14px;text-align:center;font-size:13px;font-weight:600;cursor:pointer;color:var(--text3);border:none;background:none;font-family:'Sora',sans-serif;transition:all .15s;}
+.auth-tab{flex:1;padding:14px;text-align:center;font-size:13px;font-weight:600;cursor:pointer;color:var(--text3);border:none;background:none;font-family:Sora,sans-serif;transition:all .15s;}
 .auth-tab.active{color:var(--gold);border-bottom:2px solid var(--gold);}
 .auth-body{padding:28px;}
 .auth-logo{text-align:center;margin-bottom:24px;}
@@ -307,11 +307,11 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .auth-sub{font-size:12px;color:var(--text3);margin-bottom:20px;line-height:1.5;}
 .auth-field{margin-bottom:14px;}
 .auth-label{font-size:10px;color:var(--text3);letter-spacing:.07em;font-weight:600;text-transform:uppercase;display:block;margin-bottom:5px;}
-.auth-input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:'Sora',sans-serif;font-size:13px;padding:10px 14px;border-radius:8px;outline:none;transition:border-color .15s;}
+.auth-input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:Sora,sans-serif;font-size:13px;padding:10px 14px;border-radius:8px;outline:none;transition:border-color .15s;}
 .auth-input:focus{border-color:var(--gold);}
-.auth-select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:'Sora',sans-serif;font-size:13px;padding:10px 14px;border-radius:8px;outline:none;}
+.auth-select{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-family:Sora,sans-serif;font-size:13px;padding:10px 14px;border-radius:8px;outline:none;}
 .auth-select option{background:var(--bg2);}
-.auth-btn{width:100%;padding:11px;background:var(--gold);color:#0a0a0a;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif;transition:all .15s;margin-top:4px;}
+.auth-btn{width:100%;padding:11px;background:var(--gold);color:#0a0a0a;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:Sora,sans-serif;transition:all .15s;margin-top:4px;}
 .auth-btn:hover{background:#f0d060;}
 .auth-btn:disabled{opacity:.5;cursor:not-allowed;}
 .auth-err{font-size:12px;color:var(--red);background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;padding:8px 12px;margin-bottom:12px;display:none;}
@@ -343,7 +343,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .profile-user-name{font-size:13px;font-weight:600;color:var(--text);}
 .profile-user-email{font-size:10px;color:var(--text3);margin-top:2px;}
 .profile-user-role{font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.06em;margin-top:3px;}
-.pmenu-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);font-size:12px;color:var(--text2);cursor:pointer;transition:all .12s;border:none;background:none;width:100%;text-align:left;font-family:'Sora',sans-serif;}
+.pmenu-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);font-size:12px;color:var(--text2);cursor:pointer;transition:all .12s;border:none;background:none;width:100%;text-align:left;font-family:Sora,sans-serif;}
 .pmenu-item:hover{background:var(--bg3);color:var(--text);}
 .pmenu-item.danger{color:var(--red);}
 .pmenu-item.danger:hover{background:var(--red-bg);}
@@ -1144,87 +1144,305 @@ function renderAdminConfig(){
 // ══════════════════════════════════════════════
 // COMPETÊNCIAS
 // ══════════════════════════════════════════════
-function renderComp(){
-  const data = DB.get('competencias');
-  const isMentor = currentRole==='mentor';
-  document.getElementById('content-area').innerHTML = `
-  <div class="page-header">
-    <div class="page-title">Radar de Competências</div>
-    <div class="page-sub">Avaliação cruzada Mentor × Mentorado — clique nos pontos para calibrar</div>
-  </div>
-  <div style="display:flex;gap:12px;margin-bottom:14px;">
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Autoavaliação (mentorado)</div>
-    <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#3266ad"></div>Avaliação do mentor</div>
-  </div>
-  <div class="grid-2">
-    <div class="panel">
-      <div class="panel-title"><div class="panel-title-dot"></div> Competências — calibração</div>
-      <div id="comp-list"></div>
-      ${isMentor?`<div class="divider"></div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input class="inline-inp" id="new-comp" placeholder="Nova competência..." style="flex:1;">
-        <button class="btn btn-outline btn-sm" onclick="addComp()">+ Adicionar</button>
-      </div>`:``}
-      <div style="margin-top:14px;display:flex;gap:8px;">
-        <button class="btn btn-gold btn-sm" onclick="analyzeCompWithIA()">✦ Analisar com IA ↗</button>
-        <button class="btn btn-outline btn-sm" onclick="exportCompReport()">Exportar</button>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-title"><div class="panel-title-dot"></div> Visualização radar</div>
-      <div class="chart-wrap" style="height:280px;"><canvas id="radar-chart" role="img" aria-label="Radar de competências"></canvas></div>
-    </div>
-  </div>
-  <div id="comp-ia-result" style="margin-top:16px;display:none;"></div>`;
-  renderCompList();
-  setTimeout(initRadarChart,150);
+
+const ALL_COMPETENCIAS = ['Liderança estratégica','Comunicação executiva','Gestão de stakeholders','Visão de negócio','Tomada de decisão','Influência sem autoridade','Presença executiva','Inteligência emocional','Gestão de equipes','Pensamento sistêmico','Gestão de mudança','Negociação','Orientação a resultados','Desenvolvimento de pessoas','Inovação e criatividade','Gestão de conflitos','Planejamento estratégico','Gestão financeira','Relacionamento com board','Marca pessoal e posicionamento'];
+
+function getActiveRadar(){
+  const radars = DB.get('comp_radars') || [];
+  const activeId = DB.get('comp_active_radar');
+  return radars.find(r=>r.id===activeId) || radars[0] || null;
 }
 
-function renderCompList(){
-  const data = DB.get('competencias');
+
+function activateRadar(id){DB.set('comp_active_radar',id);DB.set('comp_tab','edit');renderComp();}
+function compTab(t){DB.set('comp_tab',t);renderComp();}
+
+
+
+function getActiveRadar(){
+  const radars = DB.get('comp_radars') || [];
+  const activeId = DB.get('comp_active_radar');
+  return radars.find(r=>r.id===activeId) || radars[0] || null;
+}
+
+function renderComp(){
   const isMentor = currentRole==='mentor';
-  const el = document.getElementById('comp-list');
-  if(!el) return;
-  el.innerHTML = data.map((c,ci)=>{
-    const meDots = [1,2,3,4,5].map(n=>`<div class="dot ${n<=c.me?'me-fill':''}" onclick="setCompVal(${ci},'me',${n})" title="Mentorado: ${n}">${n}</div>`).join('');
-    const mentorDots = [1,2,3,4,5].map(n=>`<div class="dot ${n<=c.mentor?'mentor-fill':''}" onclick="${isMentor?`setCompVal(${ci},'mentor',${n})`:'void(0)'}" title="Mentor: ${n}" style="${!isMentor?'cursor:default':''}">${n}</div>`).join('');
-    const diff = c.me-c.mentor;
-    return `<div class="comp-row">
-      <div class="comp-name">${c.name}</div>
-      <div class="comp-scales">
-        <div class="dot-row">${meDots}</div>
-        <div class="dot-row">${mentorDots}</div>
-      </div>
-      <div class="comp-diff ${diff>0?'diff-p':diff<0?'diff-n':'diff-z'}">${diff>0?'+'+diff:diff}</div>
-    </div>`;
+  let radars = DB.get('comp_radars');
+  if(!radars || !radars.length){
+    const legacy = DB.get('competencias') || [];
+    radars = [{id:'r1', name:'Ciclo Q2 2026', createdAt: new Date().toLocaleDateString('pt-BR'), competencias: legacy}];
+    DB.set('comp_radars', radars);
+    DB.set('comp_active_radar', 'r1');
+  }
+  const activeId = DB.get('comp_active_radar') || radars[0].id;
+  const compTab = DB.get('comp_tab') || 'edit';
+  const radar = radars.find(r=>r.id===activeId) || radars[0];
+
+  document.getElementById('content-area').innerHTML =
+    '<div class="page-header"><div class="page-title">Radar de Competências</div><div class="page-sub">Avaliação cruzada Mentor × Mentorado — máximo 7 competências por radar</div></div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">' +
+    '<button class="btn '+(compTab==='edit'?'btn-gold':'btn-outline')+' btn-sm" onclick="compTab(\\"edit\\")">✎ Calibrar</button>' +
+    '<button class="btn '+(compTab==='history'?'btn-gold':'btn-outline')+' btn-sm" onclick="compTab(\\"history\\")">◷ Ciclos ('+radars.length+')</button>' +
+    (radars.length>=2?'<button class="btn '+(compTab==='compare'?'btn-gold':'btn-outline')+' btn-sm" onclick="compTab(\\"compare\\")">⇄ Comparar</button>':'') +
+    '<div style="flex:1"></div>' +
+    '<select style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-size:11px;padding:5px 10px;border-radius:6px;font-family:Sora,sans-serif;" onchange="DB.set(&quot;comp_active_radar&quot;,this.value);renderComp()">' +
+    radars.map(r=>'<option value="'+r.id+'"'+(r.id===activeId?' selected':'')+'>'+r.name+'</option>').join('') +
+    '</select>' +
+    '<button class="btn btn-outline btn-sm" onclick="newRadarCycle()">+ Novo ciclo</button>' +
+    '</div>' +
+    '<div id="comp-tab-content"></div>';
+
+  if(compTab==='edit') renderCompEdit(isMentor, activeId);
+  else if(compTab==='history') renderCompHistory(radars);
+  else if(compTab==='compare') renderCompCompare(radars);
+}
+
+function renderCompEdit(isMentor, activeId){
+  const radars = DB.get('comp_radars') || [];
+  const radar = radars.find(r=>r.id===activeId) || radars[0];
+  if(!radar) return;
+  const data = radar.competencias || [];
+  const atLimit = data.length >= 7;
+  const selOpts = ALL_COMPETENCIAS.filter(c=>!data.find(d=>d.name===c)).map(c=>'<option>'+c+'</option>').join('');
+
+  document.getElementById('comp-tab-content').innerHTML =
+    '<div style="display:flex;gap:12px;margin-bottom:14px;">' +
+    '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Autoavaliação (mentorado)</div>' +
+    '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#3266ad"></div>Avaliação do mentor</div>' +
+    '<div style="margin-left:auto;font-size:11px;color:'+(atLimit?'var(--amber)':'var(--text3)')+'">'+data.length+'/7 competências</div>' +
+    '</div>' +
+    '<div class="grid-2">' +
+    '<div class="panel">' +
+    '<div class="panel-title"><div class="panel-title-dot"></div> '+radar.name+' — Calibração</div>' +
+    '<div id="comp-list"></div>' +
+    '<div class="divider"></div>' +
+    (!atLimit ?
+      '<div style="margin-bottom:10px;">' +
+      '<div style="font-size:10px;color:var(--text3);margin-bottom:6px;letter-spacing:.06em">ADICIONAR COMPETÊNCIA</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:8px;">' +
+      '<select id="comp-sel" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:12px;padding:8px 10px;border-radius:6px;font-family:Sora,sans-serif;">' +
+      '<option value="">Selecione do banco...</option>'+selOpts+
+      '</select>' +
+      '<button class="btn btn-outline btn-sm" onclick="addCompFromSelect()">+ Adicionar</button>' +
+      '</div>' +
+      '<div style="display:flex;gap:6px;">' +
+      '<input class="inline-inp" id="new-comp" placeholder="Ou escreva uma competência..." style="flex:1;">' +
+      '<button class="btn btn-outline btn-sm" onclick="addComp()">+ Custom</button>' +
+      '</div></div>'
+    : '<div style="font-size:11px;color:var(--amber);padding:8px 0;">Limite de 7 competências atingido.</div>') +
+    '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+    '<button class="btn btn-gold btn-sm" onclick="analyzeCompWithIA()">✦ Analisar com IA ↗</button>' +
+    '<button class="btn btn-outline btn-sm" onclick="exportCompReport()">Exportar</button>' +
+    (isMentor?'<button class="btn btn-outline btn-sm" onclick="saveRadarSnapshot()">💾 Fechar ciclo</button>':'') +
+    '</div></div>' +
+    '<div class="panel"><div class="panel-title"><div class="panel-title-dot"></div> Visualização — '+radar.name+'</div>' +
+    '<div class="chart-wrap" style="height:280px;"><canvas id="radar-chart" role="img" aria-label="Radar de competências"></canvas></div>' +
+    '</div></div>' +
+    '<div id="comp-ia-result" style="margin-top:16px;display:none;"></div>';
+
+  renderCompList();
+  setTimeout(initRadarChart, 150);
+}
+
+function renderCompHistory(radars){
+  if(!radars.length){ document.getElementById('comp-tab-content').innerHTML='<div class="panel" style="color:var(--text3)">Nenhum ciclo salvo.</div>'; return; }
+  document.getElementById('comp-tab-content').innerHTML = radars.slice().reverse().map(function(r,i){
+    const data = r.competencias || [];
+    const rows = data.map(function(c){ const d=c.me-c.mentor; return '<tr><td style="padding:6px 0;color:var(--text2)">'+c.name+'</td><td style="text-align:center;color:var(--gold);font-weight:700">'+c.me+'</td><td style="text-align:center;color:#3266ad;font-weight:700">'+c.mentor+'</td><td style="text-align:center;font-weight:700;color:'+(d>0?'var(--green)':d<0?'var(--red)':'var(--text4)')+'">'+(d>0?'+'+d:d)+'</td></tr>'; }).join('');
+    return '<div class="panel" style="margin-bottom:14px;">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">' +
+      '<div><div style="font-size:13px;font-weight:600;color:var(--text)">'+r.name+'</div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">Criado em '+(r.createdAt||'—')+' · '+data.length+' competências'+(r.closedAt?' · Fechado em '+r.closedAt:'')+'</div></div>' +
+      '<div style="display:flex;gap:6px;">' +
+      '<button class="btn btn-outline btn-xs" data-rid="'+r.id+'" onclick="activateRadar(this.dataset.rid)">Ativar</button>' +
+      (radars.length>1?'<button class="btn btn-red btn-xs" data-rid="'+r.id+'" onclick="deleteRadar(this.dataset.rid)">Excluir</button>':'') +
+      '</div></div>' +
+      '<table style="width:100%;font-size:11px;border-collapse:collapse;">' +
+      '<thead><tr><th style="text-align:left;color:var(--text3);padding:5px 0;border-bottom:1px solid var(--border)">Competência</th><th style="text-align:center;color:var(--gold);padding:5px 0;border-bottom:1px solid var(--border)">Mentorado</th><th style="text-align:center;color:#3266ad;padding:5px 0;border-bottom:1px solid var(--border)">Mentor</th><th style="text-align:center;padding:5px 0;border-bottom:1px solid var(--border)">Gap</th></tr></thead>' +
+      '<tbody>'+rows+'</tbody></table></div>';
   }).join('');
 }
 
-function setCompVal(ci, role, val){
-  const data = DB.get('competencias');
-  data[ci][role] = val;
-  DB.set('competencias',data);
+function renderCompCompare(radars){
+  if(radars.length<2){ document.getElementById('comp-tab-content').innerHTML='<div class="panel" style="color:var(--text3);font-size:13px;">Crie pelo menos 2 ciclos para comparar.</div>'; return; }
+  const r1 = radars[radars.length-1];
+  const r2 = radars[radars.length-2];
+  const allNames = [...new Set([...(r1.competencias||[]).map(c=>c.name), ...(r2.competencias||[]).map(c=>c.name)])];
+  const opts = radars.map(r=>'<option value="'+r.id+'">'+r.name+'</option>').join('');
+
+  const tableRows = allNames.map(function(name){
+    const c1 = (r1.competencias||[]).find(c=>c.name===name);
+    const c2 = (r2.competencias||[]).find(c=>c.name===name);
+    const delta = c1&&c2 ? c1.me-c2.me : null;
+    return '<tr>' +
+      '<td style="padding:7px 0;color:var(--text2)">'+name+'</td>' +
+      '<td style="text-align:center;color:var(--gold)">'+(c1?c1.me+' / '+c1.mentor:'—')+'</td>' +
+      '<td style="text-align:center;color:var(--text3)">'+(c2?c2.me+' / '+c2.mentor:'—')+'</td>' +
+      '<td style="text-align:center;font-weight:700;color:'+(delta===null?'var(--text4)':delta>0?'var(--green)':delta<0?'var(--red)':'var(--text4)')+'">'+
+      (delta===null?'—':delta>0?'▲+'+delta:delta<0?'▼'+delta:'=')+'</td></tr>';
+  }).join('');
+
+  document.getElementById('comp-tab-content').innerHTML =
+    '<div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:18px;flex-wrap:wrap;">' +
+    '<div class="field" style="margin-bottom:0;flex:1"><label class="field-label">Ciclo A</label><select class="form-select" id="cmp-ra">'+opts.replace('value="'+r1.id+'"','value="'+r1.id+'" selected')+'</select></div>' +
+    '<div style="font-size:20px;color:var(--text4);padding-bottom:2px;">⇄</div>' +
+    '<div class="field" style="margin-bottom:0;flex:1"><label class="field-label">Ciclo B</label><select class="form-select" id="cmp-rb">'+opts.replace('value="'+r2.id+'"','value="'+r2.id+'" selected')+'</select></div>' +
+    '<button class="btn btn-gold btn-sm" style="margin-bottom:0" onclick="compareRadarsWithIA()">✦ IA analisa evolução ↗</button>' +
+    '</div>' +
+    '<div class="grid-2" style="margin-bottom:14px;">' +
+    '<div class="panel"><div class="panel-title"><div class="panel-title-dot"></div>'+r1.name+'</div><div class="chart-wrap" style="height:220px;"><canvas id="radar-cmp-a"></canvas></div></div>' +
+    '<div class="panel"><div class="panel-title"><div class="panel-title-dot"></div>'+r2.name+'</div><div class="chart-wrap" style="height:220px;"><canvas id="radar-cmp-b"></canvas></div></div>' +
+    '</div>' +
+    '<div class="panel" style="margin-bottom:14px;"><div class="panel-title"><div class="panel-title-dot"></div> Evolução por competência</div>' +
+    '<table style="width:100%;font-size:12px;border-collapse:collapse;"><thead><tr>' +
+    '<th style="text-align:left;color:var(--text3);padding:7px 0;border-bottom:1px solid var(--border)">Competência</th>' +
+    '<th style="text-align:center;color:var(--gold);padding:7px 0;border-bottom:1px solid var(--border)">'+r1.name+'<br><span style="font-size:9px;font-weight:400">Me / Mentor</span></th>' +
+    '<th style="text-align:center;color:var(--text3);padding:7px 0;border-bottom:1px solid var(--border)">'+r2.name+'<br><span style="font-size:9px;font-weight:400">Me / Mentor</span></th>' +
+    '<th style="text-align:center;padding:7px 0;border-bottom:1px solid var(--border)">Δ Mentorado</th>' +
+    '</tr></thead><tbody>'+tableRows+'</tbody></table></div>' +
+    '<div id="comp-compare-ia" style="display:none;"></div>';
+
+  setTimeout(function(){
+    [[r1,'radar-cmp-a'],[r2,'radar-cmp-b']].forEach(function(pair){
+      var r=pair[0], id=pair[1];
+      var ctx=document.getElementById(id);
+      if(!ctx||!r) return;
+      var d=r.competencias||[];
+      new Chart(ctx,{type:'radar',data:{labels:d.map(c=>c.name.split(' ').slice(0,2).join(' ')),datasets:[
+        {label:'Me',data:d.map(c=>c.me),borderColor:'#f0c040',backgroundColor:'rgba(240,192,64,.15)',pointBackgroundColor:'#f0c040',borderWidth:2},
+        {label:'Mentor',data:d.map(c=>c.mentor),borderColor:'#3266ad',backgroundColor:'rgba(50,102,173,.12)',pointBackgroundColor:'#3266ad',borderWidth:2}
+      ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{r:{min:0,max:5,ticks:{stepSize:1,color:'#555',font:{size:8}},grid:{color:'#222'},pointLabels:{color:'#888',font:{size:9}}}}}});
+    });
+  }, 150);
+}
+
+function newRadarCycle(){
+  const name = prompt('Nome do novo ciclo (ex: Ciclo Q3 2026):');
+  if(!name) return;
+  const radars = DB.get('comp_radars') || [];
+  const newId = 'r'+Date.now();
+  radars.push({id:newId, name:name.trim(), createdAt:new Date().toLocaleDateString('pt-BR'), competencias:[]});
+  DB.set('comp_radars', radars);
+  DB.set('comp_active_radar', newId);
+  DB.set('comp_tab','edit');
+  toast('Novo ciclo criado: '+name,'suc');
+  renderComp();
+}
+
+function saveRadarSnapshot(){
+  const radars = DB.get('comp_radars') || [];
+  const activeId = DB.get('comp_active_radar');
+  const r = radars.find(x=>x.id===activeId);
+  if(r) r.closedAt = new Date().toLocaleDateString('pt-BR');
+  DB.set('comp_radars', radars);
+  toast('Ciclo fechado e salvo no histórico!','suc');
+}
+
+function deleteRadar(id){
+  showConfirm('Excluir ciclo','Remover este ciclo permanentemente?','Excluir',function(){
+    let radars = DB.get('comp_radars')||[];
+    radars = radars.filter(r=>r.id!==id);
+    DB.set('comp_radars', radars);
+    if(radars.length) DB.set('comp_active_radar', radars[0].id);
+    toast('Ciclo removido','suc');
+    renderComp();
+  });
+}
+
+function addCompFromSelect(){
+  const sel = document.getElementById('comp-sel');
+  const name = sel && sel.value;
+  if(!name) return;
+  addCompByName(name);
+  if(sel) sel.value='';
+}
+
+function addCompByName(name){
+  if(!name) return;
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  if(!radar) return;
+  if(radar.competencias.length>=7){ toast('Limite de 7 competências atingido','err'); return; }
+  if(radar.competencias.find(c=>c.name===name)){ toast('Competência já adicionada','err'); return; }
+  radar.competencias.push({name,me:3,mentor:3});
+  DB.set('comp_radars', radars);
   renderCompList();
   updateRadarChart();
+  toast(name+' adicionada','suc');
 }
 
 function addComp(){
   const inp = document.getElementById('new-comp');
-  const name = inp.value.trim();
+  const name = inp && inp.value.trim();
   if(!name) return;
-  const data = DB.get('competencias');
-  data.push({name,me:3,mentor:3});
-  DB.set('competencias',data);
-  inp.value='';
+  addCompByName(name);
+  if(inp) inp.value='';
+}
+
+function removeComp(ci){
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  if(!radar) return;
+  radar.competencias.splice(ci,1);
+  DB.set('comp_radars', radars);
   renderCompList();
   updateRadarChart();
-  toast('Competência adicionada','suc');
+  toast('Competência removida','suc');
+}
+
+function renderCompList(){
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  const data = radar ? radar.competencias : [];
+  const isMentor = currentRole==='mentor';
+  const el = document.getElementById('comp-list');
+  if(!el) return;
+  if(!data.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--text3);padding:10px 0;">Nenhuma competência adicionada.</div>';
+    return;
+  }
+  el.innerHTML = data.map(function(c,ci){
+    const diff = c.me - c.mentor;
+    let html = '<div class="comp-row">';
+    html += '<div class="comp-name" style="font-size:11px">'+c.name+'</div>';
+    html += '<div class="comp-scales"><div class="dot-row">';
+    for(let n=1;n<=5;n++) html += '<div class="dot '+(n<=c.me?'me-fill':'')+'" data-ci="'+ci+'" data-role="me" data-val="'+n+'" onclick="setCompValEl(this)">'+n+'</div>';
+    html += '</div><div class="dot-row">';
+    for(let n=1;n<=5;n++) html += '<div class="dot '+(n<=c.mentor?'mentor-fill':'')+'" '+(isMentor?'data-ci="'+ci+'" data-role="mentor" data-val="'+n+'" onclick="setCompValEl(this)"':'style="cursor:default"')+'>'+n+'</div>';
+    html += '</div></div>';
+    html += '<div class="comp-diff '+(diff>0?'diff-p':diff<0?'diff-n':'diff-z')+'">'+(diff>0?'+'+diff:diff)+'</div>';
+    html += '<div data-ci="'+ci+'" onclick="removeComp(parseInt(this.dataset.ci))" style="cursor:pointer;color:var(--text4);font-size:16px;padding-left:8px;line-height:1">×</div>';
+    html += '</div>';
+    return html;
+  }).join('');
+}
+
+function setCompValEl(el){
+  setCompVal(parseInt(el.dataset.ci), el.dataset.role, parseInt(el.dataset.val));
+}
+
+function setCompVal(ci, role, val){
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  if(!radar||!radar.competencias[ci]) return;
+  radar.competencias[ci][role] = val;
+  DB.set('comp_radars', radars);
+  renderCompList();
+  updateRadarChart();
 }
 
 function initRadarChart(){
   const ctx = document.getElementById('radar-chart');
   if(!ctx) return;
-  const data = DB.get('competencias');
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  const data = radar ? radar.competencias : [];
+  if(charts.radar){ try{charts.radar.destroy()}catch(e){} }
   charts.radar = new Chart(ctx,{
     type:'radar',
     data:{
@@ -1239,8 +1457,11 @@ function initRadarChart(){
 }
 
 function updateRadarChart(){
-  if(!charts.radar) return;
-  const data = DB.get('competencias');
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  const data = radar ? radar.competencias : [];
+  if(!charts.radar){ initRadarChart(); return; }
   charts.radar.data.labels = data.map(c=>c.name.split(' ').slice(0,2).join(' '));
   charts.radar.data.datasets[0].data = data.map(c=>c.me);
   charts.radar.data.datasets[1].data = data.map(c=>c.mentor);
@@ -1248,32 +1469,44 @@ function updateRadarChart(){
 }
 
 async function analyzeCompWithIA(){
-  const data = DB.get('competencias');
-  const gaps = data.filter(c=>c.me<c.mentor).map(c=>`${c.name} (mentorado:${c.me}/mentor:${c.mentor})`).join(', ');
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  const data = radar ? radar.competencias : [];
+  const gaps = data.filter(c=>c.me<c.mentor).map(c=>c.name+' (me:'+c.me+'/mentor:'+c.mentor+')').join(', ');
   const strengths = data.filter(c=>c.me>=4).map(c=>c.name).join(', ');
   showIALoading('comp-ia-result','Analisando radar de competências');
-  const prompt = `Você é um estrategista de desenvolvimento humano e executive coach.
-Analise o radar de competências deste profissional em processo de mentoria:
-
-GAPS (mentorado abaixo da avaliação do mentor): ${gaps||'Nenhum gap crítico'}
-PONTOS FORTES (auto: ≥4): ${strengths||'A mapear'}
-
-Gere:
-1. DIAGNÓSTICO PRECISO: O que os dados revelam sobre o momento de carreira (2-3 frases)
-2. ALAVANCA PRINCIPAL: A única competência que, desenvolvida agora, gera mais impacto
-3. PLANO 30-60-90: Uma ação específica e executável para cada horizonte
-4. PERGUNTA PROVOCADORA: Uma pergunta que o mentor deve fazer na próxima sessão
-
-Seja direto, específico e executável. Sem clichês.`;
+  const prompt = 'Analise o radar de competências — ciclo "'+((radar&&radar.name)||'')+'":'+
+    '\nGAPS: '+(gaps||'Nenhum')+'\nFORÇAS: '+(strengths||'A mapear')+
+    '\nDiagnóstico preciso, alavanca principal, plano 30-60-90 e uma pergunta provocadora para o mentor. Direto e executável.';
   const result = await callAI(prompt);
   showIAResult('comp-ia-result', result, 'Análise de Competências');
 }
 
+async function compareRadarsWithIA(){
+  const radars = DB.get('comp_radars')||[];
+  const elA = document.getElementById('cmp-ra');
+  const elB = document.getElementById('cmp-rb');
+  const idA = elA ? elA.value : (radars.length>0?radars[radars.length-1].id:'');
+  const idB = elB ? elB.value : (radars.length>1?radars[radars.length-2].id:'');
+  const rA = radars.find(r=>r.id===idA)||radars[radars.length-1];
+  const rB = radars.find(r=>r.id===idB)||radars[radars.length-2];
+  if(!rA||!rB){ toast('Selecione dois ciclos válidos','err'); return; }
+  showIALoading('comp-compare-ia','Analisando evolução entre ciclos');
+  const fmt = function(r){ return ((r.competencias||[]).map(c=>c.name+': me='+c.me+'/mentor='+c.mentor).join(', ')); };
+  const prompt = 'Compare dois radares de competências:\nCICLO RECENTE ('+rA.name+'): '+fmt(rA)+'\nCICLO ANTERIOR ('+rB.name+'): '+fmt(rB)+'\nO que evoluiu? O que regrediu? Qual o padrão? O que priorizar no próximo ciclo?';
+  const result = await callAI(prompt);
+  showIAResult('comp-compare-ia', result, 'Evolução entre Ciclos');
+}
+
 function exportCompReport(){
-  const data = DB.get('competencias');
-  let txt = 'RADAR DE COMPETÊNCIAS — Arcala Insight\n';
-  txt += '==========================================\n\n';
-  data.forEach(c=>{ txt+=`${c.name}: Mentorado=${c.me}/5 | Mentor=${c.mentor}/5 | Gap=${c.me-c.mentor}\n`; });
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  const data = radar ? radar.competencias : [];
+  let txt = 'RADAR DE COMPETÊNCIAS — '+((radar&&radar.name)||'')+' — Arcala Insight\n';
+  txt += '='.repeat(50)+'\n\n';
+  data.forEach(c=>{ txt+=c.name+': Mentorado='+c.me+'/5 | Mentor='+c.mentor+'/5 | Gap='+(c.me-c.mentor)+'\n'; });
   downloadText(txt,'radar-competencias.txt');
   toast('Relatório exportado','suc');
 }

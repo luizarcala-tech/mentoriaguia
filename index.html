@@ -901,11 +901,19 @@ function deleteUser(id){
 // ══════════════════════════════════════════════
 // ADMIN — REGISTRATIONS
 // ══════════════════════════════════════════════
+function fmtDate(d){
+  if(!d) return '—';
+  try{
+    const dt = new Date(d);
+    if(isNaN(dt)) return d;
+    return dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  }catch(e){ return d||'—'; }
+}
+
 async function renderAdminRegs(){
   let regs = [];
   try {
     regs = await sbFetch('registrations?order=created_at.desc');
-    // Also merge any local ones
     const local = DB.get('registrations') || [];
     local.forEach(l => { if(!regs.find(r=>r.email===l.email)) regs.push(l); });
   } catch(e) {
@@ -926,23 +934,31 @@ async function renderAdminRegs(){
     <div class="panel-title"><div class="panel-title-dot"></div> Fila de aprovação</div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Solicitante</th><th>Role</th><th>Plano</th><th>Objetivo</th><th>Data</th><th>Status</th><th>Ação</th></tr></thead>
-        <tbody>${regs.map((r,i)=>`
+        <thead><tr>
+          <th>Solicitante</th><th>Role</th><th>Plano</th><th>Objetivo</th>
+          <th>Data solicitação</th><th>Data decisão</th><th>Status</th><th>Ação</th>
+        </tr></thead>
+        <tbody>${regs.map((r,i)=>{
+          const dataSol = fmtDate(r.created_at || r.date);
+          const dataDecisao = fmtDate(r.decided_at);
+          const roleLabel = (r.goal||'').toLowerCase().includes('mentor') ? 'mentor' : (r.role||'mentorado');
+          return `
           <tr>
             <td><div style="font-size:12px;font-weight:600;color:var(--text)">${r.name}</div><div style="font-size:10px;color:var(--text3)">${r.email}</div></td>
-            <td><span class="pill ${r.role==='mentor'?'pill-mentor':'pill-mentorado'}">${r.role.toUpperCase()}</span></td>
-            <td style="font-size:11px">${r.plan}</td>
-            <td style="font-size:11px;color:var(--text3)">${r.goal}</td>
-            <td style="font-size:11px;color:var(--text3)">${r.date}</td>
-            <td><span class="pill ${r.status==='pending'?'pill-pending':r.status==='approved'?'pill-active':'pill-locked'}">${r.status.toUpperCase()}</span></td>
+            <td><span class="pill ${roleLabel==='mentor'?'pill-mentor':'pill-mentorado'}">${roleLabel.toUpperCase()}</span></td>
+            <td style="font-size:11px">${r.plan||'—'}</td>
+            <td style="font-size:11px;color:var(--text3)">${r.goal||'—'}</td>
+            <td style="font-size:11px;color:var(--text3)">${dataSol}</td>
+            <td style="font-size:11px;color:var(--text3)">${dataDecisao}</td>
+            <td><span class="pill ${r.status==='pending'?'pill-pending':r.status==='approved'?'pill-active':'pill-locked'}">${(r.status||'pending').toUpperCase()}</span></td>
             <td><div style="display:flex;gap:5px;">
               ${r.status==='pending'?`
                 <button class="btn btn-green btn-xs" onclick="approveReg('${r.id}')">✓ Aprovar</button>
                 <button class="btn btn-red btn-xs" onclick="rejectReg('${r.id}')">✗ Recusar</button>
               `:`<span style="font-size:10px;color:var(--text4)">Processado</span>`}
             </div></td>
-          </tr>
-        `).join('')}</tbody>
+          </tr>`;
+        }).join('')}</tbody>
       </table>
     </div>
   </div>`;
@@ -962,7 +978,7 @@ function approveReg(id){
   renderAdminRegs();
 }
 
-function rejectReg(id){
+async function rejectReg(id){
   const regs = DB.get('registrations');
   const r = regs.find(r=>r.id===id);
   if(!r) return;
@@ -970,11 +986,15 @@ function rejectReg(id){
     'Recusar solicitação',
     `Recusar o acesso de "${r.name}"? O cadastro ficará marcado como recusado.`,
     'Recusar',
-    ()=>{
-      const regs2 = DB.get('registrations');
-      const r2 = regs2.find(x=>x.id===id);
-      if(r2) r2.status='rejected';
-      DB.set('registrations', regs2);
+    async ()=>{
+      try {
+        await sbFetch('registrations?id=eq.'+id, 'PATCH', {status:'rejected', decided_at: new Date().toISOString()});
+      } catch(e) {
+        const regs2 = DB.get('registrations');
+        const r2 = regs2.find(x=>x.id===id);
+        if(r2){ r2.status='rejected'; r2.decided_at = new Date().toISOString(); }
+        DB.set('registrations', regs2);
+      }
       toast('Solicitação recusada','suc');
       renderAdminRegs();
     }
@@ -2405,8 +2425,8 @@ window.approveReg = async function(id){
     'Aprovar',
     async ()=>{
       try {
-        // Update status in Supabase
-        await sbFetch(`registrations?id=eq.${id}`, 'PATCH', {status:'approved'});
+        // Update status + decided_at in Supabase
+        await sbFetch(`registrations?id=eq.${id}`, 'PATCH', {status:'approved', decided_at: new Date().toISOString()});
         // Create user in Supabase
         await sbFetch('users', 'POST', {
           id: 'u'+Date.now(),

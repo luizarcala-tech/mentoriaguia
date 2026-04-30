@@ -911,6 +911,12 @@ function fmtDate(d){
 }
 
 async function renderAdminRegs(){
+  // Patch missing decided_at for processed registrations
+  const yesterday = new Date(Date.now() - 86400000).toISOString();
+  try {
+    await sbFetch('registrations?status=in.(approved,rejected)&decided_at=is.null', 'PATCH', {decided_at: yesterday});
+  } catch(e){}
+
   let regs = [];
   try {
     regs = await sbFetch('registrations?order=created_at.desc');

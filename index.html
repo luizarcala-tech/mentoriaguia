@@ -333,6 +333,22 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .modal-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;}
 .modal-msg{font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:20px;}
 .modal-btns{display:flex;gap:10px;justify-content:flex-end;}
+
+/* ─── PROFILE MENU ─── */
+.profile-menu{position:fixed;top:54px;right:16px;z-index:300;background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);padding:8px;width:260px;box-shadow:0 8px 32px rgba(0,0,0,.5);display:none;}
+.profile-menu.open{display:block;}
+.profile-header{padding:12px 14px 14px;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;align-items:center;gap:12px;}
+.profile-avatar-lg{width:44px;height:44px;border-radius:50%;background:var(--gold-bg);border:2px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;font-family:'Space Mono',monospace;flex-shrink:0;overflow:hidden;}
+.profile-avatar-lg img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+.profile-user-name{font-size:13px;font-weight:600;color:var(--text);}
+.profile-user-email{font-size:10px;color:var(--text3);margin-top:2px;}
+.profile-user-role{font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.06em;margin-top:3px;}
+.pmenu-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);font-size:12px;color:var(--text2);cursor:pointer;transition:all .12s;border:none;background:none;width:100%;text-align:left;font-family:'Sora',sans-serif;}
+.pmenu-item:hover{background:var(--bg3);color:var(--text);}
+.pmenu-item.danger{color:var(--red);}
+.pmenu-item.danger:hover{background:var(--red-bg);}
+.pmenu-icon{font-size:13px;width:16px;text-align:center;flex-shrink:0;}
+.pmenu-divider{height:1px;background:var(--border);margin:6px 0;}
 </style>
 </head>
 <body>
@@ -464,9 +480,31 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <button class="role-btn" onclick="switchRole('mentorado')" id="rb-mentorado">Mentorado</button>
   </div>
   <div class="user-info">
-    <div class="avatar-xs" id="top-av">AI</div>
-    <span id="top-name">Arcala Insight</span>
-    <button class="nav-pill" onclick="logout()" style="font-size:11px;padding:4px 10px;border-radius:20px;background:none;border:1px solid var(--border2);color:var(--text4);cursor:pointer;font-family:'Sora',sans-serif;margin-left:8px;" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text4)'">Sair</button>
+    <div onclick="toggleProfileMenu()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;border-radius:20px;transition:background .15s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'">
+      <div class="avatar-xs" id="top-av">AI</div>
+      <span id="top-name" style="font-size:12px;color:var(--text2)">Arcala Insight</span>
+      <span style="font-size:9px;color:var(--text4)">▾</span>
+    </div>
+  </div>
+
+  <!-- PROFILE DROPDOWN MENU -->
+  <div class="profile-menu" id="profile-menu">
+    <div class="profile-header">
+      <div class="profile-avatar-lg" id="pmenu-avatar">AI</div>
+      <div>
+        <div class="profile-user-name" id="pmenu-name">—</div>
+        <div class="profile-user-email" id="pmenu-email">—</div>
+        <div class="profile-user-role" id="pmenu-role">—</div>
+      </div>
+    </div>
+    <button class="pmenu-item" onclick="openProfilePage('photo')"><span class="pmenu-icon">◎</span> Alterar foto de perfil</button>
+    <button class="pmenu-item" onclick="openProfilePage('name')"><span class="pmenu-icon">✎</span> Alterar nome</button>
+    <button class="pmenu-item" onclick="openProfilePage('email')"><span class="pmenu-icon">✉</span> Alterar e-mail</button>
+    <button class="pmenu-item" onclick="openProfilePage('password')"><span class="pmenu-icon">◈</span> Alterar senha</button>
+    <div class="pmenu-divider"></div>
+    <button class="pmenu-item" onclick="openProfilePage('plan')"><span class="pmenu-icon">◱</span> Solicitar mudança de plano</button>
+    <div class="pmenu-divider"></div>
+    <button class="pmenu-item danger" onclick="logout()"><span class="pmenu-icon">→</span> Sair da conta</button>
   </div>
 </div>
 
@@ -578,6 +616,7 @@ DB.init();
 // ══════════════════════════════════════════════
 let currentRole = 'mentor';
 let currentPage = '';
+let currentUser = null;
 let charts = {};
 let swotData = DB.get('swot');
 let discSel = DB.get('disc');
@@ -592,10 +631,9 @@ function switchRole(role){
   const bar = document.getElementById('admin-bar');
   bar.classList.toggle('show', role==='admin');
 
-  const avMap = {admin:'AD',mentor:'AP',mentorado:'LM'};
-  const nameMap = {admin:'Admin Arcala',mentor:'Ana Paula — Mentor',mentorado:'Lucas Mendes'};
-  document.getElementById('top-av').textContent = avMap[role];
-  document.getElementById('top-name').textContent = nameMap[role];
+  // Only update topbar if no user logged in
+  if(!currentUser){ document.getElementById('top-av').textContent='AI'; document.getElementById('top-name').textContent='Arcala Insight'; }
+  else { updateTopbar(); }
 
   renderSidebar();
   const defaults = {admin:'admin-users',mentor:'dash',mentorado:'minha-jornada'};
@@ -627,6 +665,8 @@ const MENUS = {
     {section:'Inteligência'},
     {id:'ia-main',icon:'✦',label:'Análise Integrada IA'},
     {id:'nps-dash',icon:'◊',label:'NPS & Progresso'},
+      {section:'Conta'},
+    {id:'perfil',icon:'◉',label:'Meu Perfil'},
   ],
   mentorado:[
     {section:'Minha Jornada'},
@@ -681,6 +721,7 @@ function showPage(id){
     'ia-main': renderIAMain,
     'nps-dash': renderNPSDash,
     'minha-jornada': renderMinhaJornada,
+    'perfil': renderPerfil,
   };
 
   destroyCharts();
@@ -2248,6 +2289,198 @@ function modalCancel(){
   _modalCallback = null;
 }
 
+
+// ══════════════════════════════════════════════
+// PROFILE MENU
+// ══════════════════════════════════════════════
+function toggleProfileMenu(){
+  const menu = document.getElementById('profile-menu');
+  const isOpen = menu.classList.contains('open');
+  if(isOpen){ menu.classList.remove('open'); return; }
+  if(currentUser){
+    const av = document.getElementById('pmenu-avatar');
+    if(currentUser.photo) av.innerHTML = '<img src="'+currentUser.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+    else av.textContent = initials(currentUser.name);
+    document.getElementById('pmenu-name').textContent = currentUser.name;
+    document.getElementById('pmenu-email').textContent = currentUser.email;
+    document.getElementById('pmenu-role').textContent = (currentUser.role||'').toUpperCase();
+  }
+  menu.classList.add('open');
+}
+document.addEventListener('click', e=>{
+  const menu = document.getElementById('profile-menu');
+  if(menu && !menu.contains(e.target) && !e.target.closest('[onclick="toggleProfileMenu()"]')){
+    menu.classList.remove('open');
+  }
+});
+
+function openProfilePage(section){
+  document.getElementById('profile-menu').classList.remove('open');
+  showPage('perfil');
+  setTimeout(()=>{ const el = document.getElementById('perfil-'+section); if(el) el.scrollIntoView({behavior:'smooth'}); }, 200);
+}
+
+function renderPerfil(){
+  if(!currentUser){ return; }
+  const u = currentUser;
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Meu Perfil</div>
+    <div class="page-sub">Gerencie suas informações, senha e preferências de conta</div>
+  </div>
+
+  <div class="grid-2">
+    <!-- COLUNA ESQUERDA -->
+    <div>
+      <!-- FOTO -->
+      <div class="panel" id="perfil-photo" style="margin-bottom:16px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Foto de perfil</div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div id="perfil-avatar-preview" style="width:72px;height:72px;border-radius:50%;background:var(--gold-bg);border:2px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;font-family:'Space Mono',monospace;overflow:hidden;flex-shrink:0;">
+            ${u.photo ? '<img src="'+u.photo+'" style="width:100%;height:100%;object-fit:cover;">' : initials(u.name)}
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Cole a URL de uma imagem ou faça upload via link externo (ex: Google Drive, Imgur).</div>
+            <div class="field" style="margin-bottom:8px;"><label class="field-label">URL da foto</label><input type="url" class="form-input" id="photo-url" placeholder="https://..." value="${u.photo||''}"></div>
+            <button class="btn btn-gold btn-sm" onclick="savePhoto()">Salvar foto</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOME -->
+      <div class="panel" id="perfil-name" style="margin-bottom:16px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Nome</div>
+        <div class="field"><label class="field-label">Nome completo</label><input type="text" class="form-input" id="edit-name" value="${u.name||''}"></div>
+        <button class="btn btn-gold btn-sm" onclick="saveName()">Salvar nome</button>
+      </div>
+
+      <!-- EMAIL -->
+      <div class="panel" id="perfil-email" style="margin-bottom:16px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> E-mail</div>
+        <div class="field"><label class="field-label">Novo e-mail</label><input type="email" class="form-input" id="edit-email" value="${u.email||''}"></div>
+        <div class="field"><label class="field-label">Confirme sua senha atual</label><input type="password" class="form-input" id="email-pass" placeholder="••••••••"></div>
+        <button class="btn btn-gold btn-sm" onclick="saveEmail()">Salvar e-mail</button>
+      </div>
+    </div>
+
+    <!-- COLUNA DIREITA -->
+    <div>
+      <!-- SENHA -->
+      <div class="panel" id="perfil-password" style="margin-bottom:16px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Alterar senha</div>
+        <div class="field"><label class="field-label">Senha atual</label><input type="password" class="form-input" id="pass-current" placeholder="••••••••"></div>
+        <div class="field"><label class="field-label">Nova senha</label><input type="password" class="form-input" id="pass-new" placeholder="Mínimo 6 caracteres"></div>
+        <div class="field"><label class="field-label">Confirmar nova senha</label><input type="password" class="form-input" id="pass-confirm" placeholder="Repita a nova senha"></div>
+        <button class="btn btn-gold btn-sm" onclick="savePassword()">Alterar senha</button>
+        <div id="pass-msg" style="font-size:11px;margin-top:8px;display:none;"></div>
+      </div>
+
+      <!-- PLANO -->
+      <div class="panel" id="perfil-plan">
+        <div class="panel-title"><div class="panel-title-dot"></div> Plano atual & solicitação de mudança</div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">PLANO ATUAL</div>
+          <div style="font-size:13px;font-weight:600;color:var(--gold)">${u.plan||'Não informado'}</div>
+        </div>
+        <div class="field"><label class="field-label">Solicitar mudança para</label>
+          <select class="form-select" id="plan-new">
+            <option>Ciclo único — 12 semanas</option>
+            <option>Renovável trimestral</option>
+            <option>Acesso institucional</option>
+          </select>
+        </div>
+        <div class="field"><label class="field-label">Motivo / observação</label>
+          <textarea class="form-input" id="plan-obs" rows="2" placeholder="Explique brevemente o motivo da solicitação..."></textarea>
+        </div>
+        <button class="btn btn-gold btn-sm" onclick="requestPlan()">Enviar solicitação ao admin</button>
+        <div id="plan-msg" style="font-size:11px;margin-top:8px;display:none;"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function savePhoto(){
+  const url = document.getElementById('photo-url').value.trim();
+  currentUser.photo = url;
+  updateCurrentUser({photo: url});
+  updateTopbar();
+  const av = document.getElementById('perfil-avatar-preview');
+  if(av) av.innerHTML = url ? '<img src="'+url+'" style="width:100%;height:100%;object-fit:cover;">' : initials(currentUser.name);
+  toast('Foto atualizada!','suc');
+}
+
+async function saveName(){
+  const name = document.getElementById('edit-name').value.trim();
+  if(!name){ toast('Informe um nome','err'); return; }
+  currentUser.name = name;
+  updateCurrentUser({name});
+  updateTopbar();
+  toast('Nome atualizado!','suc');
+}
+
+async function saveEmail(){
+  const email = document.getElementById('edit-email').value.trim();
+  const pass  = document.getElementById('email-pass').value;
+  if(!email){ toast('Informe um e-mail','err'); return; }
+  if(currentUser.password && btoa(pass) !== currentUser.password){ toast('Senha incorreta','err'); return; }
+  currentUser.email = email;
+  updateCurrentUser({email});
+  DB.set('session', {...DB.get('session'), email});
+  toast('E-mail atualizado!','suc');
+}
+
+async function savePassword(){
+  const curr    = document.getElementById('pass-current').value;
+  const newPass = document.getElementById('pass-new').value;
+  const confirm = document.getElementById('pass-confirm').value;
+  const msg = document.getElementById('pass-msg');
+  msg.style.display='none';
+  if(currentUser.password && btoa(curr) !== currentUser.password){
+    msg.textContent='Senha atual incorreta.'; msg.style.color='var(--red)'; msg.style.display='block'; return;
+  }
+  if(newPass.length < 6){
+    msg.textContent='A nova senha deve ter no mínimo 6 caracteres.'; msg.style.color='var(--red)'; msg.style.display='block'; return;
+  }
+  if(newPass !== confirm){
+    msg.textContent='As senhas não coincidem.'; msg.style.color='var(--red)'; msg.style.display='block'; return;
+  }
+  currentUser.password = btoa(newPass);
+  updateCurrentUser({password: btoa(newPass)});
+  msg.textContent='Senha alterada com sucesso!'; msg.style.color='var(--green)'; msg.style.display='block';
+  document.getElementById('pass-current').value='';
+  document.getElementById('pass-new').value='';
+  document.getElementById('pass-confirm').value='';
+}
+
+async function requestPlan(){
+  const plan = document.getElementById('plan-new').value;
+  const obs  = document.getElementById('plan-obs').value.trim();
+  const msg  = document.getElementById('plan-msg');
+  try {
+    await sbFetch('registrations', 'POST', {
+      id: 'plan-'+Date.now(),
+      name: currentUser.name,
+      email: currentUser.email,
+      role: currentUser.role,
+      plan: plan,
+      goal: 'Solicitação de mudança de plano: '+obs,
+      status: 'pending'
+    });
+  } catch(e){}
+  msg.textContent='Solicitação enviada! O administrador será notificado.';
+  msg.style.color='var(--green)'; msg.style.display='block';
+  toast('Solicitação enviada ao admin!','suc');
+}
+
+function updateCurrentUser(fields){
+  // Update localStorage
+  const users = DB.get('users')||[];
+  const idx = users.findIndex(u=>u.id===currentUser.id);
+  if(idx>=0){ users[idx]={...users[idx],...fields}; DB.set('users',users); }
+  // Update Supabase async (fire and forget)
+  sbFetch('users?id=eq.'+currentUser.id, 'PATCH', fields).catch(()=>{});
+}
+
 // ══════════════════════════════════════════════
 // AUTH SYSTEM
 // ══════════════════════════════════════════════
@@ -2396,22 +2629,26 @@ async function doSignup(){
 }
 
 function bootApp(user){
-  // Hide auth screen
+  currentUser = user;
   document.getElementById('auth-screen').style.display = 'none';
-
-  // Set role based on user
   const role = user.role === 'admin' ? 'admin' : user.role === 'mentor' ? 'mentor' : 'mentorado';
-
-  // Update topbar avatar
-  document.getElementById('top-av').textContent = initials(user.name);
-  document.getElementById('top-name').textContent = user.name;
-
-  // Hide role switcher for non-admins
   if(role !== 'admin'){
     document.getElementById('role-switcher').style.display = 'none';
   }
-
+  updateTopbar();
   switchRole(role);
+}
+
+function updateTopbar(){
+  if(!currentUser) return;
+  const av = document.getElementById('top-av');
+  const nm = document.getElementById('top-name');
+  if(currentUser.photo){
+    av.innerHTML = '<img src="'+currentUser.photo+'" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">';
+  } else {
+    av.textContent = initials(currentUser.name);
+  }
+  nm.textContent = currentUser.name;
 }
 
 function checkSession(){

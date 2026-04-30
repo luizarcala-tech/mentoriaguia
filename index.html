@@ -1203,7 +1203,7 @@ function renderCompEdit(isMentor, activeId){
   if(!radar) return;
   const data = radar.competencias || [];
   const atLimit = data.length >= 7;
-  const selOpts = ALL_COMPETENCIAS.filter(c=>!data.find(d=>d.name===c)).map(c=>'<option>'+c+'</option>').join('');
+  const selOpts = ALL_COMPETENCIAS.filter(c=>!data.find(d=>d.name===c)).map(c=>'<option value="'+c+'">'+c+'</option>').join('');
 
   document.getElementById('comp-tab-content').innerHTML =
     '<div style="display:flex;gap:12px;margin-bottom:14px;">' +
@@ -1367,7 +1367,9 @@ function addCompByName(name){
   if(radar.competencias.find(c=>c.name===name)){ toast('Competência já adicionada','err'); return; }
   radar.competencias.push({name,me:3,mentor:3});
   DB.set('comp_radars', radars);
-  renderCompList();
+  // Re-render full edit panel so select refreshes with remaining options
+  renderCompEdit(currentRole==='mentor', activeId);
+  setTimeout(initRadarChart, 150);
   updateRadarChart();
   toast(name+' adicionada','suc');
 }

@@ -566,15 +566,10 @@ DB.init();
 // Garante que o admin luizarcala@outlook.com sempre existe, mesmo com localStorage antigo
 (function ensureAdmin(){
   const users = DB.get('users') || [];
-  const admins = [
-    {id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='},
-    {id:'u0b',name:'Luiz Arcala',email:'luizarcala@gmail.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='},
-  ];
-  admins.forEach(admin => {
-    const idx = users.findIndex(u => u.email === admin.email);
-    if(idx === -1) users.unshift(admin);
-    else users[idx] = {...users[idx], ...admin};
-  });
+  const admin = {id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='};
+  const idx = users.findIndex(u => u.email === admin.email);
+  if(idx === -1) users.unshift(admin);
+  else users[idx] = {...users[idx], ...admin};
   DB.set('users', users);
 })();
 
@@ -2265,10 +2260,11 @@ function switchAuthTab(tab){
   document.getElementById('signup-pending').style.display = 'none';
 }
 
-function doLogin(){
+async function doLogin(){
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-err');
+  const btn   = document.querySelector('#pane-login .auth-btn');
   errEl.classList.remove('show');
 
   if(!email || !pass){
@@ -2276,24 +2272,54 @@ function doLogin(){
     errEl.classList.add('show'); return;
   }
 
-  const users = DB.get('users') || [];
-  const user = users.find(u => u.email === email);
+  btn.textContent='Verificando...'; btn.disabled=true;
 
-  if(!user){
-    errEl.textContent='E-mail não encontrado. Solicite acesso na aba "Criar conta".';
-    errEl.classList.add('show'); return;
-  }
-  if(user.password && user.password !== btoa(pass)){
-    errEl.textContent='Senha incorreta.';
-    errEl.classList.add('show'); return;
-  }
-  if(user.active === false || user.active === 0){
-    errEl.textContent='Seu acesso ainda não foi liberado pelo administrador.';
-    errEl.classList.add('show'); return;
-  }
+  try {
+    // 1. Tenta localStorage (admin e usuários cacheados)
+    const localUsers = DB.get('users') || [];
+    let user = localUsers.find(u => u.email === email) || null;
 
-  DB.set('session', {userId:user.id, role:user.role, name:user.name, email:user.email});
-  bootApp(user);
+    // 2. Se não achou localmente, busca no Supabase
+    if(!user){
+      try {
+        const rows = await Promise.race([
+          sbFetch('users?email=eq.'+encodeURIComponent(email)+'&select=*'),
+          new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 6000))
+        ]);
+        if(rows && rows.length > 0){
+          user = rows[0];
+          // Cacheia localmente para próximos logins
+          localUsers.push(user);
+          DB.set('users', localUsers);
+        }
+      } catch(sbErr){
+        // Supabase falhou — continua sem ele
+      }
+    }
+
+    btn.textContent='Entrar na plataforma'; btn.disabled=false;
+
+    if(!user){
+      errEl.textContent='E-mail não encontrado. Solicite acesso na aba "Criar conta".';
+      errEl.classList.add('show'); return;
+    }
+    if(user.password && user.password !== btoa(pass)){
+      errEl.textContent='Senha incorreta.';
+      errEl.classList.add('show'); return;
+    }
+    if(user.active === false || user.active === 0){
+      errEl.textContent='Seu acesso ainda não foi liberado pelo administrador.';
+      errEl.classList.add('show'); return;
+    }
+
+    DB.set('session', {userId:user.id, role:user.role, name:user.name, email:user.email});
+    bootApp(user);
+
+  } catch(e){
+    btn.textContent='Entrar na plataforma'; btn.disabled=false;
+    errEl.textContent='Erro inesperado. Tente novamente.';
+    errEl.classList.add('show');
+  }
 }
 
 async function doSignup(){
@@ -2415,49 +2441,54 @@ function logout(){
 // Patch approveReg to copy password
 const _origApproveReg = approveReg;
 window.approveReg = async function(id){
-  // Find reg in Supabase or local
   let reg = null;
   try {
-    const rows = await sbFetch(`registrations?id=eq.${id}&select=*`);
-    reg = rows[0];
-  } catch(e) {}
+    const rows = await sbFetch('registrations?id=eq.'+id+'&select=*');
+    reg = rows && rows[0];
+  } catch(e){}
   if(!reg){
     const local = DB.get('registrations')||[];
     reg = local.find(r=>r.id===id);
   }
-  if(!reg) return;
+  if(!reg){ toast('Registro não encontrado','err'); return; }
 
   showConfirm(
     'Aprovar acesso',
-    `Liberar acesso para "${reg.name}"?`,
+    'Liberar acesso para "'+reg.name+'"?',
     'Aprovar',
     async ()=>{
+      const newUser = {
+        id: 'u'+Date.now(),
+        name: reg.name,
+        email: reg.email,
+        password: reg.password || btoa('Arcala@2026'),
+        role: (reg.goal||'').toLowerCase().includes('mentor') ? 'mentor' : (reg.role||'mentorado'),
+        plan: reg.plan || 'Ciclo único',
+        active: true,
+        phase: 'G',
+        week: 0
+      };
+
+      // Salva no Supabase
       try {
-        // Update status + decided_at in Supabase
-        await sbFetch(`registrations?id=eq.${id}`, 'PATCH', {status:'approved', decided_at: new Date().toISOString()});
-        // Create user in Supabase
-        await sbFetch('users', 'POST', {
-          id: 'u'+Date.now(),
-          name: reg.name,
-          email: reg.email,
-          password: reg.password || btoa('Arcala@2026'),
-          role: reg.role || 'mentorado',
-          plan: reg.plan || 'Ciclo único',
-          active: true,
-          phase: 'G',
-          week: 0
-        });
-      } catch(e) {
-        // Fallback localStorage
-        const regs = DB.get('registrations')||[];
-        const r = regs.find(x=>x.id===id);
-        if(r) r.status='approved';
-        DB.set('registrations',regs);
-        const users = DB.get('users')||[];
-        users.push({id:'u'+Date.now(),name:reg.name,email:reg.email,password:reg.password,role:reg.role||'mentorado',plan:reg.plan,active:true,created:today(),phase:'G',week:0});
-        DB.set('users',users);
-      }
-      toast(`${reg.name} aprovado! Acesso liberado.`,'suc');
+        await sbFetch('registrations?id=eq.'+id, 'PATCH', {status:'approved', decided_at: new Date().toISOString()});
+        // Upsert — se já existe atualiza, se não insere
+        const existing = await sbFetch('users?email=eq.'+encodeURIComponent(reg.email)+'&select=id');
+        if(existing && existing.length > 0){
+          await sbFetch('users?email=eq.'+encodeURIComponent(reg.email), 'PATCH', {active:true, password: newUser.password, role: newUser.role});
+        } else {
+          await sbFetch('users', 'POST', newUser);
+        }
+      } catch(e){}
+
+      // Sempre salva no localStorage também — garante login imediato
+      const users = DB.get('users')||[];
+      const idx = users.findIndex(u=>u.email===reg.email);
+      if(idx>=0) users[idx]={...users[idx],...newUser};
+      else users.push(newUser);
+      DB.set('users', users);
+
+      toast(reg.name+' aprovado! Acesso liberado.','suc');
       renderAdminRegs();
     },
     false

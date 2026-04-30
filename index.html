@@ -1873,39 +1873,62 @@ function saveGROW(){
 // VISÃO DE FUTURO
 // ══════════════════════════════════════════════
 function renderVF(){
-  const vf = DB.get('vf');
+  const vf = DB.get('vf') || {};
+  const history = DB.get('vf_history') || [];
+  const tab = DB.get('vf_tab') || 'edit';
+
+  const historyBtns = history.length ? `
+    <button class="btn ${tab==='history'?'btn-gold':'btn-outline'} btn-sm" onclick="DB.set('vf_tab','history');renderVF()">
+      ◷ Histórico (${history.length})
+    </button>
+    ${history.length>=2?`<button class="btn ${tab==='compare'?'btn-gold':'btn-outline'} btn-sm" onclick="DB.set('vf_tab','compare');renderVF()">⇄ Comparar versões</button>`:''}
+  ` : '';
+
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
     <div class="page-title">Visão de Futuro</div>
     <div class="page-sub">Exercício de storytelling estratégico — "Um dia na vida daqui a 12 meses"</div>
   </div>
+  <div style="display:flex;gap:8px;margin-bottom:20px;">
+    <button class="btn ${tab==='edit'?'btn-gold':'btn-outline'} btn-sm" onclick="DB.set('vf_tab','edit');renderVF()">✎ Nova visão</button>
+    ${historyBtns}
+  </div>
+  <div id="vf-tab-content"></div>`;
+
+  if(tab==='edit') renderVFEdit(vf);
+  else if(tab==='history') renderVFHistory(history);
+  else if(tab==='compare') renderVFCompare(history);
+}
+
+function renderVFEdit(vf){
+  document.getElementById('vf-tab-content').innerHTML = `
   <div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;font-size:12px;color:var(--text2);line-height:1.7">
-    <strong style="color:var(--gold)">Instrução:</strong> Imagine que são 12 meses a partir de hoje. Você acordou e está vivendo exatamente o futuro profissional que deseja. Descreva esse dia com o máximo de detalhe possível. Não se limite ao que parece "realista" — escreva o que seria verdadeiramente transformador.
+    <strong style="color:var(--gold)">Instrução:</strong> Imagine que são 12 meses a partir de hoje. Descreva com detalhes o futuro profissional que deseja. Cada vez que salvar, uma nova versão é registrada com data.
   </div>
   <div class="vf-step">
     <div class="vf-step-num">DIMENSÃO 01 — CARREIRA & POSIÇÃO</div>
     <div class="vf-step-title">Como é seu trabalho? Qual posição você ocupa? O que você lidera?</div>
-    <div class="field" style="margin-bottom:0"><textarea id="vf-profissional" rows="4" placeholder="Descreva sua vida profissional ideal daqui a 12 meses...">${vf.profissional||''}</textarea></div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-profissional" rows="4" placeholder="Descreva sua vida profissional ideal...">${vf.profissional||''}</textarea></div>
   </div>
   <div class="vf-step">
     <div class="vf-step-num">DIMENSÃO 02 — IMPACTO & CONTRIBUIÇÃO</div>
-    <div class="vf-step-title">Qual problema você resolveu? Que impacto gerou na organização e no mercado?</div>
+    <div class="vf-step-title">Qual problema você resolveu? Que impacto gerou?</div>
     <div class="field" style="margin-bottom:0"><textarea id="vf-contribuicao" rows="4" placeholder="Descreva o impacto que você gerou...">${vf.contribuicao||''}</textarea></div>
   </div>
   <div class="vf-step">
     <div class="vf-step-num">DIMENSÃO 03 — VIDA & ENERGIA</div>
     <div class="vf-step-title">Como você se sente? Como é o equilíbrio entre trabalho, família e propósito?</div>
-    <div class="field" style="margin-bottom:0"><textarea id="vf-vida" rows="4" placeholder="Descreva como você se sente e como é sua vida fora do trabalho...">${vf.vida||''}</textarea></div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-vida" rows="4" placeholder="Descreva como você se sente...">${vf.vida||''}</textarea></div>
   </div>
   <div class="vf-step">
     <div class="vf-step-num">DIMENSÃO 04 — LEGADO & RECONHECIMENTO</div>
     <div class="vf-step-title">Como você é reconhecido? O que as pessoas dizem sobre você?</div>
-    <div class="field" style="margin-bottom:0"><textarea id="vf-legado" rows="4" placeholder="Descreva o reconhecimento e a reputação que você construiu...">${vf.legado||''}</textarea></div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-legado" rows="4" placeholder="Descreva o reconhecimento que você construiu...">${vf.legado||''}</textarea></div>
   </div>
   <div class="vf-step">
     <div class="vf-step-num">DIMENSÃO 05 — PRIMEIROS PASSOS</div>
-    <div class="vf-step-title">O que você fez nas primeiras 4 semanas para começar a construir essa realidade?</div>
-    <div class="field" style="margin-bottom:0"><textarea id="vf-acoes" rows="4" placeholder="Descreva as 3-5 ações que você tomou imediatamente...">${vf.acoes||''}</textarea></div>
+    <div class="vf-step-title">O que você fez nas primeiras 4 semanas para começar?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-acoes" rows="4" placeholder="Descreva as 3-5 ações imediatas...">${vf.acoes||''}</textarea></div>
   </div>
   <div style="display:flex;gap:10px;margin-top:16px;">
     <button class="btn btn-gold" onclick="saveVF()">Salvar visão</button>
@@ -1914,15 +1937,169 @@ function renderVF(){
   <div id="vf-ia-result" style="margin-top:16px;display:none;"></div>`;
 }
 
-function saveVF(){
-  DB.set('vf',{
-    profissional:document.getElementById('vf-profissional').value,
-    contribuicao:document.getElementById('vf-contribuicao').value,
-    vida:document.getElementById('vf-vida').value,
-    legado:document.getElementById('vf-legado').value,
-    acoes:document.getElementById('vf-acoes').value,
+function renderVFHistory(history){
+  if(!history.length){
+    document.getElementById('vf-tab-content').innerHTML = '<div class="panel" style="color:var(--text3);font-size:13px;">Nenhuma visão salva ainda.</div>';
+    return;
+  }
+  const dims = [
+    {key:'profissional',label:'Carreira & Posição'},
+    {key:'contribuicao',label:'Impacto & Contribuição'},
+    {key:'vida',label:'Vida & Energia'},
+    {key:'legado',label:'Legado & Reconhecimento'},
+    {key:'acoes',label:'Primeiros Passos'},
+  ];
+  document.getElementById('vf-tab-content').innerHTML = history.slice().reverse().map((v,i)=>`
+    <div class="panel" style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">Versão ${history.length-i}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Salva em ${v.savedAt||'—'}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-xs" onclick="loadVFVersion(${history.length-1-i})">Carregar esta versão</button>
+          <button class="btn btn-red btn-xs" onclick="deleteVFVersion(${history.length-1-i})">Excluir</button>
+        </div>
+      </div>
+      ${dims.map(d=>v[d.key]?`
+        <div style="margin-bottom:10px;">
+          <div style="font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.08em;margin-bottom:4px;">${d.label.toUpperCase()}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--bg3);border-radius:6px;padding:10px 12px;">${v[d.key]}</div>
+        </div>`:'').join('')}
+    </div>`).join('');
+}
+
+function renderVFCompare(history){
+  if(history.length < 2){
+    document.getElementById('vf-tab-content').innerHTML = '<div class="panel" style="color:var(--text3);font-size:13px;">Salve pelo menos 2 versões para comparar.</div>';
+    return;
+  }
+  const dims = [
+    {key:'profissional',label:'Carreira & Posição'},
+    {key:'contribuicao',label:'Impacto & Contribuição'},
+    {key:'vida',label:'Vida & Energia'},
+    {key:'legado',label:'Legado & Reconhecimento'},
+    {key:'acoes',label:'Primeiros Passos'},
+  ];
+
+  // Default: compare last two
+  const v1 = history[history.length-1];
+  const v2 = history[history.length-2];
+
+  const selOpts = history.map((v,i)=>`<option value="${i}">Versão ${i+1} — ${v.savedAt||'sem data'}</option>`).join('');
+
+  document.getElementById('vf-tab-content').innerHTML = `
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+    <div class="field" style="margin-bottom:0;flex:1;">
+      <label class="field-label">Versão A</label>
+      <select class="form-select" id="cmp-a" onchange="renderVFCompare(DB.get('vf_history')||[])">
+        ${selOpts.replace(`value="${history.length-1}"`,`value="${history.length-1}" selected`)}
+      </select>
+    </div>
+    <div style="font-size:20px;color:var(--text4);padding-top:18px;">⇄</div>
+    <div class="field" style="margin-bottom:0;flex:1;">
+      <label class="field-label">Versão B</label>
+      <select class="form-select" id="cmp-b" onchange="renderVFCompare(DB.get('vf_history')||[])">
+        ${selOpts.replace(`value="${history.length-2}"`,`value="${history.length-2}" selected`)}
+      </select>
+    </div>
+    <button class="btn btn-gold btn-sm" style="margin-top:18px" onclick="compareVFWithIA()">✦ IA compara evoluções ↗</button>
+  </div>
+  <div id="cmp-content">
+    ${dims.map(d=>`
+    <div style="margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;color:var(--gold);letter-spacing:.08em;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">${d.label.toUpperCase()}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:9px;color:var(--text4);margin-bottom:4px;">VERSÃO ${history.length} — ${v1.savedAt||'—'}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--bg3);border-radius:6px;padding:10px 12px;min-height:60px;">${v1[d.key]||'<span style="color:var(--text4);font-style:italic">Não preenchido</span>'}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--text4);margin-bottom:4px;">VERSÃO ${history.length-1} — ${v2.savedAt||'—'}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--bg3);border-radius:6px;padding:10px 12px;min-height:60px;">${v2[d.key]||'<span style="color:var(--text4);font-style:italic">Não preenchido</span>'}</div>
+        </div>
+      </div>
+    </div>`).join('')}
+  </div>
+  <div id="vf-compare-ia" style="margin-top:14px;display:none;"></div>`;
+}
+
+function loadVFVersion(idx){
+  const history = DB.get('vf_history')||[];
+  if(!history[idx]) return;
+  DB.set('vf', history[idx]);
+  DB.set('vf_tab','edit');
+  toast('Versão carregada — edite e salve para criar nova versão','suc');
+  renderVF();
+}
+
+function deleteVFVersion(idx){
+  showConfirm('Excluir versão','Remover esta versão do histórico?','Excluir',()=>{
+    const history = DB.get('vf_history')||[];
+    history.splice(idx,1);
+    DB.set('vf_history',history);
+    toast('Versão removida','suc');
+    renderVF();
   });
-  toast('Visão de futuro salva!','suc');
+}
+
+async function compareVFWithIA(){
+  const history = DB.get('vf_history')||[];
+  const selA = document.getElementById('cmp-a');
+  const selB = document.getElementById('cmp-b');
+  const idxA = selA ? parseInt(selA.value) : history.length-1;
+  const idxB = selB ? parseInt(selB.value) : history.length-2;
+  const vA = history[idxA];
+  const vB = history[idxB];
+  if(!vA||!vB){ toast('Selecione duas versões válidas','err'); return; }
+  showIALoading('vf-compare-ia','Analisando evolução da visão');
+  const prompt = `Compare duas versões da Visão de Futuro do mesmo profissional e identifique a evolução.
+
+VERSÃO MAIS RECENTE (${vA.savedAt||''}):
+Carreira: ${vA.profissional||'—'}
+Impacto: ${vA.contribuicao||'—'}
+Vida: ${vA.vida||'—'}
+Legado: ${vA.legado||'—'}
+Ações: ${vA.acoes||'—'}
+
+VERSÃO ANTERIOR (${vB.savedAt||''}):
+Carreira: ${vB.profissional||'—'}
+Impacto: ${vB.contribuicao||'—'}
+Vida: ${vB.vida||'—'}
+Legado: ${vB.legado||'—'}
+Ações: ${vB.acoes||'—'}
+
+Analise:
+1. O QUE EVOLUIU: Onde a visão ficou mais clara, ambiciosa ou concreta?
+2. O QUE REGREDIU OU SUMIU: O que estava presente antes e desapareceu? Por quê isso importa?
+3. PADRÃO CENTRAL: O que permanece constante nas duas versões? Isso revela o propósito real.
+4. PRÓXIMO NÍVEL: O que a versão mais recente ainda não está captando que deveria?`;
+  const result = await callAI(prompt);
+  showIAResult('vf-compare-ia', result, 'Análise de Evolução da Visão');
+}
+
+function saveVF(){
+  const nova = {
+    profissional: document.getElementById('vf-profissional').value,
+    contribuicao: document.getElementById('vf-contribuicao').value,
+    vida:         document.getElementById('vf-vida').value,
+    legado:       document.getElementById('vf-legado').value,
+    acoes:        document.getElementById('vf-acoes').value,
+    savedAt:      new Date().toLocaleString('pt-BR'),
+  };
+
+  // Save as current
+  DB.set('vf', nova);
+
+  // Append to history
+  const history = DB.get('vf_history') || [];
+  history.push(nova);
+  DB.set('vf_history', history);
+
+  toast('Visão salva! Versão ' + history.length + ' registrada com data.','suc');
+
+  // Refresh tab buttons
+  renderVF();
 }
 
 async function analyzeVFWithIA(){

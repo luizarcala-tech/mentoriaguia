@@ -566,13 +566,15 @@ DB.init();
 // Garante que o admin luizarcala@outlook.com sempre existe, mesmo com localStorage antigo
 (function ensureAdmin(){
   const users = DB.get('users') || [];
-  const idx = users.findIndex(u => u.email === 'luizarcala@outlook.com');
-  const admin = {id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='};
-  if(idx === -1){
-    users.unshift(admin);
-  } else {
-    users[idx] = {...users[idx], ...admin};
-  }
+  const admins = [
+    {id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='},
+    {id:'u0b',name:'Luiz Arcala',email:'luizarcala@gmail.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='},
+  ];
+  admins.forEach(admin => {
+    const idx = users.findIndex(u => u.email === admin.email);
+    if(idx === -1) users.unshift(admin);
+    else users[idx] = {...users[idx], ...admin};
+  });
   DB.set('users', users);
 })();
 

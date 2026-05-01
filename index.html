@@ -1155,6 +1155,33 @@ function getActiveRadar(){
 
 
 function activateRadar(id){DB.set('comp_active_radar',id);DB.set('comp_tab','edit');renderComp();}
+
+
+function buildCompHeader(compTab, radars, activeId){
+  const editCls = compTab==='edit' ? 'btn-gold' : 'btn-outline';
+  const histCls = compTab==='history' ? 'btn-gold' : 'btn-outline';
+  const cmpCls  = compTab==='compare' ? 'btn-gold' : 'btn-outline';
+  const cmpBtn  = radars.length>=2 ? `<button class="btn ${cmpCls} btn-sm" onclick="compTab('compare')">⇄ Comparar</button>` : '';
+  const selOpts = radars.map(r=>`<option value="${r.id}"${r.id===activeId?' selected':''}>${r.name}</option>`).join('');
+  return `
+    <div class="page-header">
+      <div class="page-title">Radar de Competências</div>
+      <div class="page-sub">Avaliação cruzada Mentor × Mentorado — máximo 7 competências por radar</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">
+      <button class="btn ${editCls} btn-sm" onclick="compTab('edit')">✎ Calibrar</button>
+      <button class="btn ${histCls} btn-sm" onclick="compTab('history')">◷ Ciclos (${radars.length})</button>
+      ${cmpBtn}
+      <div style="flex:1"></div>
+      <select style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-size:11px;padding:5px 10px;border-radius:6px;" onchange="DB.set('comp_active_radar',this.value);renderComp()">
+        ${selOpts}
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="newRadarCycle()">+ Novo ciclo</button>
+    </div>
+    <div id="comp-tab-content"></div>
+  `;
+}
+
 function compTab(t){DB.set('comp_tab',t);renderComp();}
 
 
@@ -1178,19 +1205,7 @@ function renderComp(){
   const compTab = DB.get('comp_tab') || 'edit';
   const radar = radars.find(r=>r.id===activeId) || radars[0];
 
-  document.getElementById('content-area').innerHTML =
-    '<div class="page-header"><div class="page-title">Radar de Competências</div><div class="page-sub">Avaliação cruzada Mentor × Mentorado — máximo 7 competências por radar</div></div>' +
-    '<div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">' +
-    '<button class="btn '+(compTab==='edit'?'btn-gold':'btn-outline')+' btn-sm" onclick="compTab(\\"edit\\")">✎ Calibrar</button>' +
-    '<button class="btn '+(compTab==='history'?'btn-gold':'btn-outline')+' btn-sm" onclick="compTab(\\"history\\")">◷ Ciclos ('+radars.length+')</button>' +
-    (radars.length>=2?'<button class="btn '+(compTab==='compare'?'btn-gold':'btn-outline')+' btn-sm" onclick="compTab(\\"compare\\")">⇄ Comparar</button>':'') +
-    '<div style="flex:1"></div>' +
-    '<select style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-size:11px;padding:5px 10px;border-radius:6px;font-family:Sora,sans-serif;" onchange="DB.set(&quot;comp_active_radar&quot;,this.value);renderComp()">' +
-    radars.map(r=>'<option value="'+r.id+'"'+(r.id===activeId?' selected':'')+'>'+r.name+'</option>').join('') +
-    '</select>' +
-    '<button class="btn btn-outline btn-sm" onclick="newRadarCycle()">+ Novo ciclo</button>' +
-    '</div>' +
-    '<div id="comp-tab-content"></div>';
+  document.getElementById('content-area').innerHTML = buildCompHeader(compTab, radars, activeId);
 
   if(compTab==='edit') renderCompEdit(isMentor, activeId);
   else if(compTab==='history') renderCompHistory(radars);

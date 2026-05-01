@@ -369,6 +369,53 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .pmenu-item.danger:hover{background:var(--red-bg);}
 .pmenu-icon{font-size:13px;width:16px;text-align:center;flex-shrink:0;}
 .pmenu-divider{height:1px;background:var(--border);margin:6px 0;}
+
+/* ─── TRAINING MODULE ─── */
+.training-block-overlay{position:fixed;inset:54px 0 0 220px;background:var(--bg);z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center;}
+.training-block-overlay.show{display:flex;}
+.training-block-icon{font-size:60px;margin-bottom:20px;color:var(--gold);}
+.training-block-title{font-size:22px;font-weight:600;color:var(--text);margin-bottom:10px;}
+.training-block-msg{font-size:13px;color:var(--text3);max-width:480px;line-height:1.7;margin-bottom:24px;}
+.lesson-card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:18px;margin-bottom:14px;display:flex;align-items:center;gap:16px;transition:all .15s;}
+.lesson-card.locked{opacity:.5;cursor:not-allowed;}
+.lesson-card.unlocked{cursor:pointer;}
+.lesson-card.unlocked:hover{border-color:var(--gold);}
+.lesson-card.completed{border-left:3px solid var(--green);}
+.lesson-card.recycle{border-left:3px solid var(--amber);background:rgba(240,160,64,.04);}
+.lesson-num{width:50px;height:50px;border-radius:50%;background:var(--bg3);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;font-family:'Space Mono',monospace;color:var(--text3);flex-shrink:0;}
+.lesson-card.completed .lesson-num{background:var(--green);border-color:var(--green);color:#fff;}
+.lesson-card.unlocked:not(.completed) .lesson-num{background:var(--gold-bg);border-color:var(--gold);color:var(--gold);}
+.lesson-card.recycle .lesson-num{background:var(--amber-bg);border-color:var(--amber);color:var(--amber);}
+.lesson-info{flex:1;}
+.lesson-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.lesson-desc{font-size:11px;color:var(--text3);line-height:1.6;}
+.lesson-status{font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--gold);text-transform:uppercase;}
+.lesson-status.completed{color:var(--green);}
+.lesson-status.locked{color:var(--text4);}
+.lesson-status.recycle{color:var(--amber);}
+.video-placeholder{background:linear-gradient(135deg,#1a1a1a 0%,#0f0f0f 100%);border:1px solid var(--border);border-radius:var(--radius);aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;position:relative;overflow:hidden;}
+.video-placeholder iframe{width:100%;height:100%;border:0;border-radius:var(--radius);}
+.video-play{width:64px;height:64px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-size:24px;}
+.video-caption{font-size:11px;color:var(--text4);}
+.lesson-content{font-size:13px;color:var(--text2);line-height:1.85;}
+.lesson-content h3{font-size:15px;font-weight:600;color:var(--gold);margin:24px 0 10px;}
+.lesson-content p{margin-bottom:12px;}
+.lesson-content ul{padding-left:20px;margin-bottom:14px;}
+.lesson-content li{margin-bottom:6px;}
+.lesson-content strong{color:var(--text);}
+.lesson-content blockquote{border-left:3px solid var(--gold);padding:10px 16px;background:var(--bg2);font-style:italic;color:var(--text2);margin:14px 0;border-radius:0 6px 6px 0;}
+.profile-trajectory{display:flex;gap:24px;align-items:flex-start;margin-bottom:24px;padding:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);}
+.profile-trajectory img{width:140px;height:140px;border-radius:50%;object-fit:cover;border:3px solid var(--gold);flex-shrink:0;}
+.profile-trajectory-info h4{font-size:18px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.profile-trajectory-info .role{font-size:11px;color:var(--gold);letter-spacing:.06em;font-weight:600;text-transform:uppercase;margin-bottom:10px;}
+.timeline-item{display:flex;gap:14px;margin-bottom:16px;}
+.timeline-dot{width:10px;height:10px;border-radius:50%;background:var(--gold);margin-top:6px;flex-shrink:0;box-shadow:0 0 0 4px rgba(240,192,64,.15);}
+.timeline-content{flex:1;}
+.timeline-year{font-size:11px;color:var(--gold);font-weight:600;letter-spacing:.04em;font-family:'Space Mono',monospace;}
+.timeline-title{font-size:13px;font-weight:600;color:var(--text);margin-top:2px;}
+.timeline-desc{font-size:12px;color:var(--text3);line-height:1.6;margin-top:4px;}
+.training-progress-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-bottom:8px;}
+.training-progress-fill{height:100%;background:linear-gradient(90deg,var(--gold) 0%,#f4d570 100%);border-radius:3px;transition:width .4s;}
 </style>
 </head>
 <body>
@@ -666,6 +713,52 @@ function switchRole(role){
 // ══════════════════════════════════════════════
 // SIDEBAR
 // ══════════════════════════════════════════════
+
+const LESSONS = [
+  {
+    id: 1,
+    title: 'O Idealizador e a Metodologia GUIA',
+    desc: 'Conheça Luiz Arcala, sua trajetória, e por que a metodologia GUIA foi criada para tratar pessoas como empresas.',
+    duration: '15 min',
+    version: '1.0'
+  },
+  {
+    id: 2,
+    title: 'Fase G — Início do Ciclo na Plataforma',
+    desc: 'Como conduzir o Gestar Acordo: escopo, metas, papéis e termo de mentoria.',
+    duration: '12 min',
+    version: '1.0'
+  },
+  {
+    id: 3,
+    title: 'Fase U — Diagnóstico e Visão',
+    desc: 'Como aplicar DISC, Radar de Competências, SWOT pessoal, Feedback 360° e Visão de Futuro.',
+    duration: '18 min',
+    version: '1.0'
+  },
+  {
+    id: 4,
+    title: 'Fase I — Plano de Ação e Sessões GROW',
+    desc: 'Como transformar a visão em ações semanais e conduzir sessões pelo modelo GROW.',
+    duration: '14 min',
+    version: '1.0'
+  },
+  {
+    id: 5,
+    title: 'Fase A — Aferição e Fechamento',
+    desc: 'Como conduzir a Aferição: KRs, entrevista de aprendizado, terceira dimensão do radar.',
+    duration: '12 min',
+    version: '1.0'
+  },
+  {
+    id: 6,
+    title: 'IA GUIA na Prática',
+    desc: 'Como usar os insights de IA para potencializar cada sessão de mentoria.',
+    duration: '10 min',
+    version: '1.0'
+  }
+];
+
 const MENUS = {
   admin:[
     {section:'Administração'},
@@ -679,6 +772,7 @@ const MENUS = {
     {id:'admin-config',icon:'◫',label:'Configurações'},
   ],
   mentor:[
+    {type:'top',id:'training',icon:'◉',label:'Treinamento Mentor',badge:''},
     {type:'top',id:'dash',icon:'◈',label:'Dashboard'},
     {type:'phase',letter:'G',label:'Gestar Acordo'},
     {id:'inicio-ciclo',icon:'◎',label:'Início do Ciclo'},
@@ -787,6 +881,14 @@ function renderSidebar(){
 // PAGE ROUTER
 // ══════════════════════════════════════════════
 function showPage(id){
+  // Block mentor from accessing platform features until training is complete
+  if(currentUser && currentUser.role === 'mentor' && !isTrainingComplete()){
+    const allowedForUntrained = ['training','lesson','perfil'];
+    if(!allowedForUntrained.includes(id)){
+      toast('Conclua o treinamento de mentor antes de acessar este recurso','err');
+      id = 'training';
+    }
+  }
   currentPage = id;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const nav = document.getElementById('nav-'+id);
@@ -812,6 +914,8 @@ function showPage(id){
     'inicio-ciclo': renderInicioCiclo,
     'admin-empresas': renderAdminEmpresas,
     'admin-ia-insights': renderAdminIAInsights,
+    'training': renderTraining,
+    'lesson': renderLesson,
   };
 
   destroyCharts();
@@ -3968,6 +4072,793 @@ function downloadEmailContent(){
 const _origAddUser = addUser;
 // Patch empresa_id into user creation
 
+
+// ══════════════════════════════════════════════
+// TRAINING MODULE — Mentor Training System
+// ══════════════════════════════════════════════
+function getTrainingProgress(){
+  const userId = currentUser?.id || 'guest';
+  return DB.get('training_progress_'+userId) || {completed:[], scores:{}, recycled:[]};
+}
+
+function saveTrainingProgress(p){
+  const userId = currentUser?.id || 'guest';
+  DB.set('training_progress_'+userId, p);
+}
+
+function isTrainingComplete(){
+  if(!currentUser || currentUser.role !== 'mentor') return true;
+  const p = getTrainingProgress();
+  // Must complete all lessons AND have no pending recycles
+  return p.completed.length >= LESSONS.length && p.recycled.length === 0;
+}
+
+function isLessonUnlocked(lessonId){
+  const p = getTrainingProgress();
+  if(lessonId === 1) return true;
+  // Must have completed previous lesson
+  return p.completed.includes(lessonId - 1);
+}
+
+function isLessonCompleted(lessonId){
+  const p = getTrainingProgress();
+  return p.completed.includes(lessonId) && !p.recycled.includes(lessonId);
+}
+
+function isLessonRecycle(lessonId){
+  const p = getTrainingProgress();
+  return p.recycled.includes(lessonId);
+}
+
+function checkTrainingBlock(){
+  // Block mentor from accessing platform features until training is complete
+  if(!currentUser || currentUser.role !== 'mentor') return false;
+  if(isTrainingComplete()) return false;
+
+  // Hide all sidebar items except training
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    const id = btn.id.replace('nav-','');
+    if(id !== 'training' && id !== 'perfil') btn.style.opacity = '0.4';
+  });
+  return true;
+}
+
+function renderTraining(){
+  const p = getTrainingProgress();
+  const completedCount = p.completed.filter(id=>!p.recycled.includes(id)).length;
+  const pct = Math.round((completedCount / LESSONS.length) * 100);
+  const isMentor = currentUser?.role === 'mentor';
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Treinamento de Mentor</div>
+    <div class="page-sub">Capacitação obrigatória antes de aplicar a metodologia GUIA com seus mentorados</div>
+  </div>
+
+  ${isMentor && !isTrainingComplete() ? `
+  <div style="background:linear-gradient(135deg,rgba(240,192,64,.08) 0%,rgba(240,192,64,.02) 100%);border:1px solid var(--gold-border);border-radius:var(--radius);padding:18px 22px;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div style="font-size:26px;">◉</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;color:var(--gold);margin-bottom:4px;">Acesso à plataforma bloqueado</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.6;">Conclua todas as ${LESSONS.length} aulas com nota mínima 8/10 nas provas para liberar o acesso aos instrumentos da metodologia.</div>
+      </div>
+    </div>
+  </div>
+  ` : ''}
+
+  <div class="panel" style="margin-bottom:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.06em;">PROGRESSO GERAL</div>
+      <div style="font-size:13px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace;">${pct}%</div>
+    </div>
+    <div class="training-progress-bar"><div class="training-progress-fill" style="width:${pct}%"></div></div>
+    <div style="font-size:11px;color:var(--text3);">
+      ${completedCount}/${LESSONS.length} aulas concluídas
+      ${p.recycled.length > 0 ? ` · <span style="color:var(--amber);">${p.recycled.length} aula(s) com reciclagem pendente</span>` : ''}
+    </div>
+  </div>
+
+  <div class="section-label">Aulas</div>
+  <div>
+    ${LESSONS.map(l => {
+      const completed = isLessonCompleted(l.id);
+      const unlocked = isLessonUnlocked(l.id);
+      const recycle = isLessonRecycle(l.id);
+      const cls = recycle ? 'recycle' : completed ? 'completed unlocked' : unlocked ? 'unlocked' : 'locked';
+      const status = recycle ? 'RECICLAR' : completed ? 'CONCLUÍDA' : unlocked ? 'DISPONÍVEL' : 'BLOQUEADA';
+      const score = p.scores[l.id];
+      return `
+      <div class="lesson-card ${cls}" ${unlocked || recycle ? `onclick="openLesson(${l.id})"` : ''}>
+        <div class="lesson-num">${recycle ? '↻' : completed ? '✓' : l.id}</div>
+        <div class="lesson-info">
+          <div class="lesson-title">Aula ${l.id} — ${l.title}</div>
+          <div class="lesson-desc">${l.desc}</div>
+          <div style="display:flex;gap:14px;margin-top:6px;font-size:10px;color:var(--text4);">
+            <span>⏱ ${l.duration}</span>
+            <span>v${l.version}</span>
+            ${score ? `<span style="color:var(--green);">★ Nota: ${score}/10</span>` : ''}
+          </div>
+        </div>
+        <div class="lesson-status ${cls.split(' ')[0]}">${status}</div>
+      </div>`;
+    }).join('')}
+  </div>
+  `;
+}
+
+function openLesson(lessonId){
+  if(!isLessonUnlocked(lessonId) && !isLessonRecycle(lessonId)){
+    toast('Conclua a aula anterior primeiro','err');
+    return;
+  }
+  DB.set('current_lesson', lessonId);
+  showPage('lesson');
+}
+
+function renderLesson(){
+  const lessonId = DB.get('current_lesson') || 1;
+  const lesson = LESSONS.find(l => l.id === lessonId);
+  if(!lesson){ showPage('training'); return; }
+
+  document.getElementById('content-area').innerHTML = `
+  <div style="margin-bottom:14px;">
+    <button class="btn btn-outline btn-sm" onclick="showPage('training')">← Voltar às aulas</button>
+  </div>
+  <div class="page-header">
+    <div style="font-size:11px;color:var(--gold);letter-spacing:.08em;font-weight:600;margin-bottom:6px;">AULA ${lesson.id} · ${lesson.duration} · v${lesson.version}</div>
+    <div class="page-title">${lesson.title}</div>
+    <div class="page-sub">${lesson.desc}</div>
+  </div>
+
+  <div id="lesson-content"></div>
+
+  <div style="margin-top:30px;padding:20px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);text-align:center;">
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;">Pronto para a prova?</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.6;">
+      Você precisará acertar pelo menos <strong style="color:var(--gold);">8 de 10</strong> perguntas para concluir esta aula e desbloquear a próxima.<br>
+      As perguntas são geradas pela IA com base no conteúdo desta aula.
+    </div>
+    <button class="btn btn-gold" onclick="startQuiz(${lesson.id})">✦ Iniciar prova de proficiência</button>
+  </div>
+  `;
+
+  // Render specific lesson content
+  if(lesson.id === 1) renderLesson1();
+  else if(lesson.id === 2) renderLesson2();
+  else if(lesson.id === 3) renderLesson3();
+  else if(lesson.id === 4) renderLesson4();
+  else if(lesson.id === 5) renderLesson5();
+  else if(lesson.id === 6) renderLesson6();
+}
+
+function renderLesson1(){
+  const c = document.getElementById('lesson-content');
+  c.innerHTML = `
+  <!-- VIDEO -->
+  <div class="video-placeholder" style="margin-bottom:24px;">
+    <div class="video-play">▶</div>
+    <div style="font-size:14px;color:var(--text2);font-weight:600;">Aula 1 — O Idealizador e a Metodologia</div>
+    <div class="video-caption">Vídeo em produção · ${LESSONS[0].duration}</div>
+  </div>
+
+  <div class="lesson-content">
+
+    <h3>Conheça Luiz Arcala</h3>
+
+    <div class="profile-trajectory">
+      <img src="luiz-arcala.jpg" alt="Luiz Arcala" onerror="this.style.display='none'">
+      <div class="profile-trajectory-info">
+        <h4>Luiz Fellipe Arcalá</h4>
+        <div class="role">Idealizador da Metodologia GUIA</div>
+        <p style="font-size:13px;color:var(--text2);line-height:1.7;margin:0;">
+          Engenheiro Florestal pela UNESP, MBA em Finanças pelo Insper, MBA em Gestão de Vendas pela USP e MBA em Gestão Empresarial pela FGV. Formação complementar em Conselho de Administração pela Board Academy.
+        </p>
+        <p style="font-size:13px;color:var(--text2);line-height:1.7;margin-top:8px;">
+          Atua há mais de 15 anos no design e execução de arquiteturas estratégicas em sistemas agroindustriais complexos, com foco em transformar ativos biológicos de longo ciclo em plataformas escaláveis e investíveis.
+        </p>
+      </div>
+    </div>
+
+    <h3>A Trajetória</h3>
+
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-year">2024 — PRESENTE</div>
+        <div class="timeline-title">Acelen Renewables · Gerente de Estratégia Agroindustrial</div>
+        <div class="timeline-desc">Conduz a estratégia agrícola e a arquitetura de execução de um portfólio agroindustrial complexo voltado a plataformas de bioenergia em larga escala. Estruturação de governança, priorização de CAPEX e gestão de mais de 190 mil hectares.</div>
+      </div>
+    </div>
+
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-year">2014 — 2023</div>
+        <div class="timeline-title">Grupo Innovatech · Head e Conselheiro</div>
+        <div class="timeline-desc">Liderança de operações florestais em larga escala (150 mil hectares · R$ 1,8 bilhão em CAPEX/OPEX). Estruturação de planos estratégicos, governança e M&A em empresas como Greenplac, Amata, Florestas do Sul e Galvani.</div>
+      </div>
+    </div>
+
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-year">2010 — 2013</div>
+        <div class="timeline-title">Suzano Papel e Celulose · PMO Florestal</div>
+        <div class="timeline-desc">Implantação do Escritório de Gestão de Portfólio e Projetos. Estruturação de processos de prospecção, análise e seleção de oportunidades de investimento.</div>
+      </div>
+    </div>
+
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-year">2025 — PRESENTE</div>
+        <div class="timeline-title">Mentoria e Desenvolvimento Humano</div>
+        <div class="timeline-desc">Iniciou trajetória como mentor em 2025. Impactou diretamente a carreira de 3 mentorados, treinou 10 novos mentores e estruturou uma rede de mais de 30 mentorados identificados em uma empresa.</div>
+      </div>
+    </div>
+
+    <h3>Por que a Metodologia GUIA foi criada</h3>
+
+    <p>Atuando por mais de uma década em planejamento estratégico empresarial — estruturando governança, priorizando CAPEX e tomando decisões sob incerteza biológica e operacional — Luiz percebeu um vazio crítico no mercado de mentoria:</p>
+
+    <blockquote>
+      "Não havia um método poderoso e que pudesse ser adaptado à situação real do mentorado. Conhecendo a abordagem de planejamento estratégico empresarial, decidi criar um método para tratar a pessoa como uma empresa — potencializando suas competências e aproveitando as oportunidades reais do seu ambiente de trabalho e vida."
+    </blockquote>
+
+    <p>A metodologia GUIA nasceu dessa percepção: <strong>aplicar à carreira individual o mesmo rigor estratégico que se aplica a portfólios empresariais bilionários</strong> — diagnóstico estruturado, visão de longo prazo, execução disciplinada e aferição mensurável.</p>
+
+    <h3>O Propósito</h3>
+
+    <p>A visão que move a Arcala Insight é clara:</p>
+
+    <blockquote>
+      "Quero ver as pessoas evoluindo na sua potencialidade — dando autonomia e protagonismo ao mentorado para lidar com sua própria vida, suas próprias decisões, e criar sua jornada com potência de agir, com elã vital."
+    </blockquote>
+
+    <p>Essa é a essência do que você, como mentor da plataforma, está sendo treinado para entregar. Não um conjunto de conselhos — mas uma <strong>arquitetura de execução pessoal</strong> que devolve ao mentorado o protagonismo da própria carreira.</p>
+
+    <h3>A Metodologia GUIA — Visão Geral</h3>
+
+    <p>GUIA é um ciclo estruturado de 12 semanas dividido em 4 fases sequenciais:</p>
+
+    <ul>
+      <li><strong style="color:var(--gold);">G — Gestar Acordo</strong> (Semana 1): Alinhar escopo, metas e papéis. Estabelecer o termo de mentoria.</li>
+      <li><strong style="color:var(--gold);">U — Unir Diagnóstico e Visão</strong> (Semanas 2-3): DISC, Radar de Competências, SWOT, Feedback 360° e Visão de Futuro.</li>
+      <li><strong style="color:var(--gold);">I — Implementar Microplanos</strong> (Semanas 4-9): Conversão da visão em ações semanais com sessões GROW.</li>
+      <li><strong style="color:var(--gold);">A — Aferir e Ajustar</strong> (Semanas 10-12): Medir progresso (KRs), conduzir entrevista de aprendizado, registrar evolução.</li>
+    </ul>
+
+    <h3>Resultados Esperados</h3>
+
+    <p>Ao final do ciclo, o mentorado deve ter conquistado:</p>
+
+    <ul>
+      <li><strong>Clareza de propósito</strong> e visão de longo prazo</li>
+      <li><strong>Melhor posicionamento profissional</strong> e marca pessoal</li>
+      <li><strong>Ampliação de competências críticas</strong> para a trajetória desejada</li>
+      <li><strong>Tomadas de decisão mais estratégicas</strong> e seguras</li>
+      <li><strong>Aumento da autoconfiança e protagonismo</strong> sobre a carreira</li>
+    </ul>
+
+    <h3>O Papel do Mentor</h3>
+
+    <p>Você não é um conselheiro. Você é um <strong>guia de execução</strong>. Seu papel é:</p>
+
+    <ul>
+      <li>Promover ambiente seguro para reflexão e vulnerabilidade</li>
+      <li>Aconselhar e orientar nos processos de melhoria de competências</li>
+      <li>Compartilhar experiências — sucessos e fracassos com igual honestidade</li>
+      <li>Fazer perguntas que estimulem a reflexão profunda do mentorado</li>
+      <li>Oferecer sua visão sobre os temas discutidos sem impor caminhos</li>
+    </ul>
+
+    <p>Nas próximas aulas, você verá <strong>como aplicar cada uma das fases</strong> diretamente na plataforma — passo a passo, com exemplos reais.</p>
+
+  </div>
+  `;
+}
+
+function renderLesson2(){
+  document.getElementById('lesson-content').innerHTML = `
+  <div class="video-placeholder" style="margin-bottom:24px;">
+    <div class="video-play">▶</div>
+    <div style="font-size:14px;color:var(--text2);font-weight:600;">Aula 2 — Fase G — Início do Ciclo</div>
+    <div class="video-caption">Vídeo em produção · ${LESSONS[1].duration}</div>
+  </div>
+
+  <div class="lesson-content">
+    <h3>O que é a Fase G</h3>
+    <p>"Gestar Acordo" é a primeira fase da metodologia GUIA — a base que sustenta todo o ciclo de 12 semanas. Sem um acordo claro, qualquer estrutura de execução posterior fica frágil.</p>
+    <blockquote>O objetivo da Fase G é simples e crítico: <strong>alinhar escopo, metas e papéis</strong>. Quando isso é feito bem, todo o restante flui. Quando é feito mal, retrabalhos consomem o ciclo inteiro.</blockquote>
+
+    <h3>Estrutura na Plataforma</h3>
+    <p>O instrumento "Início do Ciclo" no menu lateral (sob a letra <strong style="color:var(--gold);">G</strong>) tem 4 seções obrigatórias:</p>
+
+    <ul>
+      <li><strong>1. Escopo da Mentoria:</strong> objetivo central do ciclo, área de foco principal e contexto atual do mentorado (cargo, empresa, momento).</li>
+      <li><strong>2. Metas e Expectativas:</strong> 3 resultados concretos esperados ao final do ciclo, como o sucesso será medido, e o principal desafio percebido hoje.</li>
+      <li><strong>3. Papéis e Responsabilidades:</strong> compromissos claros do mentor e do mentorado para o ciclo.</li>
+      <li><strong>4. Termo de Mentoria:</strong> frequência e duração das sessões, canal de comunicação, datas de início e fim, cláusula de confidencialidade e assinaturas digitais.</li>
+    </ul>
+
+    <h3>Como Conduzir a Sessão de Kick-off</h3>
+    <p>A primeira sessão (60 minutos) deve ser conduzida em três momentos:</p>
+
+    <ul>
+      <li><strong>Primeiros 20 min — Conexão e Contexto:</strong> entender o momento de carreira, as ambições e o que motivou a busca pela mentoria.</li>
+      <li><strong>Próximos 25 min — Estruturação do Acordo:</strong> preencher o instrumento "Início do Ciclo" juntos, em tela compartilhada. Não delegue ao mentorado preencher sozinho — o exercício de articular em conjunto já é parte do método.</li>
+      <li><strong>Últimos 15 min — Termo e Compromissos:</strong> revisar o termo, esclarecer cláusulas, capturar as assinaturas e confirmar a próxima sessão.</li>
+    </ul>
+
+    <h3>Recurso de IA: Plano do Ciclo</h3>
+    <p>Após preencher o "Início do Ciclo", clique em <strong>"✦ Gerar plano de ciclo com IA"</strong>. A IA cruza os dados informados e gera:</p>
+    <ul>
+      <li>Leitura do cenário do mentorado</li>
+      <li>Riscos potenciais para o ciclo</li>
+      <li>Plano de abordagem para as 12 semanas</li>
+      <li>A pergunta ideal para abrir a primeira sessão real</li>
+    </ul>
+
+    <h3>Erros comuns a evitar</h3>
+    <ul>
+      <li><strong>Pular o termo:</strong> sem o termo formalizado, a relação tende a se diluir nos primeiros conflitos.</li>
+      <li><strong>Metas vagas:</strong> "quero crescer profissionalmente" não é meta. Provoque até chegar a algo mensurável.</li>
+      <li><strong>Comprometimento assimétrico:</strong> se o mentorado não se compromete a executar entre sessões, o ciclo morre na fase I.</li>
+    </ul>
+  </div>
+  `;
+}
+
+function renderLesson3(){
+  document.getElementById('lesson-content').innerHTML = `
+  <div class="video-placeholder" style="margin-bottom:24px;">
+    <div class="video-play">▶</div>
+    <div style="font-size:14px;color:var(--text2);font-weight:600;">Aula 3 — Fase U — Diagnóstico e Visão</div>
+    <div class="video-caption">Vídeo em produção · ${LESSONS[2].duration}</div>
+  </div>
+
+  <div class="lesson-content">
+    <h3>O que é a Fase U</h3>
+    <p>"Unir Diagnóstico e Visão" acontece nas semanas 2 e 3 do ciclo. É a fase de <strong>profundidade analítica</strong> — onde mentor e mentorado constroem juntos um retrato preciso do presente e uma visão clara do futuro desejado.</p>
+
+    <blockquote>Sem diagnóstico não há intervenção precisa. Sem visão não há direção. A Fase U entrega os dois ao mesmo tempo.</blockquote>
+
+    <h3>Os 5 Instrumentos da Fase U</h3>
+
+    <p><strong>1. Feedback 360° (◷)</strong></p>
+    <ul>
+      <li>O mentorado convida pares, líderes e subordinados para avaliação anônima</li>
+      <li>A plataforma consolida as respostas em barras visuais</li>
+      <li>Use o resultado para confrontar a autoavaliação com a percepção externa</li>
+      <li>O ✦ Análise IA cruza os dados e identifica os 3 maiores gaps de percepção</li>
+    </ul>
+
+    <p><strong>2. Meu Perfil DISC (◌)</strong></p>
+    <ul>
+      <li>Assessment com 7 situações — o mentorado escolhe "mais" e "menos" se parece</li>
+      <li>Pontuação ipsativa identifica o perfil predominante: D, I, S ou C</li>
+      <li>Use o resultado para calibrar sua abordagem como mentor (D precisa de espaço para decidir; I precisa de validação; S precisa de tempo; C precisa de dados)</li>
+    </ul>
+
+    <p><strong>3. Radar de Competências (◎)</strong></p>
+    <ul>
+      <li>Selecione até 7 competências do banco ou crie customizadas</li>
+      <li>Mentorado avalia (autoavaliação) e mentor avalia (visão externa)</li>
+      <li>O delta entre as duas avaliações é o ponto de maior valor da conversa</li>
+      <li>Crie ciclos versionados para comparar evolução entre Q1, Q2, Q3</li>
+    </ul>
+
+    <p><strong>4. SWOT Pessoal (◫)</strong></p>
+    <ul>
+      <li>Forças, Fraquezas, Oportunidades e Ameaças aplicados à carreira individual</li>
+      <li>O cruzamento FO (forças × oportunidades) é onde nascem os melhores OKRs</li>
+      <li>O cruzamento FA (fraquezas × ameaças) revela os riscos a mitigar</li>
+    </ul>
+
+    <p><strong>5. Visão de Futuro (◈)</strong></p>
+    <ul>
+      <li>Storytelling estruturado em 5 dimensões: Carreira, Impacto, Vida, Legado, Primeiros Passos</li>
+      <li>O mentorado descreve "um dia na vida daqui a 12 meses"</li>
+      <li>Cada visão salva gera uma versão datada — permite comparar evolução ao longo do ciclo</li>
+    </ul>
+
+    <h3>Como Conduzir a Fase U</h3>
+    <p>Use 2 sessões para cobrir os 5 instrumentos. Sugestão de divisão:</p>
+    <ul>
+      <li><strong>Sessão 2:</strong> DISC + Radar de Competências (autoavaliação)</li>
+      <li><strong>Tarefa entre sessões:</strong> mentorado envia 360° e prepara SWOT</li>
+      <li><strong>Sessão 3:</strong> análise do 360° + SWOT + Visão de Futuro</li>
+    </ul>
+
+    <h3>Sinais de qualidade do diagnóstico</h3>
+    <ul>
+      <li>O mentorado se surpreende com pelo menos um dado — significa que olhamos onde ele não olhava</li>
+      <li>Aparece um padrão claro entre os 5 instrumentos — coerência indica profundidade</li>
+      <li>O mentorado consegue verbalizar uma "tese de carreira" ao final da sessão 3</li>
+    </ul>
+  </div>
+  `;
+}
+
+function renderLesson4(){
+  document.getElementById('lesson-content').innerHTML = `
+  <div class="video-placeholder" style="margin-bottom:24px;">
+    <div class="video-play">▶</div>
+    <div style="font-size:14px;color:var(--text2);font-weight:600;">Aula 4 — Fase I — Plano de Ação</div>
+    <div class="video-caption">Vídeo em produção · ${LESSONS[3].duration}</div>
+  </div>
+
+  <div class="lesson-content">
+    <h3>O que é a Fase I</h3>
+    <p>"Implementar Microplanos" ocupa as semanas 4 a 9 do ciclo — o coração da execução. É aqui que a visão construída na Fase U vira ação semanal.</p>
+
+    <blockquote>O objetivo da Fase I é converter visão em ação. Sem isso, o diagnóstico vira papel guardado na gaveta.</blockquote>
+
+    <h3>Estrutura na Plataforma</h3>
+
+    <p>O instrumento "Plano de Ação" (sob a letra <strong style="color:var(--gold);">I</strong>) tem três componentes:</p>
+
+    <p><strong>1. OKRs com Key Results</strong></p>
+    <ul>
+      <li>Defina 2-3 OKRs com base na Visão de Futuro e nos gaps de competências</li>
+      <li>Cada OKR tem um Key Result mensurável e um % de atingimento atualizado durante o ciclo</li>
+      <li>Quebre cada OKR em microplanos de 4 semanas — não tente cobrir 12 semanas de uma vez</li>
+    </ul>
+
+    <p><strong>2. Kanban (To Do / Doing / Done)</strong></p>
+    <ul>
+      <li>Quebre os OKRs em ações semanais visíveis no Kanban</li>
+      <li>O mentorado move os cards conforme executa</li>
+      <li>O kanban torna visível o que está travando — se há sempre 8 itens em "Doing", o problema não é falta de ideias, é foco</li>
+    </ul>
+
+    <p><strong>3. Sessões GROW (50 minutos semanais)</strong></p>
+    <ul>
+      <li><strong>G — Goal:</strong> qual o objetivo desta sessão? (5 min)</li>
+      <li><strong>R — Reality:</strong> qual a situação atual? O que aconteceu desde a última sessão? (15 min)</li>
+      <li><strong>O — Options:</strong> que caminhos existem? Provoque até gerar 3 opções (20 min)</li>
+      <li><strong>W — Will:</strong> o que será feito até a próxima sessão? Compromisso explícito (10 min)</li>
+    </ul>
+
+    <h3>Como Conduzir a Fase I</h3>
+    <p>Sessões semanais de 50 minutos. Estrutura sugerida:</p>
+    <ul>
+      <li><strong>Sessão 4:</strong> definir os 2-3 OKRs do ciclo a partir do diagnóstico da Fase U</li>
+      <li><strong>Sessões 5-9:</strong> ciclos GROW semanais focando no que travou ou no que está prestes a destravar</li>
+      <li><strong>Toda sessão:</strong> o mentorado chega com o Kanban atualizado</li>
+    </ul>
+
+    <h3>Erros comuns na Fase I</h3>
+    <ul>
+      <li><strong>OKRs aspiracionais demais:</strong> "ser melhor líder" não é OKR. "Conduzir a primeira reunião 1:1 com cada subordinado direto até 30/06" é.</li>
+      <li><strong>Sessões viram bate-papo:</strong> sem GROW estruturado, a sessão vira terapia ou conversa de café.</li>
+      <li><strong>Ignorar o Kanban:</strong> se o mentorado não atualiza, o ciclo perde tração. Trate isso na sessão imediatamente.</li>
+    </ul>
+
+    <h3>Recurso de IA: Análise Integrada</h3>
+    <p>A cada 2-3 sessões, use o botão <strong>"✦ Análise Integrada IA"</strong> para gerar um relatório executivo cruzando todos os dados — DISC, competências, SWOT, visão e progresso dos OKRs. Isso revela padrões que escapam à observação direta.</p>
+  </div>
+  `;
+}
+
+function renderLesson5(){
+  document.getElementById('lesson-content').innerHTML = `
+  <div class="video-placeholder" style="margin-bottom:24px;">
+    <div class="video-play">▶</div>
+    <div style="font-size:14px;color:var(--text2);font-weight:600;">Aula 5 — Fase A — Aferição e Fechamento</div>
+    <div class="video-caption">Vídeo em produção · ${LESSONS[4].duration}</div>
+  </div>
+
+  <div class="lesson-content">
+    <h3>O que é a Fase A</h3>
+    <p>"Aferir e Ajustar" são as semanas 10 a 12 — o momento de medir progresso, corrigir rota e selar aprendizados. Sem essa fase, o ciclo fica incompleto.</p>
+
+    <blockquote>O que não é medido não é gerenciado. E o que não é selado como aprendizado, evapora.</blockquote>
+
+    <h3>Os 4 Componentes da Aferição</h3>
+
+    <p><strong>1. KRs com Atingimento</strong></p>
+    <ul>
+      <li>Cada OKR definido na Fase I aparece com um slider de 0-100%</li>
+      <li>Avalie o atingimento real, não o esforço</li>
+      <li>KRs abaixo de 70% merecem investigação: foi escopo errado? Execução? Externalidade?</li>
+    </ul>
+
+    <p><strong>2. Aferição de Competências (3ª dimensão do radar)</strong></p>
+    <ul>
+      <li>Reabra o radar de competências da Fase U</li>
+      <li>Avalie agora cada competência considerando o desempenho <strong>real observado</strong> ao longo do ciclo</li>
+      <li>O resultado aferido aparece como linha roxa no radar — terceira dimensão visual que revela a evolução</li>
+      <li>O delta entre autoavaliação inicial e resultado aferido é o ganho mensurável do ciclo</li>
+    </ul>
+
+    <p><strong>3. NPS da Mentoria</strong></p>
+    <ul>
+      <li>Em uma escala de 0-10, o quanto o mentorado recomendaria esta mentoria a um colega</li>
+      <li>NPS é dado em momento de calma reflexiva, não no calor de uma sessão difícil</li>
+      <li>Use o comentário aberto para capturar o que funcionou e o que não funcionou</li>
+    </ul>
+
+    <p><strong>4. Entrevista de Aprendizado</strong></p>
+    <ul>
+      <li>6 perguntas estruturadas: aprendizado, mudança concreta, maior desafio, pendências, protagonismo, próximos 90 dias</li>
+      <li>Conduza presencialmente — não envie como tarefa</li>
+      <li>Grave a sessão (com permissão) — o material gerado serve como insumo para a IA gerar a síntese final</li>
+    </ul>
+
+    <h3>Recurso de IA: Síntese do Ciclo</h3>
+    <p>Após preencher os 4 componentes, clique em <strong>"✦ Gerar síntese e recomendações com IA"</strong>. A IA cruza tudo — KRs, evolução de competências, entrevista — e produz:</p>
+    <ul>
+      <li>Síntese do ciclo em 3-4 frases precisas</li>
+      <li>O maior avanço identificado</li>
+      <li>O gap persistente que merece atenção no próximo ciclo</li>
+      <li>Recomendação para o próximo ciclo</li>
+      <li>Uma pergunta final para encerrar com profundidade</li>
+    </ul>
+
+    <h3>Como Conduzir o Encerramento</h3>
+    <ul>
+      <li><strong>Sessão 10:</strong> reabrir o radar com aferição em conjunto + revisar atingimento dos KRs</li>
+      <li><strong>Sessão 11:</strong> entrevista de aprendizado completa</li>
+      <li><strong>Sessão 12:</strong> apresentação da síntese da IA + decisão sobre renovação ou encerramento + celebração das conquistas</li>
+    </ul>
+
+    <h3>O que fazer com o resultado</h3>
+    <ul>
+      <li>Exportar o relatório completo do ciclo</li>
+      <li>Se houver renovação: usar a aferição como linha de base do próximo ciclo</li>
+      <li>Se houver encerramento: garantir que o mentorado tem clareza dos próximos 90 dias</li>
+    </ul>
+  </div>
+  `;
+}
+
+function renderLesson6(){
+  document.getElementById('lesson-content').innerHTML = `
+  <div class="video-placeholder" style="margin-bottom:24px;">
+    <div class="video-play">▶</div>
+    <div style="font-size:14px;color:var(--text2);font-weight:600;">Aula 6 — IA GUIA na Prática</div>
+    <div class="video-caption">Vídeo em produção · ${LESSONS[5].duration}</div>
+  </div>
+
+  <div class="lesson-content">
+    <h3>O que é a IA GUIA</h3>
+    <p>A IA GUIA é um <strong>assistente estratégico</strong> que recebe automaticamente todo o contexto do mentorado — nome, fase, perfil DISC, competências, SWOT, visão, OKRs, feedback 360° — e responde como um coach executivo sênior que conhece profundamente aquela pessoa.</p>
+
+    <blockquote>A IA não substitui você como mentor. Ela amplia sua capacidade de processar dados e identificar padrões que escapam à observação direta.</blockquote>
+
+    <h3>Onde a IA está disponível</h3>
+    <p>Cada instrumento da plataforma tem um botão <strong>"✦ Analisar com IA"</strong>:</p>
+    <ul>
+      <li><strong>DISC:</strong> análise de carreira específica para o perfil identificado</li>
+      <li><strong>Radar de Competências:</strong> diagnóstico, alavanca principal e plano 30-60-90</li>
+      <li><strong>SWOT:</strong> análise estratégica dos 4 cruzamentos</li>
+      <li><strong>Visão de Futuro:</strong> análise da visão e plano de ação para alcançá-la</li>
+      <li><strong>360°:</strong> identificação dos gaps de percepção</li>
+      <li><strong>Início do Ciclo:</strong> plano completo das 12 semanas</li>
+      <li><strong>Aferição:</strong> síntese do ciclo e recomendações para o próximo</li>
+      <li><strong>Análise Integrada:</strong> relatório executivo cruzando todos os dados</li>
+      <li><strong>Comparação de versões:</strong> evolução entre ciclos ou versões de Visão</li>
+    </ul>
+
+    <h3>Quando usar a IA</h3>
+    <ul>
+      <li><strong>Antes da sessão:</strong> rode "Análise Integrada" para chegar preparado com hipóteses</li>
+      <li><strong>Durante a sessão:</strong> use "Comparação de versões" para revelar padrões ao mentorado</li>
+      <li><strong>Após a sessão:</strong> use a IA para preparar a "Síntese do Ciclo" antes do encontro de aferição</li>
+    </ul>
+
+    <h3>Como interpretar as respostas</h3>
+    <p>A IA produz texto rápido. Trate as respostas como <strong>hipóteses qualificadas</strong>, não verdades absolutas:</p>
+    <ul>
+      <li><strong>Sempre filtre pelo seu conhecimento:</strong> você conhece o mentorado, a IA não</li>
+      <li><strong>Use as perguntas geradas:</strong> a IA frequentemente formula perguntas que você levaria semanas para chegar</li>
+      <li><strong>Compartilhe seletivamente:</strong> nem toda resposta da IA precisa ir para o mentorado</li>
+    </ul>
+
+    <h3>IA GUIA Insights (apenas Admin)</h3>
+    <p>Para administradores da plataforma, há um painel exclusivo "✦ IA GUIA Insights" com 4 análises agregadas:</p>
+    <ul>
+      <li>Análise geral da plataforma — saúde do funil GUIA</li>
+      <li>Riscos de retenção — quem está em risco de abandono</li>
+      <li>Tendências de desenvolvimento — o que o mercado pede</li>
+      <li>Relatório para RH — análise de empresas-cliente</li>
+    </ul>
+
+    <h3>E-mail Semanal Automatizado</h3>
+    <p>O painel admin também gera <strong>resumos semanais personalizados</strong> para cada mentorado — saudação personalizada, ação prioritária, notícia de carreira e reflexão. Pode ser usado para manter o engajamento entre sessões.</p>
+
+    <h3>Limitação importante</h3>
+    <blockquote>A IA é uma ferramenta. O método é seu. O vínculo com o mentorado é seu. A IA acelera o processo — não substitui presença, escuta e julgamento.</blockquote>
+  </div>
+  `;
+}
+
+// QUIZ SYSTEM
+async function startQuiz(lessonId){
+  const lesson = LESSONS.find(l=>l.id===lessonId);
+  if(!lesson) return;
+
+  document.getElementById('content-area').innerHTML = `
+  <div style="margin-bottom:14px;">
+    <button class="btn btn-outline btn-sm" onclick="openLesson(${lessonId})">← Voltar à aula</button>
+  </div>
+  <div class="page-header">
+    <div style="font-size:11px;color:var(--gold);letter-spacing:.08em;font-weight:600;margin-bottom:6px;">PROVA DE PROFICIÊNCIA · AULA ${lesson.id}</div>
+    <div class="page-title">${lesson.title}</div>
+    <div class="page-sub">10 perguntas · Nota mínima 8/10 para concluir</div>
+  </div>
+  <div id="quiz-content">
+    <div class="panel" style="text-align:center;padding:40px;">
+      <div style="font-size:32px;margin-bottom:16px;">⏳</div>
+      <div style="font-size:14px;color:var(--text2);margin-bottom:8px;">IA gerando perguntas baseadas no conteúdo da aula...</div>
+      <div style="font-size:11px;color:var(--text4);">Aguarde alguns segundos</div>
+    </div>
+  </div>
+  `;
+
+  const lessonContent = document.querySelector('.lesson-content')?.innerText || '';
+  // Generate questions via AI
+  const prompt = `Gere 10 perguntas de múltipla escolha em formato JSON sobre o conteúdo da Aula "${lesson.title}" da Metodologia GUIA de mentoria. Use APENAS o conteúdo abaixo:
+
+${getQuizContext(lessonId)}
+
+Formato de resposta (JSON puro, sem markdown):
+{"questions":[
+  {"q":"Pergunta 1?","options":["A","B","C","D"],"correct":0},
+  ...10 perguntas
+]}
+
+Regras:
+- Cada pergunta tem 4 alternativas (A/B/C/D)
+- Apenas UMA correta — campo "correct" é o índice (0,1,2,3)
+- Perguntas devem testar compreensão, não decorar
+- Misture níveis: básico, aplicação prática, análise
+- Responda APENAS o JSON, sem nenhum texto antes ou depois`;
+
+  try {
+    const result = await callAI(prompt, false);
+    let cleanResult = result.trim();
+    // Remove possible markdown code blocks
+    cleanResult = cleanResult.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```$/,'').trim();
+    const data = JSON.parse(cleanResult);
+    if(!data.questions || data.questions.length < 5){
+      throw new Error('Quiz inválido');
+    }
+    renderQuiz(lessonId, data.questions);
+  } catch(e){
+    document.getElementById('quiz-content').innerHTML = `
+    <div class="panel" style="text-align:center;">
+      <div style="font-size:13px;color:var(--red);margin-bottom:14px;">Erro ao gerar prova: ${e.message}</div>
+      <button class="btn btn-gold btn-sm" onclick="startQuiz(${lessonId})">Tentar novamente</button>
+    </div>`;
+  }
+}
+
+function getQuizContext(lessonId){
+  const contexts = {
+    1: 'Luiz Arcala é Engenheiro Florestal pela UNESP, MBA em Finanças pelo Insper. Atua na Acelen Renewables como Gerente de Estratégia Agroindustrial. Iniciou trajetória de mentor em 2025. Criou a metodologia GUIA porque não havia método poderoso adaptável à situação real do mentorado. Aplicou planejamento estratégico empresarial à carreira pessoal. Visão: ver pessoas evoluindo na sua potencialidade com autonomia e protagonismo. GUIA tem 4 fases: G (Gestar Acordo - semana 1), U (Unir Diagnóstico - semanas 2-3), I (Implementar - semanas 4-9), A (Aferir - semanas 10-12). Resultados: clareza de propósito, melhor posicionamento, ampliação de competências, decisões estratégicas, autoconfiança e protagonismo.',
+    2: 'Fase G "Gestar Acordo" é a primeira fase, semana 1, base do ciclo. Objetivo: alinhar escopo, metas e papéis. O instrumento "Início do Ciclo" tem 4 seções: (1) Escopo - objetivo, foco, contexto; (2) Metas - 3 resultados, como medir, desafio; (3) Papéis - compromissos mentor e mentorado; (4) Termo - frequência, duração, canal, datas, confidencialidade, assinaturas. Sessão de kick-off de 60 min em 3 momentos: 20min conexão, 25min preencher instrumento, 15min termo. Erros comuns: pular o termo, metas vagas, comprometimento assimétrico. IA gera plano completo das 12 semanas após preenchimento.',
+    3: 'Fase U "Unir Diagnóstico e Visão" - semanas 2-3 - profundidade analítica. 5 instrumentos: (1) Feedback 360° - convidar pares, líderes, subordinados; (2) DISC - 7 situações, perfil predominante D/I/S/C, calibra abordagem do mentor; (3) Radar de Competências - até 7 competências, mentor avalia + autoavaliação, ciclos versionados; (4) SWOT Pessoal - cruzamento FO gera OKRs, FA revela riscos; (5) Visão de Futuro - 5 dimensões: Carreira, Impacto, Vida, Legado, Primeiros Passos. Conduzir em 2 sessões. Sinais de qualidade: mentorado se surpreende, padrão coerente entre instrumentos, tese de carreira ao final.',
+    4: 'Fase I "Implementar Microplanos" - semanas 4-9 - coração da execução. 3 componentes: (1) OKRs com Key Results mensuráveis e %, quebrados em microplanos de 4 semanas; (2) Kanban To Do/Doing/Done - mentorado move cards; (3) Sessões GROW de 50 min - Goal (5min)/Reality (15min)/Options (20min)/Will (10min). Erros: OKRs aspiracionais demais, sessões viram bate-papo, ignorar Kanban. Use IA "Análise Integrada" a cada 2-3 sessões.',
+    5: 'Fase A "Aferir e Ajustar" - semanas 10-12. 4 componentes: (1) KRs com slider 0-100% atingimento real; (2) Aferição de Competências - 3ª dimensão roxa do radar, delta vs autoavaliação inicial; (3) NPS 0-10 da mentoria com comentário; (4) Entrevista de Aprendizado - 6 perguntas: aprendizado, mudança, desafio, pendências, protagonismo, próximos 90 dias. Conduzir em 3 sessões: 10 (radar+KRs), 11 (entrevista), 12 (síntese IA + decisão renovação). IA gera síntese do ciclo cruzando todos os dados.',
+    6: 'IA GUIA é assistente estratégico que recebe contexto completo do mentorado: DISC, competências, SWOT, visão, OKRs, 360°. Botão "✦ Analisar com IA" em cada instrumento. Quando usar: antes (preparação), durante (revelar padrões), após (síntese). Tratar respostas como hipóteses qualificadas, não verdades. Painel "IA GUIA Insights" admin tem: análise geral, riscos retenção, tendências, relatório RH. E-mail semanal automatizado. Limitação: IA não substitui presença, escuta e julgamento do mentor.'
+  };
+  return contexts[lessonId] || '';
+}
+
+let currentQuiz = null;
+let quizAnswers = {};
+
+function renderQuiz(lessonId, questions){
+  currentQuiz = {lessonId, questions};
+  quizAnswers = {};
+  document.getElementById('quiz-content').innerHTML = `
+  <div class="panel">
+    ${questions.map((q,i)=>`
+    <div style="padding:18px 0;${i<questions.length-1?'border-bottom:1px solid var(--border);':''}">
+      <div style="font-size:11px;color:var(--gold);font-weight:700;margin-bottom:6px;letter-spacing:.05em;">PERGUNTA ${i+1} DE ${questions.length}</div>
+      <div style="font-size:14px;color:var(--text);font-weight:500;margin-bottom:12px;line-height:1.6;">${q.q}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;" id="q-${i}">
+        ${q.options.map((opt,oi)=>`
+        <div onclick="selectQuizOption(${i},${oi})" data-idx="${oi}" style="padding:11px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;color:var(--text2);cursor:pointer;transition:all .12s;display:flex;gap:10px;align-items:flex-start;">
+          <div style="width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--text3);">${String.fromCharCode(65+oi)}</div>
+          <div style="flex:1;line-height:1.5;">${opt}</div>
+        </div>`).join('')}
+      </div>
+    </div>`).join('')}
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">
+      <button class="btn btn-gold" onclick="submitQuiz()">Concluir prova</button>
+    </div>
+  </div>
+  `;
+}
+
+function selectQuizOption(qi, oi){
+  quizAnswers[qi] = oi;
+  document.querySelectorAll(`#q-${qi} > div`).forEach((el,i)=>{
+    if(i === oi){
+      el.style.borderColor = 'var(--gold)';
+      el.style.background = 'var(--gold-bg)';
+      el.querySelector('div').style.background = 'var(--gold)';
+      el.querySelector('div').style.borderColor = 'var(--gold)';
+      el.querySelector('div').style.color = '#0a0a0a';
+    } else {
+      el.style.borderColor = 'var(--border)';
+      el.style.background = 'transparent';
+      el.querySelector('div').style.background = 'transparent';
+      el.querySelector('div').style.borderColor = 'var(--border2)';
+      el.querySelector('div').style.color = 'var(--text3)';
+    }
+  });
+}
+
+function submitQuiz(){
+  if(!currentQuiz) return;
+  const total = currentQuiz.questions.length;
+  const answered = Object.keys(quizAnswers).length;
+  if(answered < total){
+    toast(`Responda todas as ${total} perguntas (${total - answered} faltando)`,'err');
+    return;
+  }
+
+  let correct = 0;
+  currentQuiz.questions.forEach((q,i)=>{
+    if(quizAnswers[i] === q.correct) correct++;
+  });
+
+  const score = Math.round((correct / total) * 10);
+  const passed = score >= 8;
+
+  // Save progress
+  const p = getTrainingProgress();
+  p.scores[currentQuiz.lessonId] = score;
+  if(passed){
+    if(!p.completed.includes(currentQuiz.lessonId)){
+      p.completed.push(currentQuiz.lessonId);
+    }
+    // Remove from recycled if present
+    p.recycled = p.recycled.filter(id => id !== currentQuiz.lessonId);
+  }
+  saveTrainingProgress(p);
+
+  // Show result
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Resultado da Prova</div>
+    <div class="page-sub">Aula ${currentQuiz.lessonId} — ${LESSONS.find(l=>l.id===currentQuiz.lessonId).title}</div>
+  </div>
+
+  <div class="panel" style="text-align:center;padding:40px;">
+    <div style="font-size:64px;margin-bottom:14px;">${passed?'✓':'✗'}</div>
+    <div style="font-size:24px;font-weight:600;color:${passed?'var(--green)':'var(--red)'};margin-bottom:8px;">${passed?'Aprovado!':'Não aprovado'}</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:6px;">Sua nota: <strong style="color:var(--gold);font-family:'Space Mono',monospace;font-size:18px;">${score}/10</strong></div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:24px;">${correct} de ${total} perguntas corretas</div>
+
+    ${passed ? `
+      <div style="font-size:12px;color:var(--text2);line-height:1.7;max-width:480px;margin:0 auto 24px;">
+        Excelente! Você desbloqueou a próxima aula. Continue progredindo no treinamento.
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;">
+        ${currentQuiz.lessonId < LESSONS.length ? `<button class="btn btn-gold" onclick="openLesson(${currentQuiz.lessonId+1})">Próxima aula →</button>` : `<button class="btn btn-gold" onclick="showPage('training')">Treinamento concluído!</button>`}
+        <button class="btn btn-outline" onclick="showPage('training')">Voltar ao painel</button>
+      </div>
+    ` : `
+      <div style="font-size:12px;color:var(--text2);line-height:1.7;max-width:480px;margin:0 auto 24px;">
+        Você precisa de pelo menos <strong style="color:var(--gold);">8/10</strong> para concluir. Reveja o conteúdo da aula e tente novamente.
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;">
+        <button class="btn btn-gold" onclick="openLesson(${currentQuiz.lessonId})">Rever aula</button>
+        <button class="btn btn-outline" onclick="startQuiz(${currentQuiz.lessonId})">Refazer prova</button>
+      </div>
+    `}
+  </div>
+  `;
+
+  if(passed) toast('Aprovado! '+score+'/10','suc');
+}
+
 // ══════════════════════════════════════════════
 // AUTH SYSTEM
 // ══════════════════════════════════════════════
@@ -4124,6 +5015,10 @@ function bootApp(user){
   }
   updateTopbar();
   switchRole(role);
+  // If mentor and training not complete, redirect to training
+  if(role === 'mentor' && !isTrainingComplete()){
+    setTimeout(()=>showPage('training'), 100);
+  }
 }
 
 function updateTopbar(){

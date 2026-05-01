@@ -167,6 +167,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .dot:hover{border-color:var(--gold)}
 .dot.me-fill{background:var(--gold);border-color:var(--gold);color:#0a0a0a;font-weight:700}
 .dot.mentor-fill{background:#3266ad;border-color:#3266ad;color:#fff;font-weight:700}
+.dot.aferido-fill{background:#7c4dff;border-color:#7c4dff;color:#fff;font-weight:700}
 .comp-diff{font-size:10px;font-family:'Space Mono',monospace;width:32px;text-align:right;flex-shrink:0}
 .diff-p{color:var(--green)}
 .diff-n{color:var(--red)}
@@ -665,6 +666,7 @@ const MENUS = {
     {section:'Inteligência'},
     {id:'ia-main',icon:'✦',label:'Análise Integrada IA'},
     {id:'nps-dash',icon:'◊',label:'NPS & Progresso'},
+    {id:'fase-a',icon:'◈',label:'Fase A — Aferição'},
       {section:'Conta'},
     {id:'perfil',icon:'◉',label:'Meu Perfil'},
   ],
@@ -681,6 +683,7 @@ const MENUS = {
     {id:'peer360',icon:'◷',label:'Feedback 360°',badge:'I'},
     {section:'IA'},
     {id:'ia-main',icon:'✦',label:'Recomendações IA'},
+    {id:'fase-a',icon:'◈',label:'Fase A — Aferição'},
   ]
 };
 
@@ -722,6 +725,7 @@ function showPage(id){
     'nps-dash': renderNPSDash,
     'minha-jornada': renderMinhaJornada,
     'perfil': renderPerfil,
+    'fase-a': renderInstrumentoA,
   };
 
   destroyCharts();
@@ -1221,9 +1225,10 @@ function renderCompEdit(isMentor, activeId){
   const selOpts = ALL_COMPETENCIAS.filter(c=>!data.find(d=>d.name===c)).map(c=>'<option value="'+c+'">'+c+'</option>').join('');
 
   document.getElementById('comp-tab-content').innerHTML =
-    '<div style="display:flex;gap:12px;margin-bottom:14px;">' +
-    '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Autoavaliação (mentorado)</div>' +
+    '<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">' +
+    '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Autoavaliação inicial</div>' +
     '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#3266ad"></div>Avaliação do mentor</div>' +
+    '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#7c4dff"></div>Resultado aferido (Fase A)</div>' +
     '<div style="margin-left:auto;font-size:11px;color:'+(atLimit?'var(--amber)':'var(--text3)')+'">'+data.length+'/7 competências</div>' +
     '</div>' +
     '<div class="grid-2">' +
@@ -1415,6 +1420,7 @@ function renderCompList(){
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   const data = radar ? radar.competencias : [];
   const isMentor = currentRole==='mentor';
+  const isAferindo = DB.get('comp_aferindo') === activeId;
   const el = document.getElementById('comp-list');
   if(!el) return;
   if(!data.length){
@@ -1423,15 +1429,31 @@ function renderCompList(){
   }
   el.innerHTML = data.map(function(c,ci){
     const diff = c.me - c.mentor;
-    let html = '<div class="comp-row">';
-    html += '<div class="comp-name" style="font-size:11px">'+c.name+'</div>';
-    html += '<div class="comp-scales"><div class="dot-row">';
+    const diffA = (c.aferido!=null && c.me!=null) ? c.aferido - c.me : null;
+    let html = '<div class="comp-row" style="flex-wrap:wrap;">';
+    html += '<div class="comp-name" style="font-size:11px;width:150px;">'+c.name+'</div>';
+    html += '<div class="comp-scales">';
+    // Row 1: Mentorado (autoavaliação inicial)
+    html += '<div class="dot-row" title="Autoavaliação inicial (mentorado)">';
     for(let n=1;n<=5;n++) html += '<div class="dot '+(n<=c.me?'me-fill':'')+'" data-ci="'+ci+'" data-role="me" data-val="'+n+'" onclick="setCompValEl(this)">'+n+'</div>';
-    html += '</div><div class="dot-row">';
+    html += '</div>';
+    // Row 2: Mentor
+    html += '<div class="dot-row" title="Avaliação do mentor">';
     for(let n=1;n<=5;n++) html += '<div class="dot '+(n<=c.mentor?'mentor-fill':'')+'" '+(isMentor?'data-ci="'+ci+'" data-role="mentor" data-val="'+n+'" onclick="setCompValEl(this)"':'style="cursor:default"')+'>'+n+'</div>';
-    html += '</div></div>';
-    html += '<div class="comp-diff '+(diff>0?'diff-p':diff<0?'diff-n':'diff-z')+'">'+(diff>0?'+'+diff:diff)+'</div>';
-    html += '<div data-ci="'+ci+'" onclick="removeComp(parseInt(this.dataset.ci))" style="cursor:pointer;color:var(--text4);font-size:16px;padding-left:8px;line-height:1">×</div>';
+    html += '</div>';
+    // Row 3: Aferido (fase A) — always editable by mentor
+    if(isAferindo || c.aferido!=null){
+      html += '<div class="dot-row" title="Resultado aferido — Fase A">';
+      for(let n=1;n<=5;n++) html += '<div class="dot '+(n<=(c.aferido||0)?'aferido-fill':'')+'" data-ci="'+ci+'" data-role="aferido" data-val="'+n+'" onclick="setCompValEl(this)">'+n+'</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    // Diffs
+    html += '<div style="display:flex;flex-direction:column;gap:2px;">';
+    html += '<div class="comp-diff '+(diff>0?'diff-p':diff<0?'diff-n':'diff-z')+'" title="Delta mentor vs mentorado">'+(diff>0?'+'+diff:diff)+'</div>';
+    if(c.aferido!=null) html += '<div class="comp-diff '+(diffA>0?'diff-p':diffA<0?'diff-n':'diff-z')+'" style="font-size:9px;" title="Delta aferido vs inicial">'+(diffA>0?'▲+'+diffA:diffA<0?'▼'+diffA:'=')+'</div>';
+    html += '</div>';
+    html += '<div data-ci="'+ci+'" onclick="removeComp(parseInt(this.dataset.ci))" style="cursor:pointer;color:var(--text4);font-size:16px;padding-left:6px;line-height:1" title="Remover">×</div>';
     html += '</div>';
     return html;
   }).join('');
@@ -1459,17 +1481,19 @@ function initRadarChart(){
   const activeId = DB.get('comp_active_radar');
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   const data = radar ? radar.competencias : [];
+  const hasAferido = data.some(c=>c.aferido!=null);
   if(charts.radar){ try{charts.radar.destroy()}catch(e){} }
+  const datasets = [
+    {label:'Autoavaliação',data:data.map(c=>c.me||0),borderColor:'#f0c040',backgroundColor:'rgba(240,192,64,.1)',pointBackgroundColor:'#f0c040',borderWidth:2},
+    {label:'Mentor',data:data.map(c=>c.mentor||0),borderColor:'#3266ad',backgroundColor:'rgba(50,102,173,.08)',pointBackgroundColor:'#3266ad',borderWidth:2}
+  ];
+  if(hasAferido) datasets.push(
+    {label:'Aferido',data:data.map(c=>c.aferido||0),borderColor:'#7c4dff',backgroundColor:'rgba(124,77,255,.1)',pointBackgroundColor:'#7c4dff',borderWidth:2,borderDash:[4,2]}
+  );
   charts.radar = new Chart(ctx,{
     type:'radar',
-    data:{
-      labels:data.map(c=>c.name.split(' ').slice(0,2).join(' ')),
-      datasets:[
-        {label:'Mentorado',data:data.map(c=>c.me),borderColor:'#f0c040',backgroundColor:'rgba(240,192,64,.15)',pointBackgroundColor:'#f0c040',borderWidth:2},
-        {label:'Mentor',data:data.map(c=>c.mentor),borderColor:'#3266ad',backgroundColor:'rgba(50,102,173,.12)',pointBackgroundColor:'#3266ad',borderWidth:2}
-      ]
-    },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{r:{min:0,max:5,ticks:{stepSize:1,color:'#555',font:{size:9}},grid:{color:'#222'},pointLabels:{color:'#888',font:{size:10}}}}}
+    data:{labels:data.map(c=>c.name.split(' ').slice(0,2).join(' ')), datasets},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:hasAferido,labels:{color:'#888',font:{size:10},boxWidth:10}}},scales:{r:{min:0,max:5,ticks:{stepSize:1,color:'#555',font:{size:9}},grid:{color:'#222'},pointLabels:{color:'#888',font:{size:10}}}}}
   });
 }
 
@@ -1526,6 +1550,221 @@ function exportCompReport(){
   data.forEach(c=>{ txt+=c.name+': Mentorado='+c.me+'/5 | Mentor='+c.mentor+'/5 | Gap='+(c.me-c.mentor)+'\n'; });
   downloadText(txt,'radar-competencias.txt');
   toast('Relatório exportado','suc');
+}
+
+
+function toggleAferimento(){
+  const activeId = DB.get('comp_active_radar');
+  const current = DB.get('comp_aferindo');
+  DB.set('comp_aferindo', current===activeId ? null : activeId);
+  renderCompList();
+  toast(current===activeId ? 'Modo de aferição desativado' : 'Modo Fase A ativado — avalie o resultado do ciclo em roxo','suc');
+}
+
+async function renderInstrumentoA(){
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  const data = radar ? radar.competencias : [];
+  const npsHistory = DB.get('nps_history')||[];
+  const microplano = DB.get('microplano')||{okrs:[]};
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Fase A — Aferição do Ciclo</div>
+    <div class="page-sub">Instrumento de avaliação de resultados e avanços — metodologia GUIA</div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:16px;">
+    <!-- KRs -->
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Key Results — Atingimento</div>
+      <div id="kr-list">
+        ${(microplano.okrs||[]).map((o,i)=>`
+        <div style="padding:10px 0;border-bottom:1px solid var(--border);">
+          <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;">${o.desc}</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">KR: ${o.kr}</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="font-size:10px;color:var(--text3)">Atingimento:</div>
+            <input type="range" min="0" max="100" value="${o.atingimento||0}" 
+              style="flex:1;accent-color:var(--gold);"
+              oninput="updateKR(${i},this.value)" id="kr-range-${i}">
+            <div style="font-size:13px;font-weight:700;color:var(--gold);width:40px;text-align:right;" id="kr-pct-${i}">${o.atingimento||0}%</div>
+          </div>
+        </div>`).join('')}
+        ${!microplano.okrs?.length?'<div style="font-size:12px;color:var(--text3)">Nenhum OKR cadastrado. Acesse Microplanos para definir.</div>':''}
+      </div>
+    </div>
+
+    <!-- NPS do ciclo -->
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> NPS da Mentoria — Ciclo atual</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Em uma escala de 0 a 10, o quanto você recomendaria esta mentoria a um colega?</div>
+      <div class="nps-row" id="nps-a-row"></div>
+      <div class="field" style="margin-top:12px;"><label class="field-label">Comentário sobre o ciclo</label>
+        <textarea class="form-input" id="nps-a-comment" rows="3" placeholder="O que funcionou bem? O que poderia ter sido diferente?"></textarea>
+      </div>
+      <button class="btn btn-gold btn-sm" onclick="saveNPSFaseA()">Salvar avaliação</button>
+    </div>
+  </div>
+
+  <!-- Entrevista de Aprendizado -->
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Entrevista de Aprendizado — Fase A</div>
+    <div class="grid-2">
+      <div>
+        <div class="field"><label class="field-label">O que você aprendeu de mais importante neste ciclo?</label>
+          <textarea class="form-input" id="ea-aprendizado" rows="3" placeholder="Descreva os 2-3 aprendizados mais significativos...">${DB.get('fase_a')?.aprendizado||''}</textarea>
+        </div>
+        <div class="field"><label class="field-label">O que mudou concretamente na sua atuação profissional?</label>
+          <textarea class="form-input" id="ea-mudanca" rows="3" placeholder="Cite comportamentos, decisões ou resultados tangíveis...">${DB.get('fase_a')?.mudanca||''}</textarea>
+        </div>
+        <div class="field"><label class="field-label">Qual foi o maior desafio e como você o enfrentou?</label>
+          <textarea class="form-input" id="ea-desafio" rows="3" placeholder="Descreva o desafio e sua estratégia...">${DB.get('fase_a')?.desafio||''}</textarea>
+        </div>
+      </div>
+      <div>
+        <div class="field"><label class="field-label">O que ficou pendente para o próximo ciclo?</label>
+          <textarea class="form-input" id="ea-pendente" rows="3" placeholder="O que você sabe que ainda precisa desenvolver...">${DB.get('fase_a')?.pendente||''}</textarea>
+        </div>
+        <div class="field"><label class="field-label">Como está seu protagonismo sobre a carreira hoje vs. início do ciclo?</label>
+          <textarea class="form-input" id="ea-protagonismo" rows="3" placeholder="Em que momentos você agiu de forma mais proativa e autônoma...">${DB.get('fase_a')?.protagonismo||''}</textarea>
+        </div>
+        <div class="field"><label class="field-label">Quais são os 3 próximos passos para os próximos 90 dias?</label>
+          <textarea class="form-input" id="ea-proximos" rows="3" placeholder="Seja específico: o que, quando e como...">${DB.get('fase_a')?.proximos||''}</textarea>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:4px;">
+      <button class="btn btn-gold" onclick="saveFaseA()">Salvar entrevista</button>
+      <button class="btn btn-outline" onclick="analyzeFaseAWithIA()">✦ Gerar síntese e recomendações com IA ↗</button>
+    </div>
+  </div>
+
+  <!-- Aferição das Competências -->
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Aferição de Competências — Resultado do Ciclo</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+      Avalie cada competência considerando o desempenho <strong>real observado</strong> ao longo do ciclo — não a aspiração inicial. Esta é a terceira linha (roxa) no radar.
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Autoavaliação inicial</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#3266ad"></div>Avaliação do mentor</div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#7c4dff"></div>Resultado aferido</div>
+    </div>
+    <div id="aferimento-list">
+      ${data.map((c,ci)=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+        <div style="font-size:11px;color:var(--text2);width:160px;flex-shrink:0;">${c.name}</div>
+        <div style="display:flex;flex-direction:column;gap:3px;">
+          <div style="display:flex;gap:3px;">${[1,2,3,4,5].map(n=>`<div style="width:20px;height:20px;border-radius:50%;border:1.5px solid ${n<=c.me?'var(--gold)':'var(--border2)'};background:${n<=c.me?'var(--gold)':'transparent'};display:flex;align-items:center;justify-content:center;font-size:8px;color:${n<=c.me?'#0a0a0a':'var(--text4)'}">${n}</div>`).join('')}</div>
+          <div style="display:flex;gap:3px;">${[1,2,3,4,5].map(n=>`<div style="width:20px;height:20px;border-radius:50%;border:1.5px solid ${n<=c.mentor?'#3266ad':'var(--border2)'};background:${n<=c.mentor?'#3266ad':'transparent'};display:flex;align-items:center;justify-content:center;font-size:8px;color:${n<=c.mentor?'#fff':'var(--text4)'}">${n}</div>`).join('')}</div>
+          <div style="display:flex;gap:3px;" id="af-row-${ci}">${[1,2,3,4,5].map(n=>`<div style="width:20px;height:20px;border-radius:50%;border:1.5px solid ${n<=(c.aferido||0)?'#7c4dff':'var(--border2)'};background:${n<=(c.aferido||0)?'#7c4dff':'transparent'};display:flex;align-items:center;justify-content:center;font-size:8px;color:${n<=(c.aferido||0)?'#fff':'var(--text4)'};cursor:pointer;" data-ci="${ci}" data-val="${n}" onclick="setAferido(this)">${n}</div>`).join('')}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px;font-size:10px;font-family:'Space Mono',monospace;">
+          <div style="color:${c.mentor>c.me?'var(--red)':c.mentor<c.me?'var(--green)':'var(--text4)'}">Δ mentor: ${c.mentor-c.me>0?'+':''}${c.mentor-c.me}</div>
+          ${c.aferido!=null?`<div style="color:${c.aferido>c.me?'var(--green)':c.aferido<c.me?'var(--red)':'var(--text4)'}">Δ evolução: ${c.aferido-c.me>0?'+':''}${c.aferido-c.me}</div>`:''}
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <div id="fase-a-ia" style="display:none;"></div>`;
+
+  // Init NPS row
+  const row = document.getElementById('nps-a-row');
+  if(row){
+    row.innerHTML = [0,1,2,3,4,5,6,7,8,9,10].map(n=>`<div class="nps-num nps-${n}" onclick="selectNPS(${n},this)">${n}</div>`).join('');
+    row.innerHTML += '<span style="font-size:10px;color:var(--text4);margin-left:8px">0 = Não recomendaria · 10 = Recomendaria com certeza</span>';
+  }
+}
+
+function setAferido(el){
+  const ci = parseInt(el.dataset.ci);
+  const val = parseInt(el.dataset.val);
+  const radars = DB.get('comp_radars')||[];
+  const activeId = DB.get('comp_active_radar');
+  const radar = radars.find(r=>r.id===activeId)||radars[0];
+  if(!radar||!radar.competencias[ci]) return;
+  radar.competencias[ci].aferido = val;
+  DB.set('comp_radars', radars);
+  // Update visual
+  const row = document.getElementById('af-row-'+ci);
+  if(row) row.querySelectorAll('[data-val]').forEach(d=>{
+    const n = parseInt(d.dataset.val);
+    const filled = n<=val;
+    d.style.background = filled?'#7c4dff':'transparent';
+    d.style.borderColor = filled?'#7c4dff':'var(--border2)';
+    d.style.color = filled?'#fff':'var(--text4)';
+  });
+  // Update main radar
+  updateRadarChart();
+}
+
+function updateKR(i, val){
+  document.getElementById('kr-pct-'+i).textContent = val+'%';
+  const mp = DB.get('microplano')||{okrs:[]};
+  if(mp.okrs[i]) mp.okrs[i].atingimento = parseInt(val);
+  DB.set('microplano', mp);
+}
+
+function saveNPSFaseA(){
+  if(selectedNPS===null){ toast('Selecione uma nota','err'); return; }
+  const comment = document.getElementById('nps-a-comment')?.value||'';
+  const nps = DB.get('nps_history')||[];
+  nps.push({cycle:'Ciclo atual (Fase A)', score:selectedNPS, responses:1, comment, date:new Date().toLocaleDateString('pt-BR')});
+  DB.set('nps_history', nps);
+  toast('NPS registrado: '+selectedNPS+'/10','suc');
+}
+
+function saveFaseA(){
+  const data = {
+    aprendizado: document.getElementById('ea-aprendizado')?.value||'',
+    mudanca:     document.getElementById('ea-mudanca')?.value||'',
+    desafio:     document.getElementById('ea-desafio')?.value||'',
+    pendente:    document.getElementById('ea-pendente')?.value||'',
+    protagonismo:document.getElementById('ea-protagonismo')?.value||'',
+    proximos:    document.getElementById('ea-proximos')?.value||'',
+    savedAt:     new Date().toLocaleString('pt-BR'),
+  };
+  DB.set('fase_a', data);
+  toast('Entrevista de aprendizado salva!','suc');
+}
+
+async function analyzeFaseAWithIA(){
+  saveFaseA();
+  const fa = DB.get('fase_a')||{};
+  const mp = DB.get('microplano')||{okrs:[]};
+  const radars = DB.get('comp_radars')||[];
+  const radar = radars.find(r=>r.id===DB.get('comp_active_radar'))||radars[0];
+  const data = radar?.competencias||[];
+  const krs = (mp.okrs||[]).map(o=>o.desc+': '+((o.atingimento||0))+'%').join('; ');
+  const evolucao = data.filter(c=>c.aferido!=null).map(c=>c.name+': inicial='+c.me+' → aferido='+c.aferido+' (Δ'+(c.aferido-c.me)+')').join('; ');
+
+  showIALoading('fase-a-ia','Gerando síntese do ciclo com IA');
+
+  const prompt = `Você é um executive coach senior. Analise o fechamento de ciclo de mentoria (Fase A do GUIA):
+
+ATINGIMENTO DE KRs: ${krs||'Não informado'}
+EVOLUÇÃO DE COMPETÊNCIAS: ${evolucao||'Não aferido'}
+APRENDIZADO: ${fa.aprendizado||'—'}
+MUDANÇAS CONCRETAS: ${fa.mudanca||'—'}
+MAIOR DESAFIO: ${fa.desafio||'—'}
+PENDÊNCIAS: ${fa.pendente||'—'}
+PROTAGONISMO: ${fa.protagonismo||'—'}
+PRÓXIMOS PASSOS: ${fa.proximos||'—'}
+
+Produza:
+1. SÍNTESE DO CICLO: O que este ciclo revelou sobre o profissional em 3-4 frases precisas
+2. MAIOR AVANÇO: A transformação mais significativa que os dados evidenciam
+3. GAP PERSISTENTE: O que ainda não evoluiu como esperado e por quê (hipótese)
+4. RECOMENDAÇÃO PARA O PRÓXIMO CICLO: Os 2-3 focos prioritários com justificativa
+5. UMA PERGUNTA FINAL: A pergunta mais poderosa para encerrar este ciclo com o mentorado
+
+Seja honesto, preciso e orientado ao próximo nível.`;
+
+  const result = await callAI(prompt);
+  showIAResult('fase-a-ia', result, 'Síntese do Ciclo — Fase A');
 }
 
 // ══════════════════════════════════════════════

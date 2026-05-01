@@ -44,12 +44,31 @@ body{font-family:Sora,sans-serif;background:var(--bg);color:var(--text);min-heig
 
 /* ─── SIDEBAR ─── */
 .sidebar{
-  width:210px;flex-shrink:0;
+  width:220px;flex-shrink:0;
   background:var(--bg1);border-right:1px solid var(--border);
   position:fixed;top:54px;bottom:0;overflow-y:auto;
-  display:flex;flex-direction:column;padding:12px 8px;gap:2px;
+  display:flex;flex-direction:column;padding:8px 0 16px;gap:0;
 }
-.sidebar-section{font-size:9px;letter-spacing:.12em;color:var(--text4);padding:12px 10px 5px;font-weight:700;text-transform:uppercase}
+.sidebar-section{font-size:9px;letter-spacing:.12em;color:var(--text4);padding:10px 12px 4px;font-weight:700;text-transform:uppercase}
+.guia-phase{
+  display:flex;align-items:stretch;
+  border-left:3px solid transparent;
+  margin-bottom:2px;
+}
+.guia-letter{
+  width:28px;flex-shrink:0;
+  display:flex;align-items:flex-start;justify-content:center;
+  padding-top:8px;
+  font-family:'Space Mono',monospace;
+  font-size:22px;font-weight:700;
+  color:var(--gold);
+  letter-spacing:0;
+  line-height:1;
+  cursor:default;
+  user-select:none;
+}
+.guia-items{flex:1;display:flex;flex-direction:column;gap:0;padding:4px 0;}
+.guia-phase-divider{height:1px;background:var(--border);margin:6px 8px;}
 .nav-item{
   display:flex;align-items:center;gap:9px;
   padding:8px 10px;border-radius:var(--radius-sm);
@@ -64,7 +83,7 @@ body{font-family:Sora,sans-serif;background:var(--bg);color:var(--text);min-heig
 .nav-item.active .nav-badge{background:rgba(240,192,64,.2)}
 
 /* ─── CONTENT ─── */
-.content{margin-left:210px;flex:1;padding:28px 32px;max-width:1200px}
+.content{margin-left:220px;flex:1;padding:28px 32px;max-width:1200px}
 
 /* ─── PAGES ─── */
 .page{display:none}
@@ -654,50 +673,108 @@ const MENUS = {
     {id:'admin-config',icon:'◫',label:'Configurações'},
   ],
   mentor:[
-    {section:'Visão Geral'},
-    {id:'dash',icon:'◈',label:'Dashboard'},
-    {section:'Metodologia GUIA'},
-    {id:'comp',icon:'◎',label:'Radar Competências',badge:'G·U'},
-    {id:'swot',icon:'◫',label:'SWOT Pessoal',badge:'U'},
-    {id:'disc',icon:'◌',label:'Assessment DISC',badge:'U'},
-    {id:'peer360',icon:'◷',label:'Feedback 360°',badge:'I'},
-    {id:'microplano',icon:'◱',label:'Microplanos',badge:'I'},
-    {id:'vf',icon:'◈',label:'Visão de Futuro',badge:'U'},
-    {section:'Inteligência'},
+    {type:'top',id:'dash',icon:'◈',label:'Dashboard'},
+    {type:'phase',letter:'G',label:'Gestar Acordo'},
+    {id:'inicio-ciclo',icon:'◎',label:'Início do Ciclo'},
+    {type:'phase',letter:'U',label:'Unir Diagnóstico'},
+    {id:'peer360',icon:'◷',label:'Feedback 360°'},
+    {id:'disc',icon:'◌',label:'Meu Perfil DISC'},
+    {id:'comp',icon:'◎',label:'Competências'},
+    {id:'swot',icon:'◫',label:'SWOT Pessoal'},
+    {id:'vf',icon:'◈',label:'Visão de Futuro'},
+    {type:'phase',letter:'I',label:'Implementar'},
+    {id:'microplano',icon:'◱',label:'Plano de Ação'},
+    {type:'phase',letter:'A',label:'Aferir e Ajustar'},
+    {id:'fase-a',icon:'◈',label:'Aferir e Ajustar (A)'},
+    {type:'section',label:'Inteligência'},
     {id:'ia-main',icon:'✦',label:'Análise Integrada IA'},
     {id:'nps-dash',icon:'◊',label:'NPS & Progresso'},
-    {id:'fase-a',icon:'◈',label:'Fase A — Aferição'},
-      {section:'Conta'},
+    {type:'section',label:'Conta'},
     {id:'perfil',icon:'◉',label:'Meu Perfil'},
   ],
   mentorado:[
-    {section:'Minha Jornada'},
-    {id:'minha-jornada',icon:'◈',label:'Início'},
-    {section:'Instrumentos'},
-    {id:'comp',icon:'◎',label:'Competências',badge:'G·U'},
-    {id:'swot',icon:'◫',label:'SWOT Pessoal',badge:'U'},
-    {id:'disc',icon:'◌',label:'Meu Perfil DISC',badge:'U'},
-    {id:'vf',icon:'◈',label:'Visão de Futuro',badge:'U'},
-    {id:'microplano',icon:'◱',label:'Meu Microplano',badge:'I'},
-    {section:'Avaliações'},
-    {id:'peer360',icon:'◷',label:'Feedback 360°',badge:'I'},
-    {section:'IA'},
+    {type:'top',id:'minha-jornada',icon:'◈',label:'Início'},
+    {type:'phase',letter:'G',label:'Gestar Acordo'},
+    {id:'inicio-ciclo',icon:'◎',label:'Início do Ciclo'},
+    {type:'phase',letter:'U',label:'Unir Diagnóstico'},
+    {id:'peer360',icon:'◷',label:'Feedback 360°'},
+    {id:'disc',icon:'◌',label:'Meu Perfil DISC'},
+    {id:'comp',icon:'◎',label:'Competências'},
+    {id:'swot',icon:'◫',label:'SWOT Pessoal'},
+    {id:'vf',icon:'◈',label:'Visão de Futuro'},
+    {type:'phase',letter:'I',label:'Implementar'},
+    {id:'microplano',icon:'◱',label:'Plano de Ação'},
+    {type:'phase',letter:'A',label:'Aferir e Ajustar'},
+    {id:'fase-a',icon:'◈',label:'Aferir e Ajustar (A)'},
+    {type:'section',label:'IA'},
     {id:'ia-main',icon:'✦',label:'Recomendações IA'},
-    {id:'fase-a',icon:'◈',label:'Fase A — Aferição'},
+    {type:'section',label:'Conta'},
+    {id:'perfil',icon:'◉',label:'Meu Perfil'},
   ]
 };
 
 function renderSidebar(){
   const sb = document.getElementById('sidebar');
   const menu = MENUS[currentRole];
-  sb.innerHTML = menu.map(item=>{
-    if(item.section) return `<div class="sidebar-section">${item.section}</div>`;
-    return `<button class="nav-item" id="nav-${item.id}" onclick="showPage('${item.id}')">
-      <span class="nav-icon">${item.icon}</span>
-      ${item.label}
-      ${item.badge?`<span class="nav-badge">${item.badge}</span>`:''}
-    </button>`;
-  }).join('');
+  if(!menu){ sb.innerHTML=''; return; }
+
+  // Admin: standard flat menu
+  if(currentRole==='admin'){
+    sb.innerHTML = menu.map(item=>{
+      if(item.section) return `<div class="sidebar-section">${item.section}</div>`;
+      return `<button class="nav-item" id="nav-${item.id}" onclick="showPage('${item.id}')">
+        <span class="nav-icon">${item.icon}</span>${item.label}
+        ${item.badge?`<span class="nav-badge">${item.badge}</span>`:''}
+      </button>`;
+    }).join('');
+    return;
+  }
+
+  // GUIA menu: group items under phase letters
+  let html = '';
+  let inPhase = false;
+  let phaseItems = [];
+  let currentPhase = null;
+
+  function flushPhase(){
+    if(!currentPhase) return;
+    const items = phaseItems.map(it=>`
+      <button class="nav-item" id="nav-${it.id}" onclick="showPage('${it.id}')">
+        <span class="nav-icon">${it.icon}</span>${it.label}
+      </button>`).join('');
+    html += `<div class="guia-phase">
+      <div class="guia-letter" title="${currentPhase.label}">${currentPhase.letter}</div>
+      <div class="guia-items">${items}</div>
+    </div>
+    <div class="guia-phase-divider"></div>`;
+    phaseItems = [];
+    currentPhase = null;
+  }
+
+  menu.forEach(item=>{
+    if(item.type==='top'){
+      html += `<button class="nav-item" id="nav-${item.id}" onclick="showPage('${item.id}')" style="margin:4px 6px 8px;border-bottom:1px solid var(--border);padding-bottom:10px;">
+        <span class="nav-icon">${item.icon}</span>${item.label}
+      </button>`;
+    } else if(item.type==='phase'){
+      flushPhase();
+      currentPhase = item;
+    } else if(item.type==='section'){
+      flushPhase();
+      html += `<div class="sidebar-section">${item.label}</div>`;
+    } else if(item.id){
+      if(currentPhase){
+        phaseItems.push(item);
+      } else {
+        html += `<button class="nav-item" id="nav-${item.id}" onclick="showPage('${item.id}')">
+          <span class="nav-icon">${item.icon}</span>${item.label}
+          ${item.badge?`<span class="nav-badge">${item.badge}</span>`:''}
+        </button>`;
+      }
+    }
+  });
+  flushPhase();
+  sb.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════
@@ -726,6 +803,7 @@ function showPage(id){
     'minha-jornada': renderMinhaJornada,
     'perfil': renderPerfil,
     'fase-a': renderInstrumentoA,
+    'inicio-ciclo': renderInicioCiclo,
   };
 
   destroyCharts();
@@ -3199,6 +3277,228 @@ function updateCurrentUser(fields){
   if(idx>=0){ users[idx]={...users[idx],...fields}; DB.set('users',users); }
   // Update Supabase async (fire and forget)
   sbFetch('users?id=eq.'+currentUser.id, 'PATCH', fields).catch(()=>{});
+}
+
+
+// ══════════════════════════════════════════════
+// INÍCIO DO CICLO — Fase G
+// ══════════════════════════════════════════════
+function renderInicioCiclo(){
+  const data = DB.get('inicio_ciclo') || {};
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Início do Ciclo — Fase G</div>
+    <div class="page-sub">Gestar acordo · Alinhar escopo, metas e papéis · Semana 1</div>
+  </div>
+
+  <div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius);padding:14px 18px;margin-bottom:20px;font-size:12px;color:var(--text2);line-height:1.7">
+    <strong style="color:var(--gold)">Objetivo da Fase G:</strong> Alinhar escopo, metas e papéis. Estabelecer as bases do acordo de mentoria com clareza e comprometimento de ambas as partes.
+  </div>
+
+  <div class="grid-2" style="margin-bottom:16px;">
+    <!-- Escopo -->
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Escopo da Mentoria</div>
+      <div class="field"><label class="field-label">Objetivo central do ciclo</label>
+        <textarea class="form-input" id="ic-objetivo" rows="3" placeholder="O que o mentorado quer alcançar ao final das 12 semanas?">${data.objetivo||''}</textarea>
+      </div>
+      <div class="field"><label class="field-label">Área de foco principal</label>
+        <select class="form-select" id="ic-foco">
+          <option value="">Selecione...</option>
+          ${['Liderança executiva e ascensão ao C-level','Transição de carreira','Marca pessoal e posicionamento','Gestão de equipes e times','Empreendedorismo','Desenvolvimento de competências específicas','Equilíbrio vida-trabalho e bem-estar','Outro'].map(o=>`<option ${data.foco===o?'selected':''}>${o}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label class="field-label">Contexto atual (cargo, empresa, momento)</label>
+        <textarea class="form-input" id="ic-contexto" rows="3" placeholder="Descreva o momento profissional atual do mentorado...">${data.contexto||''}</textarea>
+      </div>
+    </div>
+
+    <!-- Metas e Expectativas -->
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Metas e Expectativas</div>
+      <div class="field"><label class="field-label">3 resultados concretos esperados ao final do ciclo</label>
+        <textarea class="form-input" id="ic-metas" rows="3" placeholder="1. ...
+2. ...
+3. ...">${data.metas||''}</textarea>
+      </div>
+      <div class="field"><label class="field-label">Como o sucesso será medido?</label>
+        <textarea class="form-input" id="ic-sucesso" rows="3" placeholder="Quais indicadores ou evidências mostrarão que o ciclo foi bem-sucedido?">${data.sucesso||''}</textarea>
+      </div>
+      <div class="field"><label class="field-label">Principal desafio ou bloqueio percebido hoje</label>
+        <textarea class="form-input" id="ic-desafio" rows="2" placeholder="O que está impedindo ou dificultando o avanço?">${data.desafio||''}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- Papéis e Responsabilidades -->
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Papéis e Responsabilidades</div>
+    <div class="grid-2">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:10px;letter-spacing:.04em">MENTOR</div>
+        <div class="field"><label class="field-label">O mentor se compromete a</label>
+          <textarea class="form-input" id="ic-mentor-comp" rows="4" placeholder="Ex: Realizar sessões semanais de 50 min, compartilhar experiências, fazer perguntas que estimulem reflexão, dar feedback estruturado...">${data.mentor_comp||'Realizar sessões semanais de 50 min'}</textarea>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--blue);margin-bottom:10px;letter-spacing:.04em">MENTORADO</div>
+        <div class="field"><label class="field-label">O mentorado se compromete a</label>
+          <textarea class="form-input" id="ic-mentorado-comp" rows="4" placeholder="Ex: Aparecer preparado nas sessões, executar planos entre sessões, buscar feedback, praticar vulnerabilidade...">${data.mentorado_comp||'Comparecer preparado às sessões · Executar ações acordadas · Buscar feedback proativamente'}</textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Termo de Mentoria -->
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Termo de Mentoria</div>
+    <div class="grid-2">
+      <div>
+        <div class="field"><label class="field-label">Frequência das sessões</label>
+          <select class="form-select" id="ic-frequencia">
+            <option ${data.frequencia==='Semanal'?'selected':''}>Semanal</option>
+            <option ${data.frequencia==='Quinzenal'?'selected':''}>Quinzenal</option>
+            <option ${data.frequencia==='Mensal'?'selected':''}>Mensal</option>
+          </select>
+        </div>
+        <div class="field"><label class="field-label">Duração de cada sessão</label>
+          <select class="form-select" id="ic-duracao">
+            <option ${data.duracao==='30 minutos'?'selected':''}>30 minutos</option>
+            <option ${data.duracao==='50 minutos'?'selected':''} selected>50 minutos</option>
+            <option ${data.duracao==='60 minutos'?'selected':''}>60 minutos</option>
+            <option ${data.duracao==='90 minutos'?'selected':''}>90 minutos</option>
+          </select>
+        </div>
+        <div class="field"><label class="field-label">Canal de comunicação principal</label>
+          <select class="form-select" id="ic-canal">
+            ${['WhatsApp','E-mail','Google Meet','Zoom','Microsoft Teams','Presencial'].map(o=>`<option ${data.canal===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div>
+        <div class="field"><label class="field-label">Data de início</label>
+          <input type="date" class="form-input" id="ic-inicio" value="${data.data_inicio||''}">
+        </div>
+        <div class="field"><label class="field-label">Data prevista de encerramento</label>
+          <input type="date" class="form-input" id="ic-fim" value="${data.data_fim||''}">
+        </div>
+        <div class="field"><label class="field-label">Cláusula de confidencialidade</label>
+          <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:11px;color:var(--text3);line-height:1.6;">
+            Todas as informações compartilhadas nesta mentoria são estritamente confidenciais. Nenhum conteúdo será divulgado a terceiros sem consentimento expresso de ambas as partes.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:var(--radius-sm);padding:14px 16px;margin-top:12px;">
+      <div style="font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:12px;">
+        Ao salvar este termo, mentor e mentorado confirmam que estão de acordo com o escopo, as metas, os papéis e as condições estabelecidas acima. Este documento serve como base de comprometimento mútuo para o ciclo de mentoria.
+      </div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        <div class="field" style="flex:1;margin-bottom:0;">
+          <label class="field-label">Nome do Mentor</label>
+          <input type="text" class="form-input" id="ic-nome-mentor" placeholder="Nome completo" value="${data.nome_mentor||''}">
+        </div>
+        <div class="field" style="flex:1;margin-bottom:0;">
+          <label class="field-label">Nome do Mentorado</label>
+          <input type="text" class="form-input" id="ic-nome-mentorado" placeholder="Nome completo" value="${data.nome_mentorado||''}">
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:6px;align-items:center;">
+        <input type="checkbox" id="ic-aceite" ${data.aceite?'checked':''} style="accent-color:var(--gold);width:14px;height:14px;">
+        <label for="ic-aceite" style="font-size:12px;color:var(--text2);cursor:pointer;">Confirmo que li e concordo com os termos acima</label>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;">
+    <button class="btn btn-gold" onclick="saveInicioCiclo()">Salvar e assinar termo</button>
+    <button class="btn btn-outline" onclick="exportInicioCiclo()">Exportar PDF</button>
+    <button class="btn btn-outline" onclick="analyzeInicioCicloWithIA()">✦ Gerar plano de ciclo com IA ↗</button>
+  </div>
+  <div id="ic-ia-result" style="margin-top:16px;display:none;"></div>
+  `;
+}
+
+function saveInicioCiclo(){
+  const aceite = document.getElementById('ic-aceite')?.checked;
+  if(!aceite){ toast('Confirme os termos antes de salvar','err'); return; }
+  const data = {
+    objetivo:    document.getElementById('ic-objetivo')?.value||'',
+    foco:        document.getElementById('ic-foco')?.value||'',
+    contexto:    document.getElementById('ic-contexto')?.value||'',
+    metas:       document.getElementById('ic-metas')?.value||'',
+    sucesso:     document.getElementById('ic-sucesso')?.value||'',
+    desafio:     document.getElementById('ic-desafio')?.value||'',
+    mentor_comp: document.getElementById('ic-mentor-comp')?.value||'',
+    mentorado_comp:document.getElementById('ic-mentorado-comp')?.value||'',
+    frequencia:  document.getElementById('ic-frequencia')?.value||'',
+    duracao:     document.getElementById('ic-duracao')?.value||'',
+    canal:       document.getElementById('ic-canal')?.value||'',
+    data_inicio: document.getElementById('ic-inicio')?.value||'',
+    data_fim:    document.getElementById('ic-fim')?.value||'',
+    nome_mentor: document.getElementById('ic-nome-mentor')?.value||'',
+    nome_mentorado:document.getElementById('ic-nome-mentorado')?.value||'',
+    aceite:      true,
+    savedAt:     new Date().toLocaleString('pt-BR'),
+  };
+  DB.set('inicio_ciclo', data);
+  toast('Termo de mentoria salvo e assinado!','suc');
+}
+
+function exportInicioCiclo(){
+  const data = DB.get('inicio_ciclo')||{};
+  let txt = 'TERMO DE MENTORIA — Arcala Insight\n';
+  txt += '='.repeat(50)+'\n\n';
+  txt += 'Data: '+new Date().toLocaleDateString('pt-BR')+'\n\n';
+  txt += 'ESCOPO\n'+'-'.repeat(30)+'\n';
+  txt += 'Objetivo: '+(data.objetivo||'—')+'\n';
+  txt += 'Foco: '+(data.foco||'—')+'\n';
+  txt += 'Contexto: '+(data.contexto||'—')+'\n\n';
+  txt += 'METAS\n'+'-'.repeat(30)+'\n';
+  txt += (data.metas||'—')+'\n\n';
+  txt += 'SUCESSO: '+(data.sucesso||'—')+'\n\n';
+  txt += 'COMPROMETIMENTOS\n'+'-'.repeat(30)+'\n';
+  txt += 'Mentor: '+(data.mentor_comp||'—')+'\n\n';
+  txt += 'Mentorado: '+(data.mentorado_comp||'—')+'\n\n';
+  txt += 'CONDIÇÕES\n'+'-'.repeat(30)+'\n';
+  txt += 'Frequência: '+(data.frequencia||'—')+' | Duração: '+(data.duracao||'—')+'\n';
+  txt += 'Canal: '+(data.canal||'—')+'\n';
+  txt += 'Início: '+(data.data_inicio||'—')+' | Encerramento: '+(data.data_fim||'—')+'\n\n';
+  txt += 'ASSINATURAS\n'+'-'.repeat(30)+'\n';
+  txt += 'Mentor: '+(data.nome_mentor||'—')+'\n';
+  txt += 'Mentorado: '+(data.nome_mentorado||'—')+'\n';
+  txt += '\nTermo aceito em: '+(data.savedAt||'—')+'\n';
+  downloadText(txt,'termo-mentoria.txt');
+  toast('Termo exportado!','suc');
+}
+
+async function analyzeInicioCicloWithIA(){
+  saveInicioCiclo();
+  const data = DB.get('inicio_ciclo')||{};
+  if(!data.objetivo){ toast('Preencha pelo menos o objetivo antes de analisar','err'); return; }
+  showIALoading('ic-ia-result','Gerando plano de ciclo com IA');
+  const prompt = `Você é um mentor executivo sênior. Com base no acordo de início de ciclo abaixo, gere um plano estruturado para as 12 semanas.
+
+OBJETIVO DO CICLO: ${data.objetivo||'—'}
+FOCO: ${data.foco||'—'}
+CONTEXTO: ${data.contexto||'—'}
+METAS: ${data.metas||'—'}
+COMO MEDIR SUCESSO: ${data.sucesso||'—'}
+DESAFIO PRINCIPAL: ${data.desafio||'—'}
+
+Produza:
+1. LEITURA DO CENÁRIO: O que esses dados revelam sobre o momento e as ambições do mentorado?
+2. RISCOS DO CICLO: O que pode comprometer o sucesso? Quais alertas o mentor deve observar?
+3. PLANO DE ABORDAGEM — 12 SEMANAS:
+   - Semanas 1-3 (Fase U): Que diagnósticos priorizar?
+   - Semanas 4-9 (Fase I): Quais ações e experimentos gerar?
+   - Semanas 10-12 (Fase A): Como aferir e consolidar?
+4. PERGUNTA DE KICK-OFF: A melhor pergunta para abrir a primeira sessão real.
+
+Seja específico ao contexto apresentado. Evite respostas genéricas.`;
+  const result = await callAI(prompt);
+  showIAResult('ic-ia-result', result, 'Plano do Ciclo — Fase G');
 }
 
 // ══════════════════════════════════════════════

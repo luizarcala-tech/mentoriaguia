@@ -569,7 +569,7 @@ const DB = {
   init(){
     if(!this.get('users')) this.set('users', [
       {id:'u1',name:'Luiz Arcala',email:'luiz@arcala.com',role:'admin',active:true,created:'2026-01-15',plan:'Admin',password:'YWRtaW4xMjM='},
-      {id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='},
+      {id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY=',empresa_id:'e1'},
       {id:'u2',name:'Lucas Mendes',email:'lucas.mendes@petro.com',role:'mentorado',mentor:'u3',active:true,created:'2026-02-01',plan:'Ciclo único — 12 semanas',phase:'I',week:6,password:'bWVudGVlMTIz'},
       {id:'u3',name:'Ana Paula Mentor',email:'ana.mentor@arcala.com',role:'mentor',active:true,created:'2026-01-20',plan:'Mentor',mentorados:['u2','u4','u5'],password:'bWVudG9yMTIz'},
       {id:'u4',name:'Ana Carvalho',email:'ana.carvalho@vale.com',role:'mentorado',mentor:'u3',active:true,created:'2026-02-10',plan:'Renovável trimestral',phase:'U',week:3},
@@ -605,6 +605,9 @@ const DB = {
       {avaliador:'Subordinado',relacao:'Subordinado',respostas:[3,4,5,3,3],obs:'Bom mentor interno, mas poderia dar mais autonomia',done:true},
     ]);
     if(!this.get('grow_sessions')) this.set('grow_sessions',[]);
+    if(!this.get('empresas')) this.set('empresas',[
+      {id:'e1',nome:'Arcala Insight',setor:'Consultoria',cnpj:'',contato:'luizarcala@outlook.com',ativa:true,created:'2026-01-01'},
+    ]);
     if(!this.get('microplano')) this.set('microplano',{
       objetivo:'Consolidar posicionamento estratégico e construir narrativa executiva para o comitê',
       okrs:[
@@ -668,6 +671,9 @@ const MENUS = {
     {section:'Administração'},
     {id:'admin-users',icon:'◉',label:'Usuários & Acessos'},
     {id:'admin-regs',icon:'◈',label:'Cadastros Pendentes',badge:'3'},
+    {id:'admin-empresas',icon:'◫',label:'Empresas'},
+    {section:'Inteligência'},
+    {id:'admin-ia-insights',icon:'✦',label:'IA GUIA Insights'},
     {id:'admin-nps',icon:'◎',label:'NPS & Métricas'},
     {section:'Sistema'},
     {id:'admin-config',icon:'◫',label:'Configurações'},
@@ -804,6 +810,8 @@ function showPage(id){
     'perfil': renderPerfil,
     'fase-a': renderInstrumentoA,
     'inicio-ciclo': renderInicioCiclo,
+    'admin-empresas': renderAdminEmpresas,
+    'admin-ia-insights': renderAdminIAInsights,
   };
 
   destroyCharts();
@@ -901,6 +909,7 @@ async function renderAdminUsers(){
     </div>
     <div class="form-row cols-3">
       <div class="field"><label class="field-label">Plano</label><select id="nu-plan"><option>Ciclo único — 12 semanas</option><option>Renovável trimestral</option><option>Trial — 2 semanas</option><option>Acesso institucional</option></select></div>
+      <div class="field"><label class="field-label">Empresa</label><select id="nu-empresa"><option value="">— Sem empresa —</option>${(DB.get('empresas')||[]).map(e=>`<option value="${e.id}">${e.nome}</option>`).join('')}</select></div>
       <div class="field"><label class="field-label">Mentor responsável</label><select id="nu-mentor"><option value="">— Sem mentor —</option>${users.filter(u=>u.role==='mentor').map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select></div>
       <div class="field"><label class="field-label">Ativar imediatamente</label><select id="nu-active"><option value="1">Sim — acesso liberado</option><option value="0">Não — aguardar</option></select></div>
     </div>
@@ -915,7 +924,7 @@ async function renderAdminUsers(){
     <div class="table-wrap">
       <table id="users-table">
         <thead><tr>
-          <th>Usuário</th><th>Role</th><th>Plano</th><th>Criado em</th><th>Fase</th><th>Acesso</th><th>Ações</th>
+          <th>Usuário</th><th>Role</th><th>Empresa</th><th>Plano</th><th>Criado em</th><th>Fase</th><th>Acesso</th><th>Ações</th>
         </tr></thead>
         <tbody id="users-tbody"></tbody>
       </table>
@@ -935,6 +944,7 @@ function renderUsersTable(users){
         <div><div style="font-size:12px;font-weight:600;color:var(--text)">${u.name}</div><div style="font-size:10px;color:var(--text3)">${u.email}</div></div>
       </div></td>
       <td><span class="pill ${rolePill}">${u.role.toUpperCase()}</span></td>
+      <td style="font-size:11px;color:var(--text3)">${(DB.get('empresas')||[]).find(e=>e.id===u.empresa_id)?.nome||'—'}</td>
       <td style="font-size:11px">${u.plan||'—'}</td>
       <td style="font-size:11px;color:var(--text3)">${u.created||'—'}</td>
       <td style="font-size:12px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${u.phase||'—'}</td>
@@ -969,7 +979,8 @@ function addUser(){
   if(!name||!email){ toast('Preencha nome e e-mail','err'); return; }
   const users = DB.get('users');
   if(users.find(u=>u.email===email)){ toast('E-mail já cadastrado','err'); return; }
-  users.push({id:'u'+Date.now(),name,email,role,plan,mentor:mentor||null,active,created:today(),phase:'G',week:0});
+  const empresa_id = document.getElementById('nu-empresa')?.value||null;
+  users.push({id:'u'+Date.now(),name,email,role,plan,mentor:mentor||null,empresa_id,active,created:today(),phase:'G',week:0});
   DB.set('users',users);
   toast(`${name} cadastrado com sucesso!${active?' Acesso liberado.':' Aguardando liberação.'}`, 'suc');
   renderAdminUsers();
@@ -3500,6 +3511,462 @@ Seja específico ao contexto apresentado. Evite respostas genéricas.`;
   const result = await callAI(prompt);
   showIAResult('ic-ia-result', result, 'Plano do Ciclo — Fase G');
 }
+
+
+// ══════════════════════════════════════════════
+// ADMIN — EMPRESAS
+// ══════════════════════════════════════════════
+function getEmpresas(){ return DB.get('empresas')||[]; }
+
+function renderAdminEmpresas(){
+  const empresas = getEmpresas();
+  const users = DB.get('users')||[];
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Empresas</div>
+    <div class="page-sub">Cadastre empresas e associe usuários. Dados segmentados por empresa para insights de RH.</div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:20px;">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Cadastrar empresa</div>
+      <div class="field"><label class="field-label">Nome da empresa</label><input type="text" class="form-input" id="emp-nome" placeholder="Razão social ou nome fantasia"></div>
+      <div class="form-row cols-2">
+        <div class="field"><label class="field-label">Setor</label>
+          <select class="form-select" id="emp-setor">
+            <option>Tecnologia</option><option>Financeiro</option><option>Saúde</option>
+            <option>Indústria</option><option>Varejo</option><option>Consultoria</option>
+            <option>Educação</option><option>Energia</option><option>Agronegócio</option>
+            <option>Governo/Público</option><option>Outro</option>
+          </select>
+        </div>
+        <div class="field"><label class="field-label">CNPJ</label><input type="text" class="form-input" id="emp-cnpj" placeholder="00.000.000/0001-00"></div>
+      </div>
+      <div class="field"><label class="field-label">E-mail de contato RH</label><input type="email" class="form-input" id="emp-contato" placeholder="rh@empresa.com"></div>
+      <button class="btn btn-gold" onclick="addEmpresa()">+ Cadastrar empresa</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Visão geral por empresa</div>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 0;color:var(--text3);border-bottom:1px solid var(--border)">Empresa</th>
+          <th style="text-align:center;padding:6px 0;color:var(--text3);border-bottom:1px solid var(--border)">Setor</th>
+          <th style="text-align:center;padding:6px 0;color:var(--text3);border-bottom:1px solid var(--border)">Usuários</th>
+          <th style="text-align:center;padding:6px 0;color:var(--text3);border-bottom:1px solid var(--border)">Status</th>
+        </tr></thead>
+        <tbody>
+          ${empresas.map(e=>{
+            const count = users.filter(u=>u.empresa_id===e.id).length;
+            return `<tr>
+              <td style="padding:8px 0;color:var(--text);font-weight:500">${e.nome}</td>
+              <td style="text-align:center;color:var(--text3);font-size:11px">${e.setor||'—'}</td>
+              <td style="text-align:center;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${count}</td>
+              <td style="text-align:center"><span class="pill ${e.ativa?'pill-active':'pill-locked'}">${e.ativa?'ATIVA':'INATIVA'}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Empresa cards com usuários -->
+  <div class="section-label">Usuários por empresa</div>
+  <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+    <input class="inline-inp" id="emp-filter" placeholder="🔍 Filtrar por empresa..." style="width:220px" oninput="filterEmpresaUsers(this.value)">
+    <select class="form-select" style="width:auto;" id="emp-sel-filter" onchange="filterEmpresaUsers(document.getElementById('emp-filter').value)">
+      <option value="">Todas as empresas</option>
+      ${empresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join('')}
+    </select>
+  </div>
+
+  <div id="empresa-users-list">
+    ${empresas.map(e=>{
+      const empUsers = users.filter(u=>u.empresa_id===e.id);
+      if(!empUsers.length) return '';
+      return `<div class="panel" style="margin-bottom:14px;" data-empresa="${e.id}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${e.nome}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${e.setor||'—'} · ${empUsers.length} usuário(s) · ${e.contato||''}</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-outline btn-xs" onclick="showEmpresaInsights('${e.id}')">✦ Insights RH</button>
+            <button class="btn btn-red btn-xs" onclick="deleteEmpresa('${e.id}')">Excluir</button>
+          </div>
+        </div>
+        <table style="width:100%;font-size:11px;border-collapse:collapse;">
+          <thead><tr>
+            <th style="text-align:left;padding:5px 0;color:var(--text3);border-bottom:1px solid var(--border)">Usuário</th>
+            <th style="text-align:center;padding:5px 0;color:var(--text3);border-bottom:1px solid var(--border)">Role</th>
+            <th style="text-align:center;padding:5px 0;color:var(--text3);border-bottom:1px solid var(--border)">Fase</th>
+            <th style="text-align:center;padding:5px 0;color:var(--text3);border-bottom:1px solid var(--border)">Acesso</th>
+            <th style="text-align:center;padding:5px 0;color:var(--text3);border-bottom:1px solid var(--border)">Empresa</th>
+          </tr></thead>
+          <tbody>
+            ${empUsers.map(u=>`<tr>
+              <td style="padding:7px 0;">
+                <div style="font-weight:600;color:var(--text)">${u.name}</div>
+                <div style="color:var(--text4);font-size:10px">${u.email}</div>
+              </td>
+              <td style="text-align:center"><span class="pill ${u.role==='mentor'?'pill-mentor':'pill-mentorado'}">${u.role.toUpperCase()}</span></td>
+              <td style="text-align:center;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${u.phase||'G'}</td>
+              <td style="text-align:center"><div class="toggle ${u.active?'on':''}" onclick="toggleUserAccess('${u.id}',this)"></div></td>
+              <td style="text-align:center">
+                <select style="background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:10px;padding:3px 6px;border-radius:5px;" onchange="changeUserEmpresa('${u.id}',this.value)">
+                  <option value="">Sem empresa</option>
+                  ${empresas.map(em=>`<option value="${em.id}" ${u.empresa_id===em.id?'selected':''}>${em.nome}</option>`).join('')}
+                </select>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    }).join('')}
+    ${users.filter(u=>!u.empresa_id).length>0?`
+    <div class="panel" style="margin-bottom:14px;border-color:var(--border2)">
+      <div style="font-size:13px;font-weight:600;color:var(--text3);margin-bottom:10px">Sem empresa associada</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${users.filter(u=>!u.empresa_id).map(u=>`
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 12px;font-size:11px;">
+          <div style="font-weight:600;color:var(--text)">${u.name}</div>
+          <div style="color:var(--text4)">${u.role}</div>
+          <select style="margin-top:6px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:10px;padding:3px 6px;border-radius:5px;width:100%;" onchange="changeUserEmpresa('${u.id}',this.value)">
+            <option value="">Associar empresa...</option>
+            ${empresas.map(e=>`<option value="${e.id}">${e.nome}</option>`).join('')}
+          </select>
+        </div>`).join('')}
+      </div>
+    </div>`:''}
+  </div>
+  <div id="empresa-insights-result" style="margin-top:16px;display:none;"></div>
+  `;
+}
+
+function addEmpresa(){
+  const nome = document.getElementById('emp-nome')?.value.trim();
+  if(!nome){ toast('Informe o nome da empresa','err'); return; }
+  const empresas = getEmpresas();
+  if(empresas.find(e=>e.nome.toLowerCase()===nome.toLowerCase())){ toast('Empresa já cadastrada','err'); return; }
+  const id = 'e'+Date.now();
+  empresas.push({
+    id, nome,
+    setor: document.getElementById('emp-setor')?.value||'',
+    cnpj:  document.getElementById('emp-cnpj')?.value||'',
+    contato: document.getElementById('emp-contato')?.value||'',
+    ativa: true,
+    created: today()
+  });
+  DB.set('empresas', empresas);
+  toast(nome+' cadastrada!','suc');
+  renderAdminEmpresas();
+}
+
+function changeUserEmpresa(userId, empresaId){
+  const users = DB.get('users')||[];
+  const u = users.find(u=>u.id===userId);
+  if(!u) return;
+  u.empresa_id = empresaId||null;
+  DB.set('users', users);
+  // Update Supabase
+  sbFetch('users?id=eq.'+userId,'PATCH',{empresa_id:empresaId||null}).catch(()=>{});
+  toast('Empresa atualizada','suc');
+}
+
+function deleteEmpresa(id){
+  showConfirm('Excluir empresa','Remover esta empresa? Os usuários associados ficarão sem empresa.','Excluir',()=>{
+    const empresas = getEmpresas().filter(e=>e.id!==id);
+    DB.set('empresas', empresas);
+    toast('Empresa removida','suc');
+    renderAdminEmpresas();
+  });
+}
+
+function filterEmpresaUsers(q){
+  const empId = document.getElementById('emp-sel-filter')?.value||'';
+  document.querySelectorAll('#empresa-users-list [data-empresa]').forEach(el=>{
+    const id = el.dataset.empresa;
+    const matchEmp = !empId || id===empId;
+    el.style.display = matchEmp ? '' : 'none';
+  });
+}
+
+async function showEmpresaInsights(empresaId){
+  const empresas = getEmpresas();
+  const empresa = empresas.find(e=>e.id===empresaId);
+  const users = (DB.get('users')||[]).filter(u=>u.empresa_id===empresaId&&u.role==='mentorado');
+  if(!users.length){ toast('Nenhum mentorado nesta empresa ainda','err'); return; }
+
+  showIALoading('empresa-insights-result','Gerando insights de RH para '+empresa.nome);
+
+  const fases = {G:0,U:0,I:0,A:0};
+  users.forEach(u=>{ if(fases[u.phase]!==undefined) fases[u.phase]++; });
+
+  const prompt = `Você é um CHRO (Chief Human Resources Officer) sênior analisando dados de mentoria executiva.
+
+EMPRESA: ${empresa.nome} (${empresa.setor||'Setor não informado'})
+MENTORADOS ATIVOS: ${users.length}
+DISTRIBUIÇÃO POR FASE GUIA: G=${fases.G} | U=${fases.U} | I=${fases.I} | A=${fases.A}
+PLANOS: ${[...new Set(users.map(u=>u.plan))].join(', ')}
+
+Gere um relatório executivo de RH com:
+1. DIAGNÓSTICO DO GRUPO: O que a distribuição por fase revela sobre o estágio de desenvolvimento desta equipe?
+2. PADRÕES DE DESENVOLVIMENTO: Quais competências um grupo neste estágio tipicamente prioriza?
+3. RECOMENDAÇÕES PARA O RH: 3 ações estratégicas que o RH pode tomar para acelerar os resultados desta turma
+4. ALERTA: Qual é o maior risco de retenção ou desenvolvimento para este grupo?
+5. PRÓXIMO INVESTIMENTO: O que esta empresa deveria priorizar no próximo ciclo de desenvolvimento?
+
+Escreva como um parceiro estratégico do RH, não como um consultor genérico.`;
+
+  const result = await callAI(prompt);
+  showIAResult('empresa-insights-result', result, 'Insights RH — '+empresa.nome);
+  document.getElementById('empresa-insights-result').style.display='block';
+  document.getElementById('empresa-insights-result').scrollIntoView({behavior:'smooth'});
+}
+
+// ══════════════════════════════════════════════
+// ADMIN — IA GUIA INSIGHTS
+// ══════════════════════════════════════════════
+async function renderAdminIAInsights(){
+  const users = DB.get('users')||[];
+  const empresas = getEmpresas();
+  const mentorados = users.filter(u=>u.role==='mentorado'&&u.active);
+  const npsHistory = DB.get('nps_history')||[];
+  const lastNPS = npsHistory.length ? npsHistory[npsHistory.length-1].score : '—';
+
+  const fases = {G:0,U:0,I:0,A:0};
+  mentorados.forEach(u=>{ if(fases[u.phase]!==undefined) fases[u.phase]++; });
+
+  const porEmpresa = {};
+  empresas.forEach(e=>{
+    porEmpresa[e.nome] = mentorados.filter(u=>u.empresa_id===e.id).length;
+  });
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">✦ IA GUIA Insights</div>
+    <div class="page-sub">Análise comportamental e estratégica de todos os usuários da plataforma</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Mentorados Ativos</div><div class="kpi-value">${mentorados.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Empresas</div><div class="kpi-value">${empresas.length}</div></div>
+    <div class="kpi"><div class="kpi-label">NPS Médio</div><div class="kpi-value" style="color:var(--green)">${lastNPS}</div></div>
+    <div class="kpi"><div class="kpi-label">Fase Predominante</div><div class="kpi-value" style="color:var(--gold)">${Object.entries(fases).sort((a,b)=>b[1]-a[1])[0][0]}</div></div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:16px;">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Distribuição por fase GUIA</div>
+      <div class="chart-wrap" style="height:200px;"><canvas id="ia-fases-chart" role="img" aria-label="Distribuição por fase"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Mentorados por empresa</div>
+      <div class="chart-wrap" style="height:200px;"><canvas id="ia-emp-chart" role="img" aria-label="Mentorados por empresa"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Análise com IA GUIA Insights</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn btn-gold" onclick="runGuiaInsightsGeral()">✦ Análise geral da plataforma</button>
+      <button class="btn btn-outline" onclick="runGuiaInsightsRetencao()">⚠ Riscos de retenção</button>
+      <button class="btn btn-outline" onclick="runGuiaInsightsTendencias()">↗ Tendências de desenvolvimento</button>
+      <button class="btn btn-outline" onclick="runGuiaInsightsRH()">◈ Relatório para RH</button>
+    </div>
+    <div id="guia-insights-result" style="display:none;"></div>
+  </div>
+
+  <!-- Email Report Section -->
+  <div class="panel">
+    <div class="panel-title"><div class="panel-title-dot"></div> Rotina de E-mail Semanal</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:14px;">
+      Gere e visualize o resumo semanal que será enviado a cada mentorado — inclui progresso, ações pendentes e notícias de carreira relevantes.
+    </div>
+    <div class="grid-2" style="margin-bottom:12px;">
+      <div class="field" style="margin-bottom:0;"><label class="field-label">Mentorado</label>
+        <select class="form-select" id="email-user-sel">
+          <option value="">Todos os mentorados</option>
+          ${mentorados.map(u=>`<option value="${u.id}">${u.name} — ${u.phase||'G'}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:0;"><label class="field-label">Semana de referência</label>
+        <input type="date" class="form-input" id="email-week" value="${new Date().toISOString().split('T')[0]}">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-gold" onclick="generateWeeklyEmail()">✦ Gerar resumo semanal</button>
+      <button class="btn btn-outline" onclick="copyEmailContent()">Copiar conteúdo</button>
+    </div>
+    <div id="email-preview" style="margin-top:16px;display:none;"></div>
+  </div>
+  `;
+
+  setTimeout(()=>{
+    // Fases chart
+    const ctx1 = document.getElementById('ia-fases-chart');
+    if(ctx1) new Chart(ctx1,{type:'doughnut',data:{
+      labels:['G','U','I','A'],
+      datasets:[{data:[fases.G,fases.U,fases.I,fases.A],backgroundColor:['#f0c040','#5b9cf0','#4ecb71','#f0a040'],borderWidth:0}]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#888',font:{size:11},boxWidth:12}}}}});
+
+    // Empresa chart
+    const ctx2 = document.getElementById('ia-emp-chart');
+    const empLabels = Object.keys(porEmpresa);
+    const empData = Object.values(porEmpresa);
+    if(ctx2) new Chart(ctx2,{type:'bar',data:{
+      labels:empLabels,
+      datasets:[{data:empData,backgroundColor:'rgba(240,192,64,.4)',borderColor:'#f0c040',borderWidth:1,borderRadius:4}]
+    },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,ticks:{stepSize:1,color:'#666'},grid:{color:'#1a1a1a'}},x:{ticks:{color:'#888'},grid:{display:false}}}}});
+  },200);
+}
+
+async function runGuiaInsightsGeral(){
+  const users = DB.get('users')||[];
+  const mentorados = users.filter(u=>u.role==='mentorado'&&u.active);
+  const empresas = getEmpresas();
+  const nps = DB.get('nps_history')||[];
+  const fases = {G:0,U:0,I:0,A:0};
+  mentorados.forEach(u=>{ if(fases[u.phase]!==undefined) fases[u.phase]++; });
+
+  showIALoading('guia-insights-result','IA GUIA Insights analisando a plataforma');
+
+  const prompt = `Você é o IA GUIA Insights — um sistema de inteligência estratégica para desenvolvimento humano.
+
+DADOS DA PLATAFORMA ARCALA INSIGHT:
+Total de mentorados ativos: ${mentorados.length}
+Empresas atendidas: ${empresas.length} (${empresas.map(e=>e.nome).join(', ')})
+Distribuição por fase GUIA: G=${fases.G} | U=${fases.U} | I=${fases.I} | A=${fases.A}
+NPS histórico: ${nps.map(n=>n.cycle+': '+n.score).join(' | ')}
+
+Gere um diagnóstico estratégico completo:
+
+1. SAÚDE DA PLATAFORMA: O que os dados revelam sobre o engajamento e progresso geral?
+2. PADRÃO PREDOMINANTE: Qual o perfil comportamental típico dos usuários desta plataforma?
+3. GARGALO DO FUNIL GUIA: Em qual fase os mentorados mais travam e por quê?
+4. OPORTUNIDADE OCULTA: O que os dados sugerem que ainda não está sendo explorado?
+5. RECOMENDAÇÃO ESTRATÉGICA: As 3 mudanças de maior impacto que o Arcala Insight pode fazer agora.
+
+Escreva como um Chief People Analytics Officer apresentando para o board.`;
+
+  const result = await callAI(prompt);
+  showIAResult('guia-insights-result', result, 'IA GUIA Insights — Análise Geral');
+}
+
+async function runGuiaInsightsRetencao(){
+  const users = DB.get('users')||[];
+  const mentorados = users.filter(u=>u.role==='mentorado'&&u.active);
+  showIALoading('guia-insights-result','Analisando riscos de retenção');
+  const fase_g = mentorados.filter(u=>u.phase==='G');
+  const prompt = `Analise riscos de retenção na plataforma de mentoria:
+Total mentorados: ${mentorados.length}
+Na fase G (início) há ${fase_g.length} usuários — potencial risco de abandono antes de começar.
+Planos: ${[...new Set(mentorados.map(u=>u.plan))].join(', ')}
+
+Identifique: 1) Sinais de risco de evasão 2) Perfil de usuário com maior probabilidade de abandono 3) Intervenções preventivas específicas 4) Métricas de alerta que o admin deve monitorar semanalmente.`;
+  const result = await callAI(prompt);
+  showIAResult('guia-insights-result', result, 'IA GUIA Insights — Riscos de Retenção');
+}
+
+async function runGuiaInsightsTendencias(){
+  const nps = DB.get('nps_history')||[];
+  showIALoading('guia-insights-result','Mapeando tendências');
+  const prompt = `Com base em dados de uma plataforma de mentoria executiva (metodologia GUIA de 12 semanas):
+NPS histórico: ${nps.map(n=>n.cycle+': '+n.score).join(' | ')||'Dados iniciais'}
+Quais são as tendências mais relevantes em desenvolvimento executivo para 2026? O que profissionais em mentoria mais precisam desenvolver para prosperar no mercado atual? Baseie-se em dados e contexto de mercado brasileiro.`;
+  const result = await callAI(prompt);
+  showIAResult('guia-insights-result', result, 'IA GUIA Insights — Tendências');
+}
+
+async function runGuiaInsightsRH(){
+  const users = DB.get('users')||[];
+  const empresas = getEmpresas();
+  const mentorados = users.filter(u=>u.role==='mentorado'&&u.active);
+  showIALoading('guia-insights-result','Gerando relatório para RH');
+  const empBreakdown = empresas.map(e=>{
+    const count = mentorados.filter(u=>u.empresa_id===e.id).length;
+    return e.nome+': '+count+' mentorados';
+  }).join(' | ');
+  const prompt = `Crie um relatório executivo de People Analytics para RH baseado nos dados da plataforma de mentoria:
+${empBreakdown||'Dados agregados de '+mentorados.length+' mentorados'}
+Inclua: Sumário executivo (3 parágrafos), ROI esperado de programas de mentoria, benchmarks de mercado, e recomendações de próximos passos para o time de RH. Tom: parceiro estratégico de negócios.`;
+  const result = await callAI(prompt);
+  showIAResult('guia-insights-result', result, 'IA GUIA Insights — Relatório RH');
+}
+
+async function generateWeeklyEmail(){
+  const userId = document.getElementById('email-user-sel')?.value;
+  const weekDate = document.getElementById('email-week')?.value;
+  const users = DB.get('users')||[];
+  const targets = userId ? [users.find(u=>u.id===userId)].filter(Boolean) : users.filter(u=>u.role==='mentorado'&&u.active);
+  if(!targets.length){ toast('Nenhum mentorado encontrado','err'); return; }
+
+  const u = targets[0]; // Preview first user
+  showIALoading('email-preview','Gerando resumo semanal personalizado');
+
+  const disc = DB.get('disc');
+  const vf = DB.get('vf')||{};
+  const mp = DB.get('microplano')||{okrs:[]};
+  const pendentes = (mp.kanban?.todo||[]).slice(0,3).join(', ');
+
+  const prompt = `Você é o assistente de desenvolvimento de carreira da plataforma Arcala Insight.
+Crie um e-mail semanal personalizado, cálido e motivador para:
+
+MENTORADO: ${u.name}
+FASE ATUAL: ${u.phase||'G'} — Semana ${u.week||0} de 12
+PERFIL DISC: ${disc||'Não realizado'}
+VISÃO DE FUTURO: ${vf.profissional||'Em construção'}
+AÇÕES PENDENTES: ${pendentes||'Verificar no plano de ação'}
+SEMANA DE REFERÊNCIA: ${weekDate||'Atual'}
+
+O e-mail deve ter:
+1. SAUDAÇÃO personalizada com o nome e um reconhecimento genuíno do momento
+2. DESTAQUE DA SEMANA: O que foi mais importante neste ponto da jornada (baseado na fase)
+3. AÇÃO PRIORITÁRIA: A única coisa mais importante para fazer esta semana
+4. NOTÍCIA DE CARREIRA: Um insight relevante sobre desenvolvimento executivo e mercado (atual, não genérico)
+5. REFLEXÃO: Uma pergunta poderosa para a semana
+6. ENCERRAMENTO motivador e autêntico, assinado como "Equipe Arcala Insight"
+
+Formato: e-mail real, com assunto, saudação, parágrafos e assinatura. Português brasileiro, tom profissional e humano.`;
+
+  const result = await callAI(prompt);
+
+  // Display as email preview
+  const previewEl = document.getElementById('email-preview');
+  previewEl.style.display='block';
+  previewEl.innerHTML = `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+    <div style="background:var(--gold);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:13px;font-weight:700;color:#0a0a0a;">Prévia do e-mail — ${u.name}</div>
+      <div style="font-size:11px;color:#0a0a0a;opacity:.7">${targets.length} destinatário(s)</div>
+    </div>
+    <div style="padding:20px;font-size:13px;color:var(--text2);line-height:1.8;white-space:pre-wrap;font-family:Georgia,serif;">${result}</div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;">
+      <button class="btn btn-gold btn-sm" onclick="copyEmailContent()">Copiar e-mail</button>
+      <button class="btn btn-outline btn-sm" onclick="downloadEmailContent()">Exportar .txt</button>
+      <div style="flex:1"></div>
+      <span style="font-size:11px;color:var(--text3);align-self:center;">Integração com e-mail: configure em Configurações</span>
+    </div>
+  </div>`;
+}
+
+function copyEmailContent(){
+  const el = document.getElementById('email-preview');
+  if(!el||el.style.display==='none'){ toast('Gere o e-mail primeiro','err'); return; }
+  navigator.clipboard.writeText(el.innerText).then(()=>toast('Conteúdo copiado!','suc'));
+}
+
+function downloadEmailContent(){
+  const el = document.getElementById('email-preview');
+  if(!el) return;
+  downloadText(el.innerText, 'resumo-semanal-'+today()+'.txt');
+  toast('E-mail exportado!','suc');
+}
+
+// Add empresa field to addUser function
+const _origAddUser = addUser;
+// Patch empresa_id into user creation
 
 // ══════════════════════════════════════════════
 // AUTH SYSTEM

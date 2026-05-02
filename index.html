@@ -451,6 +451,33 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .phase-pip.done{background:var(--green);border-color:var(--green);color:#fff;}
 .phase-pip.active{background:var(--gold-bg);border-color:var(--gold);color:var(--gold);}
 .phase-pip.locked{background:var(--bg3);}
+
+/* ─── MATCH PANEL ─── */
+.match-board{display:grid;grid-template-columns:1fr 60px 1fr;gap:0;align-items:start;}
+.match-col{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.match-col-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.match-col-title{font-size:12px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;}
+.match-col-count{font-size:11px;color:var(--text4);font-family:'Space Mono',monospace;}
+.match-user-card{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:10px;user-select:none;}
+.match-user-card:last-child{border-bottom:none;}
+.match-user-card:hover{background:var(--bg2);}
+.match-user-card.selected{background:var(--gold-bg);border-left:3px solid var(--gold);}
+.match-user-card.matched{background:var(--green-bg);border-left:3px solid var(--green);}
+.match-avatar{width:34px;height:34px;border-radius:50%;background:var(--bg3);border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text3);flex-shrink:0;font-family:'Space Mono',monospace;}
+.match-avatar.gold{background:var(--gold-bg);border-color:var(--gold);color:var(--gold);}
+.match-avatar.green{background:var(--green-bg);border-color:var(--green);color:var(--green);}
+.match-user-info{flex:1;min-width:0;}
+.match-user-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.match-user-sub{font-size:10px;color:var(--text4);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
+.match-center{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:80px;gap:12px;}
+.match-arrow{width:44px;height:44px;border-radius:50%;background:var(--bg2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text4);}
+.match-arrow.active{background:var(--gold-bg);border-color:var(--gold);color:var(--gold);cursor:pointer;transition:all .15s;}
+.match-arrow.active:hover{background:var(--gold);color:#0a0a0a;}
+.match-pair{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;transition:all .15s;}
+.match-pair:hover{border-color:var(--border2);}
+.match-pair-mentor{flex:1;text-align:right;}
+.match-pair-mentee{flex:1;}
+.match-pair-sep{width:32px;height:32px;border-radius:50%;background:var(--gold-bg);border:1.5px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--gold);flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -867,6 +894,7 @@ const MENUS = {
     {section:'Administração'},
     {id:'admin-users',icon:'◉',label:'Usuários & Acessos'},
     {id:'admin-regs',icon:'◈',label:'Cadastros Pendentes',badge:'3'},
+    {id:'admin-match',icon:'◈',label:'Associar Mentor ↔ Mentorado'},
     {id:'admin-empresas',icon:'◫',label:'Empresas'},
     {section:'Inteligência'},
     {id:'admin-ia-insights',icon:'✦',label:'IA GUIA Insights'},
@@ -1020,6 +1048,7 @@ function showPage(id){
     'inicio-ciclo': renderInicioCiclo,
     'admin-empresas': renderAdminEmpresas,
     'admin-training': renderAdminTraining,
+    'admin-match': renderAdminMatch,
     'admin-updates': renderAdminUpdates,
     'admin-ia-insights': renderAdminIAInsights,
     'training': renderTraining,
@@ -6221,6 +6250,267 @@ function renderMinhaJornada(){
     }).join('')}
   </div>
   `;
+}
+
+
+// ══════════════════════════════════════════════
+// ADMIN — ASSOCIAR MENTOR ↔ MENTORADO
+// ══════════════════════════════════════════════
+
+let matchSelectedMentor = null;
+let matchSelectedMentee = null;
+
+function renderAdminMatch(){
+  const users = DB.get('users')||[];
+  const mentors  = users.filter(u=>u.role==='mentor' && u.active);
+  const mentees  = users.filter(u=>u.role==='mentorado' && u.active);
+
+  // Build current pairs
+  const pairs = [];
+  mentees.forEach(m=>{
+    if(m.mentor_id){
+      const mentor = users.find(u=>u.id===m.mentor_id);
+      if(mentor) pairs.push({mentor, mentee: m});
+    }
+  });
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Associar Mentor ↔ Mentorado</div>
+    <div class="page-sub">Selecione um mentor e um mentorado para criar ou desfazer associações</div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid" style="margin-bottom:20px;">
+    <div class="kpi"><div class="kpi-label">Mentores</div><div class="kpi-value" style="color:var(--gold)">${mentors.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Mentorados</div><div class="kpi-value">${mentees.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Pareados</div><div class="kpi-value" style="color:var(--green)">${pairs.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Sem mentor</div><div class="kpi-value" style="color:var(--amber)">${mentees.filter(m=>!m.mentor_id).length}</div></div>
+  </div>
+
+  <!-- Drag and drop board -->
+  <div class="match-board" style="margin-bottom:24px;">
+
+    <!-- MENTORS column -->
+    <div class="match-col">
+      <div class="match-col-header">
+        <div>
+          <div class="match-col-title">Mentores</div>
+          <div style="font-size:11px;color:var(--text4);margin-top:2px;">Clique para selecionar</div>
+        </div>
+        <div class="match-col-count">${mentors.length}</div>
+      </div>
+      <div>
+        ${mentors.length ? mentors.map(m=>{
+          const myMentees = mentees.filter(x=>x.mentor_id===m.id);
+          const isSelected = matchSelectedMentor === m.id;
+          return `<div class="match-user-card ${isSelected?'selected':myMentees.length?'matched':''}"
+            onclick="selectMatchMentor('${m.id}')">
+            <div class="match-avatar ${isSelected?'gold':myMentees.length?'green':''}">${initials(m.name)}</div>
+            <div class="match-user-info">
+              <div class="match-user-name">${m.name}</div>
+              <div class="match-user-sub">${myMentees.length ? myMentees.length+' mentorado(s)' : 'Sem mentorados'}</div>
+            </div>
+            ${isSelected?'<span style="color:var(--gold);font-size:14px;">●</span>':''}
+            ${!isSelected&&myMentees.length?'<span style="color:var(--green);font-size:10px;font-weight:700;">'+myMentees.length+'</span>':''}
+          </div>`;
+        }).join('') : `<div style="padding:20px;text-align:center;font-size:12px;color:var(--text4);">Nenhum mentor ativo</div>`}
+      </div>
+    </div>
+
+    <!-- CENTER actions -->
+    <div class="match-center">
+      <div class="match-arrow ${matchSelectedMentor && matchSelectedMentee ? 'active' : ''}"
+        onclick="${matchSelectedMentor && matchSelectedMentee ? 'doMatch()' : ''}"
+        title="${matchSelectedMentor && matchSelectedMentee ? 'Criar associação' : 'Selecione mentor e mentorado'}">
+        ↔
+      </div>
+      ${matchSelectedMentor && matchSelectedMentee ? `
+      <div style="font-size:9px;color:var(--gold);font-weight:700;letter-spacing:.06em;text-align:center;line-height:1.6;">
+        ASSOCIAR
+      </div>` : `
+      <div style="font-size:9px;color:var(--text4);text-align:center;line-height:1.6;">
+        ←<br>selecione<br>→
+      </div>`}
+    </div>
+
+    <!-- MENTEES column -->
+    <div class="match-col">
+      <div class="match-col-header">
+        <div>
+          <div class="match-col-title">Mentorados</div>
+          <div style="font-size:11px;color:var(--text4);margin-top:2px;">Clique para selecionar</div>
+        </div>
+        <div class="match-col-count">${mentees.length}</div>
+      </div>
+      <div>
+        ${mentees.length ? mentees.map(m=>{
+          const mentor = m.mentor_id ? users.find(u=>u.id===m.mentor_id) : null;
+          const isSelected = matchSelectedMentee === m.id;
+          return `<div class="match-user-card ${isSelected?'selected':mentor?'matched':''}"
+            onclick="selectMatchMentee('${m.id}')">
+            <div class="match-avatar ${isSelected?'gold':mentor?'green':''}">${initials(m.name)}</div>
+            <div class="match-user-info">
+              <div class="match-user-name">${m.name}</div>
+              <div class="match-user-sub">${mentor ? '→ '+mentor.name : 'Sem mentor'}</div>
+            </div>
+            ${isSelected?'<span style="color:var(--gold);font-size:14px;">●</span>':''}
+          </div>`;
+        }).join('') : `<div style="padding:20px;text-align:center;font-size:12px;color:var(--text4);">Nenhum mentorado ativo</div>`}
+      </div>
+    </div>
+  </div>
+
+  <!-- Selection preview -->
+  ${matchSelectedMentor || matchSelectedMentee ? `
+  <div class="panel" style="margin-bottom:20px;border-color:var(--gold-border);background:var(--gold-bg);">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.06em;margin-bottom:12px;">ASSOCIAÇÃO SELECIONADA</div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+      <div style="flex:1;text-align:center;min-width:120px;">
+        ${matchSelectedMentor ? (() => {
+          const m = users.find(u=>u.id===matchSelectedMentor);
+          return m ? `<div class="match-avatar gold" style="width:48px;height:48px;font-size:16px;margin:0 auto 8px;">${initials(m.name)}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${m.name}</div>
+          <div style="font-size:10px;color:var(--gold);font-weight:700;margin-top:2px;">MENTOR</div>` : '';
+        })() : `<div style="font-size:12px;color:var(--text4);">← Selecione um mentor</div>`}
+      </div>
+      <div style="font-size:28px;color:var(--gold);">↔</div>
+      <div style="flex:1;text-align:center;min-width:120px;">
+        ${matchSelectedMentee ? (() => {
+          const m = users.find(u=>u.id===matchSelectedMentee);
+          return m ? `<div class="match-avatar gold" style="width:48px;height:48px;font-size:16px;margin:0 auto 8px;">${initials(m.name)}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${m.name}</div>
+          <div style="font-size:10px;color:var(--gold);font-weight:700;margin-top:2px;">MENTORADO</div>` : '';
+        })() : `<div style="font-size:12px;color:var(--text4);">Selecione um mentorado →</div>`}
+      </div>
+    </div>
+    ${matchSelectedMentor && matchSelectedMentee ? `
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:center;">
+      <button class="btn btn-gold" onclick="doMatch()">✓ Confirmar associação</button>
+      <button class="btn btn-outline" onclick="clearMatchSelection()">Cancelar</button>
+    </div>` : ''}
+  </div>` : ''}
+
+  <!-- Current pairs -->
+  <div class="section-label">Associações ativas (${pairs.length})</div>
+  ${pairs.length ? `
+  <div style="margin-bottom:20px;">
+    ${pairs.map(p=>`
+    <div class="match-pair">
+      <div class="match-pair-mentor">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${p.mentor.name}</div>
+        <div style="font-size:10px;color:var(--gold);font-weight:700;margin-top:2px;">MENTOR</div>
+        <div style="font-size:10px;color:var(--text4);margin-top:1px;">${p.mentor.email}</div>
+      </div>
+      <div class="match-pair-sep">↔</div>
+      <div class="match-pair-mentee">
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${p.mentee.name}</div>
+        <div style="font-size:10px;color:var(--blue);font-weight:700;margin-top:2px;">MENTORADO</div>
+        <div style="font-size:10px;color:var(--text4);margin-top:1px;">${p.mentee.email}</div>
+      </div>
+      <button class="btn btn-red btn-xs" onclick="removeMatch('${p.mentee.id}','${p.mentee.name}')" style="flex-shrink:0;">Desfazer</button>
+    </div>`).join('')}
+  </div>` : `
+  <div class="panel" style="text-align:center;padding:24px;border-style:dashed;margin-bottom:20px;">
+    <div style="font-size:13px;color:var(--text4);">Nenhuma associação criada ainda. Selecione um mentor e um mentorado acima.</div>
+  </div>`}
+
+  <!-- Unmatched mentees -->
+  ${mentees.filter(m=>!m.mentor_id).length ? `
+  <div class="section-label">Sem mentor (${mentees.filter(m=>!m.mentor_id).length})</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+    ${mentees.filter(m=>!m.mentor_id).map(m=>`
+    <div onclick="selectMatchMentee('${m.id}')" style="padding:8px 14px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius-sm);cursor:pointer;transition:all .12s;" onmouseover="this.style.borderColor='var(--amber)'" onmouseout="this.style.borderColor='var(--amber-border)'">
+      <div style="font-size:12px;font-weight:600;color:var(--text)">${m.name}</div>
+      <div style="font-size:10px;color:var(--amber);margin-top:2px;">Clique para selecionar</div>
+    </div>`).join('')}
+  </div>` : ''}
+  `;
+}
+
+function selectMatchMentor(id){
+  matchSelectedMentor = matchSelectedMentor === id ? null : id;
+  renderAdminMatch();
+}
+
+function selectMatchMentee(id){
+  matchSelectedMentee = matchSelectedMentee === id ? null : id;
+  renderAdminMatch();
+}
+
+function clearMatchSelection(){
+  matchSelectedMentor = null;
+  matchSelectedMentee = null;
+  renderAdminMatch();
+}
+
+function doMatch(){
+  if(!matchSelectedMentor || !matchSelectedMentee){ toast('Selecione mentor e mentorado','err'); return; }
+  const users = DB.get('users')||[];
+  const mentor = users.find(u=>u.id===matchSelectedMentor);
+  const mentee = users.find(u=>u.id===matchSelectedMentee);
+  if(!mentor||!mentee) return;
+
+  showConfirm(
+    'Confirmar associação',
+    `Associar ${mentor.name} como mentor de ${mentee.name}?`,
+    'Associar',
+    async ()=>{
+      // Update mentee with mentor_id
+      mentee.mentor_id = matchSelectedMentor;
+      // Update mentor's mentorados list
+      if(!mentor.mentorados) mentor.mentorados = [];
+      if(!mentor.mentorados.includes(mentee.id)) mentor.mentorados.push(mentee.id);
+      DB.set('users', users);
+
+      // Sync to Supabase
+      try {
+        await sbFetch('users?id=eq.'+mentee.id, 'PATCH', {mentor_id: matchSelectedMentor});
+      } catch(e){}
+
+      // Auto-release phase G for mentee
+      const allRel = DB.get('phase_releases')||{};
+      if(!allRel[mentee.id]) allRel[mentee.id] = {G:true, U:false, I:false, A:false};
+      else allRel[mentee.id].G = true;
+      DB.set('phase_releases', allRel);
+
+      toast(`${mentee.name} associado a ${mentor.name}!`, 'suc');
+      matchSelectedMentor = null;
+      matchSelectedMentee = null;
+      renderAdminMatch();
+    },
+    false
+  );
+}
+
+function removeMatch(menteeId, menteeName){
+  showConfirm(
+    'Desfazer associação',
+    `Remover o mentor de ${menteeName}? O mentorado ficará sem mentor.`,
+    'Desfazer',
+    async ()=>{
+      const users = DB.get('users')||[];
+      const mentee = users.find(u=>u.id===menteeId);
+      if(!mentee) return;
+
+      const oldMentorId = mentee.mentor_id;
+      mentee.mentor_id = null;
+
+      // Remove from mentor's list
+      if(oldMentorId){
+        const mentor = users.find(u=>u.id===oldMentorId);
+        if(mentor && mentor.mentorados){
+          mentor.mentorados = mentor.mentorados.filter(id=>id!==menteeId);
+        }
+      }
+
+      DB.set('users', users);
+      try { await sbFetch('users?id=eq.'+menteeId, 'PATCH', {mentor_id: null}); } catch(e){}
+
+      toast(`Associação de ${menteeName} removida`, 'suc');
+      renderAdminMatch();
+    }
+  );
 }
 
 // ══════════════════════════════════════════════

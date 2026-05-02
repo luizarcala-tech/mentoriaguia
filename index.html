@@ -775,7 +775,9 @@ function switchRole(role){
 
   renderSidebar();
   const defaults = {admin:'admin-users',mentor:'dash',mentorado:'minha-jornada'};
-  showPage(defaults[role]);
+  // Restore last visited page for this role, fallback to default
+  const lastPage = DB.get('last_page_'+role) || defaults[role];
+  showPage(lastPage);
 }
 
 // ══════════════════════════════════════════════
@@ -1027,7 +1029,17 @@ function showPage(id){
       id = 'training';
     }
   }
+  // Block mentorado from accessing unreleased phases
+  if(currentUser && currentUser.role === 'mentorado' && !canMenteeAccess(id)){
+    const phaseMap = {'disc':'U','comp':'U','swot':'U','vf':'U','peer360':'U','microplano':'I','fase-a':'A'};
+    const needed = phaseMap[id];
+    const phaseNames = {U:'Unir Diagnóstico (U)',I:'Implementar (I)',A:'Aferir e Ajustar (A)'};
+    toast('Esta etapa ainda não foi liberada pelo seu mentor. Aguarde a liberação da Fase '+(phaseNames[needed]||needed)+'.','err');
+    return;
+  }
   currentPage = id;
+  // Persist last page per role so refresh restores it
+  if(currentUser) DB.set('last_page_'+currentRole, id);
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const nav = document.getElementById('nav-'+id);
   if(nav) nav.classList.add('active');

@@ -381,18 +381,18 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .lesson-card.unlocked{cursor:pointer;}
 .lesson-card.unlocked:hover{border-color:var(--gold);}
 .lesson-card.completed{border-left:3px solid var(--green);}
-.lesson-card.recycle{border-left:3px solid var(--amber);background:rgba(240,160,64,.04);}
+.lesson-card.update{border-left:3px solid var(--amber);background:rgba(240,160,64,.04);}
 .lesson-num{width:50px;height:50px;border-radius:50%;background:var(--bg3);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;font-family:'Space Mono',monospace;color:var(--text3);flex-shrink:0;}
 .lesson-card.completed .lesson-num{background:var(--green);border-color:var(--green);color:#fff;}
 .lesson-card.unlocked:not(.completed) .lesson-num{background:var(--gold-bg);border-color:var(--gold);color:var(--gold);}
-.lesson-card.recycle .lesson-num{background:var(--amber-bg);border-color:var(--amber);color:var(--amber);}
+.lesson-card.update .lesson-num{background:var(--amber-bg);border-color:var(--amber);color:var(--amber);}
 .lesson-info{flex:1;}
 .lesson-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;}
 .lesson-desc{font-size:11px;color:var(--text3);line-height:1.6;}
 .lesson-status{font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--gold);text-transform:uppercase;}
 .lesson-status.completed{color:var(--green);}
 .lesson-status.locked{color:var(--text4);}
-.lesson-status.recycle{color:var(--amber);}
+.lesson-status.update{color:var(--amber);}
 .video-placeholder{background:linear-gradient(135deg,#1a1a1a 0%,#0f0f0f 100%);border:1px solid var(--border);border-radius:var(--radius);aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;position:relative;overflow:hidden;}
 .video-placeholder iframe{width:100%;height:100%;border:0;border-radius:var(--radius);}
 .video-play{width:64px;height:64px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;color:#0a0a0a;font-size:24px;}
@@ -714,6 +714,72 @@ function switchRole(role){
 // SIDEBAR
 // ══════════════════════════════════════════════
 
+
+// ══════════════════════════════════════════════
+// PLATFORM VERSION & CHANGELOG
+// ══════════════════════════════════════════════
+const PLATFORM_VERSION = '1.2.0';
+const PLATFORM_BUILD_DATE = '2026-05-02';
+
+function getChangelog(){
+  return DB.get('platform_changelog') || [{
+    version: '1.0.0',
+    date: '2026-04-29',
+    type: 'launch',
+    summary: 'Lançamento da plataforma Arcala Insight',
+    changes: [
+      'Metodologia GUIA com 4 fases estruturadas',
+      'Assessment DISC com 7 situações ipsativas',
+      'Radar de Competências com ciclos versionados',
+      'SWOT Pessoal, Visão de Futuro e Feedback 360°',
+      'Plano de Ação com OKRs, Kanban e GROW',
+      'Fase A — Aferição com 3ª dimensão do radar',
+      'IA GUIA Insights e análise integrada',
+      'Sistema de login e gestão de usuários',
+    ],
+    trainingImpact: [],
+    mentorImpact: 'Lançamento inicial — treinamento base obrigatório',
+    mentoradoImpact: 'Acesso completo aos instrumentos GUIA'
+  },{
+    version: '1.1.0',
+    date: '2026-04-30',
+    type: 'feature',
+    summary: 'Empresas, IA GUIA Insights e E-mail Semanal',
+    changes: [
+      'Tabela de empresas com associação de usuários',
+      'Separação de dados por empresa para RH',
+      'Painel IA GUIA Insights com 4 análises estratégicas',
+      'Gerador de e-mail semanal personalizado por IA',
+    ],
+    trainingImpact: [6],
+    mentorImpact: 'Nova funcionalidade: IA GUIA Insights disponível no admin',
+    mentoradoImpact: 'Nenhum impacto direto'
+  },{
+    version: '1.2.0',
+    date: '2026-05-02',
+    type: 'feature',
+    summary: 'Módulo de Treinamento de Mentor + Sistema de Atualizações',
+    changes: [
+      '6 aulas sequenciais com bloqueio progressivo',
+      'Provas geradas por IA com nota mínima 8/10',
+      'Perfil completo do idealizador Luiz Arcala',
+      'Sistema de atualização obrigatória por versão de aula',
+      'Painel admin de gestão de treinamentos',
+      'Log de documentação e changelog da plataforma',
+      'Rotina de testes integrados antes de cada deploy',
+    ],
+    trainingImpact: [1,2,3,4,5,6],
+    mentorImpact: 'Treinamento obrigatório antes de acessar a plataforma',
+    mentoradoImpact: 'Nenhum impacto direto'
+  }];
+}
+
+function addChangelog(entry){
+  const log = getChangelog();
+  log.push(entry);
+  DB.set('platform_changelog', log);
+}
+
 const LESSONS = [
   {
     id: 1,
@@ -770,6 +836,7 @@ const MENUS = {
     {id:'admin-nps',icon:'◎',label:'NPS & Métricas'},
     {section:'Treinamento'},
     {id:'admin-training',icon:'◈',label:'Gestão de Treinamentos'},
+    {id:'admin-updates',icon:'◎',label:'Atualizações & Deploy'},
     {section:'Sistema'},
     {id:'admin-config',icon:'◫',label:'Configurações'},
   ],
@@ -916,6 +983,7 @@ function showPage(id){
     'inicio-ciclo': renderInicioCiclo,
     'admin-empresas': renderAdminEmpresas,
     'admin-training': renderAdminTraining,
+    'admin-updates': renderAdminUpdates,
     'admin-ia-insights': renderAdminIAInsights,
     'training': renderTraining,
     'lesson': renderLesson,
@@ -4081,7 +4149,7 @@ const _origAddUser = addUser;
 // ══════════════════════════════════════════════
 function getTrainingProgress(){
   const userId = currentUser?.id || 'guest';
-  return DB.get('training_progress_'+userId) || {completed:[], scores:{}, recycled:[]};
+  return DB.get('training_progress_'+userId) || {completed:[], scores:{}, updated:[]};
 }
 
 function saveTrainingProgress(p){
@@ -4092,8 +4160,8 @@ function saveTrainingProgress(p){
 function isTrainingComplete(){
   if(!currentUser || currentUser.role !== 'mentor') return true;
   const p = getTrainingProgress();
-  // Must complete all lessons AND have no pending recycles
-  return p.completed.length >= LESSONS.length && p.recycled.length === 0;
+  // Must complete all lessons AND have no pending updates
+  return p.completed.length >= LESSONS.length && p.updated.length === 0;
 }
 
 function isLessonUnlocked(lessonId){
@@ -4105,12 +4173,12 @@ function isLessonUnlocked(lessonId){
 
 function isLessonCompleted(lessonId){
   const p = getTrainingProgress();
-  return p.completed.includes(lessonId) && !p.recycled.includes(lessonId);
+  return p.completed.includes(lessonId) && !p.updated.includes(lessonId);
 }
 
-function isLessonRecycle(lessonId){
+function isLessonUpdate(lessonId){
   const p = getTrainingProgress();
-  return p.recycled.includes(lessonId);
+  return p.updated.includes(lessonId);
 }
 
 function checkTrainingBlock(){
@@ -4128,7 +4196,7 @@ function checkTrainingBlock(){
 
 function renderTraining(){
   const p = getTrainingProgress();
-  const completedCount = p.completed.filter(id=>!p.recycled.includes(id)).length;
+  const completedCount = p.completed.filter(id=>!p.updated.includes(id)).length;
   const pct = Math.round((completedCount / LESSONS.length) * 100);
   const isMentor = currentUser?.role === 'mentor';
 
@@ -4158,7 +4226,7 @@ function renderTraining(){
     <div class="training-progress-bar"><div class="training-progress-fill" style="width:${pct}%"></div></div>
     <div style="font-size:11px;color:var(--text3);">
       ${completedCount}/${LESSONS.length} aulas concluídas
-      ${p.recycled.length > 0 ? ` · <span style="color:var(--amber);">${p.recycled.length} aula(s) com reciclagem pendente</span>` : ''}
+      ${p.updated.length > 0 ? ` · <span style="color:var(--amber);">${p.updated.length} aula(s) com atualização pendente</span>` : ''}
     </div>
   </div>
 
@@ -4167,19 +4235,19 @@ function renderTraining(){
     ${LESSONS.map(l => {
       const completed = isLessonCompleted(l.id);
       const unlocked = isLessonUnlocked(l.id);
-      const recycle = isLessonRecycle(l.id);
-      const cls = recycle ? 'recycle' : completed ? 'completed unlocked' : unlocked ? 'unlocked' : 'locked';
-      const status = recycle ? 'RECICLAR' : completed ? 'CONCLUÍDA' : unlocked ? 'DISPONÍVEL' : 'BLOQUEADA';
+      const update = isLessonUpdate(l.id);
+      const cls = update ? 'update' : completed ? 'completed unlocked' : unlocked ? 'unlocked' : 'locked';
+      const status = update ? 'ATUALIZAR' : completed ? 'CONCLUÍDA' : unlocked ? 'DISPONÍVEL' : 'BLOQUEADA';
       const score = p.scores[l.id];
       return `
-      <div class="lesson-card ${cls}" ${unlocked || recycle ? `onclick="openLesson(${l.id})"` : ''}>
-        <div class="lesson-num">${recycle ? '↻' : completed ? '✓' : l.id}</div>
+      <div class="lesson-card ${cls}" ${unlocked || update ? `onclick="openLesson(${l.id})"` : ''}>
+        <div class="lesson-num">${update ? '↻' : completed ? '✓' : l.id}</div>
         <div class="lesson-info">
           <div class="lesson-title">Aula ${l.id} — ${l.title}</div>
           <div class="lesson-desc">${l.desc}</div>
           <div style="display:flex;gap:14px;margin-top:6px;font-size:10px;color:var(--text4);">
             <span>⏱ ${l.duration}</span>
-            <span>v${l.version}</span>
+            <span>v${(getLessonVersions().find(x=>x.id===l.id)||{version:l.version}).version}</span>
             ${score ? `<span style="color:var(--green);">★ Nota: ${score}/10</span>` : ''}
           </div>
         </div>
@@ -4191,7 +4259,7 @@ function renderTraining(){
 }
 
 function openLesson(lessonId){
-  if(!isLessonUnlocked(lessonId) && !isLessonRecycle(lessonId)){
+  if(!isLessonUnlocked(lessonId) && !isLessonUpdate(lessonId)){
     toast('Conclua a aula anterior primeiro','err');
     return;
   }
@@ -4821,8 +4889,8 @@ function submitQuiz(){
     if(!p.completed.includes(currentQuiz.lessonId)){
       p.completed.push(currentQuiz.lessonId);
     }
-    // Remove from recycled if present
-    p.recycled = p.recycled.filter(id => id !== currentQuiz.lessonId);
+    // Remove from updated if present
+    p.updated = p.updated.filter(id => id !== currentQuiz.lessonId);
   }
   saveTrainingProgress(p);
 
@@ -4864,7 +4932,7 @@ function submitQuiz(){
 
 
 // ══════════════════════════════════════════════
-// TRAINING PART 2 — Recycle System + Admin Panel
+// TRAINING PART 2 — Update System + Admin Panel
 // ══════════════════════════════════════════════
 
 // ── LESSON VERSION MANAGEMENT ────────────────────────────────────────────────
@@ -4875,7 +4943,7 @@ function getLessonVersions(){
     title: l.title,
     videoUrl: '',
     updateNote: '',
-    requiresRecycle: false,
+    requiresUpdate: false,
     updatedAt: ''
   }));
 }
@@ -4884,46 +4952,46 @@ function saveLessonVersions(versions){
   DB.set('lesson_versions', versions);
 }
 
-// Check if a mentor needs recycle on any lesson
-function getMentorRecycleNeeds(userId){
-  const p = DB.get('training_progress_'+userId) || {completed:[], scores:{}, recycled:[]};
+// Check if a mentor needs update on any lesson
+function getMentorUpdateNeeds(userId){
+  const p = DB.get('training_progress_'+userId) || {completed:[], scores:{}, updated:[]};
   const versions = getLessonVersions();
-  const recycleNeeded = [];
+  const updateNeeded = [];
 
-  // Check each completed lesson — if admin marked it as requiresRecycle
+  // Check each completed lesson — if admin marked it as requiresUpdate
   // and user hasn't re-completed it since
   versions.forEach(v => {
-    if(v.requiresRecycle && p.completed.includes(v.id) && !p.recycled.includes(v.id)){
+    if(v.requiresUpdate && p.completed.includes(v.id) && !p.updated.includes(v.id)){
       const userCompletedVersion = p.completedVersions?.[v.id] || '1.0';
       if(userCompletedVersion !== v.version){
-        recycleNeeded.push(v.id);
+        updateNeeded.push(v.id);
       }
     }
   });
-  return recycleNeeded;
+  return updateNeeded;
 }
 
-// Override isTrainingComplete to account for recycles
+// Override isTrainingComplete to account for updates
 const _origIsTrainingComplete = isTrainingComplete;
 window.isTrainingComplete = function(){
   if(!currentUser || currentUser.role !== 'mentor') return true;
   const userId = currentUser.id;
-  const p = DB.get('training_progress_'+userId) || {completed:[], scores:{}, recycled:[]};
+  const p = DB.get('training_progress_'+userId) || {completed:[], scores:{}, updated:[]};
   const versions = getLessonVersions();
 
   // All lessons must be completed
   if(p.completed.length < LESSONS.length) return false;
 
-  // Check for mandatory recycles
-  const recycleNeeds = [];
+  // Check for mandatory updates
+  const updateNeeds = [];
   versions.forEach(v => {
-    if(v.requiresRecycle){
+    if(v.requiresUpdate){
       const userVersion = p.completedVersions?.[v.id];
-      if(userVersion !== v.version) recycleNeeds.push(v.id);
+      if(userVersion !== v.version) updateNeeds.push(v.id);
     }
   });
 
-  return recycleNeeds.length === 0;
+  return updateNeeds.length === 0;
 };
 
 // After passing quiz — save version info
@@ -4973,7 +5041,7 @@ function renderAdminTraining(){
     <div class="kpi">
       <div class="kpi-label">Com Reciclagem Pendente</div>
       <div class="kpi-value" style="color:var(--amber)">
-        ${mentors.filter(m=>getMentorRecycleNeeds(m.id).length>0).length}
+        ${mentors.filter(m=>getMentorUpdateNeeds(m.id).length>0).length}
       </div>
     </div>
     <div class="kpi">
@@ -4997,14 +5065,14 @@ function renderAdminTraining(){
           <div style="flex:1;">
             <div style="font-size:13px;font-weight:600;color:var(--text)">Aula ${v.id} — ${v.title}</div>
             <div style="font-size:10px;color:var(--text4);margin-top:2px;font-family:'Space Mono',monospace;">v${v.version} ${v.updatedAt?'· '+v.updatedAt:''}</div>
-            ${v.requiresRecycle?`<div style="font-size:10px;color:var(--amber);margin-top:4px;font-weight:600;">⚠ Reciclagem obrigatória ativa</div>`:''}
+            ${v.requiresUpdate?`<div style="font-size:10px;color:var(--amber);margin-top:4px;font-weight:600;">⚠ Atualização obrigatória ativa</div>`:''}
             ${v.updateNote?`<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic;">"${v.updateNote}"</div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;gap:5px;">
             <button class="btn btn-outline btn-xs" onclick="editLesson(${v.id})">Editar</button>
-            ${v.requiresRecycle?
-              `<button class="btn btn-xs" style="background:var(--amber-bg);border-color:var(--amber);color:var(--amber);" onclick="cancelRecycle(${v.id})">Cancelar reciclagem</button>`:
-              `<button class="btn btn-xs" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red);" onclick="triggerRecycle(${v.id})">Exigir reciclagem</button>`
+            ${v.requiresUpdate?
+              `<button class="btn btn-xs" style="background:var(--amber-bg);border-color:var(--amber);color:var(--amber);" onclick="cancelUpdate(${v.id})">Cancelar atualização</button>`:
+              `<button class="btn btn-xs" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red);" onclick="triggerUpdate(${v.id})">Exigir atualização</button>`
             }
           </div>
         </div>
@@ -5029,10 +5097,10 @@ function renderAdminTraining(){
       ${mentors.length === 0 ?
         `<div class="panel" style="color:var(--text3);font-size:12px;">Nenhum mentor ativo ainda.</div>` :
         mentors.map(m=>{
-          const p = DB.get('training_progress_'+m.id)||{completed:[],scores:{},recycled:[]};
-          const recycleNeeds = getMentorRecycleNeeds(m.id);
+          const p = DB.get('training_progress_'+m.id)||{completed:[],scores:{},updated:[]};
+          const updateNeeds = getMentorUpdateNeeds(m.id);
           const pct = Math.round((p.completed.length/LESSONS.length)*100);
-          const allDone = p.completed.length >= LESSONS.length && recycleNeeds.length === 0;
+          const allDone = p.completed.length >= LESSONS.length && updateNeeds.length === 0;
           return `
           <div class="panel" style="margin-bottom:12px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
@@ -5042,8 +5110,8 @@ function renderAdminTraining(){
                 <div style="font-size:10px;color:var(--text3)">${m.email}</div>
               </div>
               <div>
-                <span class="pill ${allDone?'pill-active':recycleNeeds.length>0?'pill-pending':'pill-locked'}">
-                  ${allDone?'HABILITADO':recycleNeeds.length>0?'RECICLAGEM':'EM PROGRESSO'}
+                <span class="pill ${allDone?'pill-active':updateNeeds.length>0?'pill-pending':'pill-locked'}">
+                  ${allDone?'HABILITADO':updateNeeds.length>0?'RECICLAGEM':'EM PROGRESSO'}
                 </span>
               </div>
             </div>
@@ -5054,18 +5122,18 @@ function renderAdminTraining(){
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               ${LESSONS.map(l=>{
                 const done = p.completed.includes(l.id);
-                const recycle = recycleNeeds.includes(l.id);
+                const update = updateNeeds.includes(l.id);
                 const score = p.scores[l.id];
-                return `<div title="Aula ${l.id}${score?' · '+score+'/10':''}" style="width:28px;height:28px;border-radius:50%;background:${recycle?'var(--amber-bg)':done?'var(--green)':'var(--bg3)'};border:1.5px solid ${recycle?'var(--amber)':done?'var(--green)':'var(--border2)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${recycle?'var(--amber)':done?'#fff':'var(--text4)'};">${recycle?'↻':l.id}</div>`;
+                return `<div title="Aula ${l.id}${score?' · '+score+'/10':''}" style="width:28px;height:28px;border-radius:50%;background:${update?'var(--amber-bg)':done?'var(--green)':'var(--bg3)'};border:1.5px solid ${update?'var(--amber)':done?'var(--green)':'var(--border2)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${update?'var(--amber)':done?'#fff':'var(--text4)'};">${update?'↻':l.id}</div>`;
               }).join('')}
             </div>
-            ${recycleNeeds.length>0?`
+            ${updateNeeds.length>0?`
             <div style="margin-top:8px;font-size:11px;color:var(--amber);">
-              ⚠ Reciclagem pendente: Aulas ${recycleNeeds.join(', ')}
+              ⚠ Atualização pendente: Aulas ${updateNeeds.join(', ')}
             </div>`:''}
             <div style="margin-top:8px;display:flex;gap:6px;">
               <button class="btn btn-outline btn-xs" onclick="resetMentorTraining('${m.id}','${m.name}')">Resetar progresso</button>
-              <button class="btn btn-outline btn-xs" onclick="forceMentorRecycle('${m.id}','${m.name}')">Forçar reciclagem total</button>
+              <button class="btn btn-outline btn-xs" onclick="forceMentorUpdate('${m.id}','${m.name}')">Forçar atualização total</button>
             </div>
           </div>`;
         }).join('')
@@ -5081,8 +5149,8 @@ function renderAdminTraining(){
       <div class="field"><label class="field-label">Nota sobre a atualização</label><textarea class="form-input" id="edit-note" rows="3" placeholder="Descreva o que mudou nesta versão..."></textarea></div>
       <div class="field">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-          <input type="checkbox" id="edit-recycle" style="accent-color:var(--gold);width:14px;height:14px;">
-          <span style="font-size:12px;color:var(--text2);">Exigir reciclagem de todos os mentores que já completaram esta aula</span>
+          <input type="checkbox" id="edit-update" style="accent-color:var(--gold);width:14px;height:14px;">
+          <span style="font-size:12px;color:var(--text2);">Exigir atualização de todos os mentores que já completaram esta aula</span>
         </label>
       </div>
       <div style="display:flex;gap:8px;margin-top:6px;">
@@ -5105,7 +5173,7 @@ function editLesson(id){
   document.getElementById('lesson-edit-title').textContent = `Atualizar Aula ${id} — ${v.title}`;
   document.getElementById('edit-version').value = v.version || '1.0';
   document.getElementById('edit-note').value = '';
-  document.getElementById('edit-recycle').checked = false;
+  document.getElementById('edit-update').checked = false;
   document.getElementById('lesson-edit-modal').style.display='flex';
 }
 
@@ -5118,7 +5186,7 @@ function saveLessonEdit(){
   if(!editingLessonId) return;
   const newVersion = document.getElementById('edit-version').value.trim();
   const note = document.getElementById('edit-note').value.trim();
-  const requireRecycle = document.getElementById('edit-recycle').checked;
+  const requireUpdate = document.getElementById('edit-update').checked;
 
   if(!newVersion){ toast('Informe a versão','err'); return; }
 
@@ -5128,7 +5196,7 @@ function saveLessonEdit(){
 
   versions[idx].version = newVersion;
   versions[idx].updateNote = note;
-  versions[idx].requiresRecycle = requireRecycle;
+  versions[idx].requiresUpdate = requireUpdate;
   versions[idx].updatedAt = new Date().toLocaleDateString('pt-BR');
 
   // Also update LESSONS array in memory
@@ -5137,7 +5205,7 @@ function saveLessonEdit(){
 
   saveLessonVersions(versions);
   closeLessonEdit();
-  toast(`Aula ${editingLessonId} atualizada para v${newVersion}${requireRecycle?' — reciclagem ativa':''}`, 'suc');
+  toast(`Aula ${editingLessonId} atualizada para v${newVersion}${requireUpdate?' — atualização ativa':''}`, 'suc');
   renderAdminTraining();
 }
 
@@ -5155,16 +5223,16 @@ function saveVideoUrl(id){
   renderAdminTraining();
 }
 
-function triggerRecycle(id){
+function triggerUpdate(id){
   const versions = getLessonVersions();
   const v = versions.find(x=>x.id===id);
   if(!v) return;
   showConfirm(
-    'Exigir reciclagem',
+    'Exigir atualização',
     `Todos os mentores que concluíram a Aula ${id} deverão refazê-la. Deseja continuar?`,
     'Confirmar',
     ()=>{
-      v.requiresRecycle = true;
+      v.requiresUpdate = true;
       v.updatedAt = new Date().toLocaleDateString('pt-BR');
       saveLessonVersions(versions);
       toast(`Reciclagem da Aula ${id} ativada para todos os mentores`,'suc');
@@ -5174,11 +5242,11 @@ function triggerRecycle(id){
   );
 }
 
-function cancelRecycle(id){
+function cancelUpdate(id){
   const versions = getLessonVersions();
   const v = versions.find(x=>x.id===id);
   if(!v) return;
-  v.requiresRecycle = false;
+  v.requiresUpdate = false;
   saveLessonVersions(versions);
   toast(`Reciclagem da Aula ${id} cancelada`,'suc');
   renderAdminTraining();
@@ -5190,21 +5258,21 @@ function resetMentorTraining(userId, name){
     `Resetar todo o progresso de treinamento de "${name}"? Esta ação não pode ser desfeita.`,
     'Resetar',
     ()=>{
-      DB.set('training_progress_'+userId, {completed:[], scores:{}, recycled:[], completedVersions:{}});
+      DB.set('training_progress_'+userId, {completed:[], scores:{}, updated:[], completedVersions:{}});
       toast(`Progresso de ${name} resetado`,'suc');
       renderAdminTraining();
     }
   );
 }
 
-function forceMentorRecycle(userId, name){
+function forceMentorUpdate(userId, name){
   showConfirm(
-    'Forçar reciclagem total',
+    'Forçar atualização total',
     `Exigir que "${name}" refaça todas as aulas completadas?`,
     'Forçar',
     ()=>{
-      const p = DB.get('training_progress_'+userId)||{completed:[],scores:{},recycled:[],completedVersions:{}};
-      // Reset completedVersions so all completed lessons need recycle
+      const p = DB.get('training_progress_'+userId)||{completed:[],scores:{},updated:[],completedVersions:{}};
+      // Reset completedVersions so all completed lessons need update
       p.completedVersions = {};
       DB.set('training_progress_'+userId, p);
       toast(`Reciclagem total ativada para ${name}`,'suc');
@@ -5229,15 +5297,15 @@ window.renderLesson = function(){
       p.innerHTML = `<iframe src="${convertToEmbedUrl(v.videoUrl)}" allowfullscreen style="width:100%;height:100%;border:0;border-radius:var(--radius);"></iframe>`;
     });
   }
-  // Show recycle notice if pending
+  // Show update notice if pending
   if(currentUser && currentUser.role==='mentor'){
-    const needsRecycle = getMentorRecycleNeeds(currentUser.id);
-    if(needsRecycle.includes(lessonId)){
+    const needsUpdate = getMentorUpdateNeeds(currentUser.id);
+    if(needsUpdate.includes(lessonId)){
       const header = document.querySelector('.page-header');
       if(header){
         const notice = document.createElement('div');
         notice.style.cssText = 'background:var(--amber-bg);border:1px solid var(--amber);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2);';
-        notice.innerHTML = '⚠ <strong style="color:var(--amber);">Reciclagem obrigatória</strong> — Esta aula foi atualizada. Reveja o conteúdo e refaça a prova para manter sua habilitação.';
+        notice.innerHTML = '⚠ <strong style="color:var(--amber);">Atualização obrigatória</strong> — Esta aula foi atualizada. Reveja o conteúdo e refaça a prova para manter sua habilitação.';
         header.after(notice);
       }
     }
@@ -5262,23 +5330,388 @@ function convertToEmbedUrl(url){
   return url;
 }
 
-// ── PATCH renderTraining to show recycle warnings ────────────────────────────
+// ── PATCH renderTraining to show update warnings ────────────────────────────
 const _origRenderTraining = renderTraining;
 window.renderTraining = function(){
   _origRenderTraining.call(this);
-  // After render, update recycle status
+  // After render, update update status
   if(currentUser && currentUser.role === 'mentor'){
-    const recycleNeeds = getMentorRecycleNeeds(currentUser.id);
-    recycleNeeds.forEach(id=>{
+    const updateNeeds = getMentorUpdateNeeds(currentUser.id);
+    updateNeeds.forEach(id=>{
       const card = document.querySelector(`.lesson-card:nth-child(${id})`);
       if(card){
-        card.classList.add('recycle');
+        card.classList.add('update');
         const statusEl = card.querySelector('.lesson-status');
-        if(statusEl){ statusEl.textContent = 'RECICLAR'; statusEl.className = 'lesson-status recycle'; }
+        if(statusEl){ statusEl.textContent = 'ATUALIZAR'; statusEl.className = 'lesson-status update'; }
       }
     });
   }
 };
+
+
+
+// ══════════════════════════════════════════════
+// ADMIN — ATUALIZAÇÕES & DEPLOY PANEL
+// ══════════════════════════════════════════════
+
+// Integrated test suite
+function runIntegratedTests(){
+  const results = [];
+
+  function check(label, fn){
+    try {
+      const ok = fn();
+      results.push({label, ok, error: null});
+    } catch(e){
+      results.push({label, ok: false, error: e.message});
+    }
+  }
+
+  // AUTH TESTS
+  check('Auth: DB.get/set funciona', ()=>{
+    DB.set('__test__','ok');
+    return DB.get('__test__') === 'ok';
+  });
+  check('Auth: Admin luizarcala@outlook.com existe e está ativo', ()=>{
+    const users = DB.get('users')||[];
+    const admin = users.find(u=>u.email==='luizarcala@outlook.com');
+    return admin && admin.active && admin.role==='admin';
+  });
+  check('Auth: função doLogin existe', ()=> typeof doLogin === 'function');
+  check('Auth: função bootApp existe', ()=> typeof bootApp === 'function');
+  check('Auth: função checkSession existe', ()=> typeof checkSession === 'function');
+
+  // TRAINING TESTS
+  check('Training: LESSONS definido com 6 aulas', ()=> Array.isArray(LESSONS) && LESSONS.length === 6);
+  check('Training: renderTraining existe', ()=> typeof renderTraining === 'function');
+  check('Training: renderLesson existe', ()=> typeof renderLesson === 'function');
+  check('Training: startQuiz existe', ()=> typeof startQuiz === 'function');
+  check('Training: isTrainingComplete existe', ()=> typeof isTrainingComplete === 'function');
+  check('Training: getMentorUpdateNeeds existe', ()=> typeof getMentorUpdateNeeds === 'function');
+  check('Training: renderAdminTraining existe', ()=> typeof renderAdminTraining === 'function');
+
+  // SIDEBAR/ROUTER TESTS
+  check('Router: renderComp existe', ()=> typeof renderComp === 'function');
+  check('Router: renderDISC existe', ()=> typeof renderDISC === 'function');
+  check('Router: renderSWOT existe', ()=> typeof renderSWOT === 'function');
+  check('Router: renderVF existe', ()=> typeof renderVF === 'function');
+  check('Router: renderPeer360 existe', ()=> typeof renderPeer360 === 'function');
+  check('Router: renderMicroplano existe', ()=> typeof renderMicroplano === 'function');
+  check('Router: renderInstrumentoA existe', ()=> typeof renderInstrumentoA === 'function');
+  check('Router: renderInicioCiclo existe', ()=> typeof renderInicioCiclo === 'function');
+  check('Router: renderAdminEmpresas existe', ()=> typeof renderAdminEmpresas === 'function');
+  check('Router: renderAdminIAInsights existe', ()=> typeof renderAdminIAInsights === 'function');
+  check('Router: renderPerfil existe', ()=> typeof renderPerfil === 'function');
+
+  // COMPETENCIAS TESTS
+  check('Comp: buildCompHeader existe', ()=> typeof buildCompHeader === 'function');
+  check('Comp: compTab existe', ()=> typeof compTab === 'function');
+  check('Comp: ALL_COMPETENCIAS definido', ()=> Array.isArray(ALL_COMPETENCIAS) && ALL_COMPETENCIAS.length >= 10);
+  check('Comp: addCompByName existe', ()=> typeof addCompByName === 'function');
+  check('Comp: removeComp existe', ()=> typeof removeComp === 'function');
+
+  // VF TESTS
+  check('VF: renderVFHistory existe', ()=> typeof renderVFHistory === 'function');
+  check('VF: renderVFCompare existe', ()=> typeof renderVFCompare === 'function');
+  check('VF: saveVF existe', ()=> typeof saveVF === 'function');
+
+  // IA TESTS
+  check('IA: callAI existe', ()=> typeof callAI === 'function');
+  check('IA: showIALoading existe', ()=> typeof showIALoading === 'function');
+  check('IA: showIAResult existe', ()=> typeof showIAResult === 'function');
+
+  // UTILS TESTS
+  check('Utils: showConfirm existe (não usa confirm())', ()=> typeof showConfirm === 'function');
+  check('Utils: sbFetch existe', ()=> typeof sbFetch === 'function');
+  check('Utils: fmtDate existe', ()=> typeof fmtDate === 'function');
+  check('Utils: toast existe', ()=> typeof toast === 'function');
+  check('Utils: today existe', ()=> typeof today === 'function' && /\d{4}-\d{2}-\d{2}/.test(today()));
+  check('Utils: initials existe', ()=> typeof initials === 'function' && initials('Luiz Arcala') === 'LA');
+
+  // DATA INTEGRITY
+  check('Data: DB.get usuarios retorna array', ()=> Array.isArray(DB.get('users')));
+  check('Data: PLATFORM_VERSION definido', ()=> typeof PLATFORM_VERSION === 'string' && PLATFORM_VERSION.length > 0);
+  check('Data: getChangelog retorna array', ()=> Array.isArray(getChangelog()));
+
+  // UI TESTS
+  check('UI: sidebar element existe', ()=> !!document.getElementById('sidebar'));
+  check('UI: content-area existe', ()=> !!document.getElementById('content-area'));
+  check('UI: confirm-modal existe', ()=> !!document.getElementById('confirm-modal'));
+  check('UI: auth-screen existe', ()=> !!document.getElementById('auth-screen'));
+  check('UI: topbar avatar existe', ()=> !!document.getElementById('top-av'));
+
+  return results;
+}
+
+function renderAdminUpdates(){
+  const changelog = getChangelog();
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Atualizações & Deploy</div>
+    <div class="page-sub">Gestão de versões, análise de impacto, testes integrados e publicação de atualizações</div>
+  </div>
+
+  <!-- Current Version Banner -->
+  <div style="background:linear-gradient(135deg,rgba(240,192,64,.1) 0%,rgba(240,192,64,.02) 100%);border:1px solid var(--gold-border);border-radius:var(--radius);padding:18px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <div>
+      <div style="font-size:11px;color:var(--text4);letter-spacing:.08em;font-weight:600;margin-bottom:4px;">VERSÃO ATUAL DA PLATAFORMA</div>
+      <div style="font-size:28px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace;">v${PLATFORM_VERSION}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px;">Arcala Insight — Build ${PLATFORM_BUILD_DATE}</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-outline" onclick="runTestSuite()">◎ Rodar testes integrados</button>
+      <button class="btn btn-gold" onclick="openNewUpdateModal()">+ Registrar nova atualização</button>
+    </div>
+  </div>
+
+  <!-- Test results area -->
+  <div id="test-results-area" style="display:none;margin-bottom:20px;"></div>
+
+  <!-- New update modal -->
+  <div id="new-update-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:400;align-items:center;justify-content:center;">
+    <div style="background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);padding:28px;width:600px;max-width:90vw;max-height:85vh;overflow-y:auto;">
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:18px;">Registrar nova atualização</div>
+
+      <div class="grid-2">
+        <div class="field"><label class="field-label">Nova versão</label>
+          <input type="text" class="form-input" id="upd-version" placeholder="ex: 1.3.0">
+        </div>
+        <div class="field"><label class="field-label">Tipo</label>
+          <select class="form-select" id="upd-type">
+            <option value="feature">🆕 Nova funcionalidade</option>
+            <option value="improvement">⬆ Melhoria</option>
+            <option value="fix">🔧 Correção de bug</option>
+            <option value="content">📝 Atualização de conteúdo</option>
+            <option value="breaking">⚠ Mudança significativa</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field"><label class="field-label">Resumo da atualização</label>
+        <input type="text" class="form-input" id="upd-summary" placeholder="Descreva em uma frase o que foi atualizado">
+      </div>
+
+      <div class="field"><label class="field-label">Mudanças realizadas (uma por linha)</label>
+        <textarea class="form-input" id="upd-changes" rows="5" placeholder="• Nova funcionalidade X&#10;• Melhoria no instrumento Y&#10;• Correção do bug Z"></textarea>
+      </div>
+
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:10px;letter-spacing:.06em;">ANÁLISE DE IMPACTO NO TREINAMENTO</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6;">Quais aulas precisam ser atualizadas por causa desta mudança?</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+          ${LESSONS.map(l=>`
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);cursor:pointer;background:var(--bg3);padding:6px 10px;border-radius:20px;border:1px solid var(--border);">
+            <input type="checkbox" id="impact-${l.id}" style="accent-color:var(--gold);" value="${l.id}">
+            Aula ${l.id}
+          </label>`).join('')}
+        </div>
+        <div class="field" style="margin-bottom:0;"><label class="field-label">O que muda no conteúdo de cada aula impactada?</label>
+          <textarea class="form-input" id="upd-training-note" rows="3" placeholder="Ex: Aula 3 — adicionar novo instrumento X. Aula 6 — atualizar seção de IA com novos botões..."></textarea>
+        </div>
+      </div>
+
+      <div class="field"><label class="field-label">Impacto para o mentor</label>
+        <input type="text" class="form-input" id="upd-mentor-impact" placeholder="O que o mentor precisa saber ou fazer?">
+      </div>
+      <div class="field"><label class="field-label">Impacto para o mentorado</label>
+        <input type="text" class="form-input" id="upd-mentorado-impact" placeholder="O que muda na experiência do mentorado?">
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-gold" onclick="saveNewUpdate()">Salvar e analisar impacto</button>
+        <button class="btn btn-outline" onclick="closeNewUpdateModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Changelog -->
+  <div class="section-label">Histórico de versões</div>
+  ${changelog.slice().reverse().map((entry,i)=>{
+    const typeColors = {feature:'var(--green)',improvement:'var(--blue)',fix:'var(--amber)',content:'var(--text3)',breaking:'var(--red)',launch:'var(--gold)'};
+    const typeLabels = {feature:'NOVA FUNC.','improvement':'MELHORIA',fix:'BUG FIX',content:'CONTEÚDO',breaking:'BREAKING',launch:'LANÇAMENTO'};
+    const color = typeColors[entry.type]||'var(--text3)';
+    const label = typeLabels[entry.type]||entry.type.toUpperCase();
+    return `
+    <div class="panel" style="margin-bottom:12px;${i===0?'border-color:var(--gold);':''}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="font-size:20px;font-weight:700;color:${i===0?'var(--gold)':'var(--text3)'};font-family:'Space Mono',monospace;">v${entry.version}</div>
+          <div>
+            <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:20px;background:${color}20;color:${color};border:1px solid ${color}40;">${label}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text4);">${entry.date||''}</div>
+        </div>
+        ${i===0?'<span style="font-size:10px;font-weight:700;color:var(--gold);letter-spacing:.06em;">VERSÃO ATUAL</span>':''}
+      </div>
+
+      <div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:10px;">${entry.summary}</div>
+
+      ${entry.changes&&entry.changes.length?`
+      <ul style="padding-left:18px;margin-bottom:12px;">
+        ${entry.changes.map(c=>`<li style="font-size:12px;color:var(--text2);margin-bottom:4px;line-height:1.5;">${c}</li>`).join('')}
+      </ul>`:''}
+
+      ${(entry.trainingImpact&&entry.trainingImpact.length)||(entry.trainingNote)?`
+      <div style="background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:10px;">
+        <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:5px;letter-spacing:.06em;">IMPACTO NO TREINAMENTO</div>
+        ${entry.trainingImpact&&entry.trainingImpact.length?`<div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Aulas afetadas: ${entry.trainingImpact.map(id=>'Aula '+id).join(', ')}</div>`:''}
+        ${entry.trainingNote?`<div style="font-size:11px;color:var(--text2);">${entry.trainingNote}</div>`:''}
+      </div>`:''}
+
+      <div style="display:flex;gap:16px;flex-wrap:wrap;">
+        ${entry.mentorImpact?`<div style="font-size:11px;"><span style="color:var(--text4);">Mentor: </span><span style="color:var(--text2);">${entry.mentorImpact}</span></div>`:''}
+        ${entry.mentoradoImpact?`<div style="font-size:11px;"><span style="color:var(--text4);">Mentorado: </span><span style="color:var(--text2);">${entry.mentoradoImpact}</span></div>`:''}
+      </div>
+    </div>`;
+  }).join('')}
+  `;
+}
+
+function openNewUpdateModal(){
+  document.getElementById('new-update-modal').style.display='flex';
+}
+
+function closeNewUpdateModal(){
+  document.getElementById('new-update-modal').style.display='none';
+}
+
+function saveNewUpdate(){
+  const version = document.getElementById('upd-version')?.value.trim();
+  const type = document.getElementById('upd-type')?.value;
+  const summary = document.getElementById('upd-summary')?.value.trim();
+  const changesRaw = document.getElementById('upd-changes')?.value.trim();
+  const trainingNote = document.getElementById('upd-training-note')?.value.trim();
+  const mentorImpact = document.getElementById('upd-mentor-impact')?.value.trim();
+  const mentoradoImpact = document.getElementById('upd-mentorado-impact')?.value.trim();
+
+  if(!version||!summary){ toast('Informe versão e resumo','err'); return; }
+
+  const impactedLessons = LESSONS
+    .filter(l=>document.getElementById('impact-'+l.id)?.checked)
+    .map(l=>l.id);
+
+  const changes = changesRaw ? changesRaw.split('\n').map(c=>c.replace(/^[•\-\*]\s*/,'')).filter(Boolean) : [];
+
+  const entry = {
+    version,
+    date: today(),
+    type,
+    summary,
+    changes,
+    trainingImpact: impactedLessons,
+    trainingNote: trainingNote||'',
+    mentorImpact: mentorImpact||'Nenhum impacto',
+    mentoradoImpact: mentoradoImpact||'Nenhum impacto',
+  };
+
+  addChangelog(entry);
+
+  // If training impacted — trigger update requirement on those lessons
+  if(impactedLessons.length > 0){
+    const versions = getLessonVersions();
+    impactedLessons.forEach(id=>{
+      const v = versions.find(x=>x.id===id);
+      if(v){
+        // Bump minor version
+        const parts = (v.version||'1.0').split('.');
+        parts[parts.length-1] = String(parseInt(parts[parts.length-1]||0)+1);
+        v.version = parts.join('.');
+        v.requiresUpdate = true;
+        v.updateNote = trainingNote||summary;
+        v.updatedAt = today();
+      }
+    });
+    saveLessonVersions(versions);
+    toast(`Atualização v${version} registrada — ${impactedLessons.length} aula(s) marcadas para atualização obrigatória`, 'suc');
+  } else {
+    toast(`Versão v${version} registrada no changelog`, 'suc');
+  }
+
+  closeNewUpdateModal();
+  renderAdminUpdates();
+}
+
+async function runTestSuite(){
+  const area = document.getElementById('test-results-area');
+  area.style.display='block';
+  area.innerHTML = `
+  <div class="panel" style="margin-bottom:16px;">
+    <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px;">⏳ Executando testes integrados...</div>
+    <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden;">
+      <div style="height:100%;background:var(--gold);border-radius:2px;animation:pulse 1s infinite;width:60%;"></div>
+    </div>
+  </div>`;
+
+  await new Promise(r=>setTimeout(r,600));
+
+  const results = runIntegratedTests();
+  const passed = results.filter(r=>r.ok).length;
+  const failed = results.filter(r=>!r.ok).length;
+  const total = results.length;
+  const pct = Math.round((passed/total)*100);
+
+  area.innerHTML = `
+  <div class="panel" style="margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:${failed===0?'var(--green)':'var(--red)'}">
+          ${failed===0?'✓ Todos os testes passaram':'✗ Falhas detectadas — corrigir antes do deploy'}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">${passed}/${total} testes · ${pct}% de aprovação</div>
+      </div>
+      <div style="font-size:24px;font-weight:700;font-family:'Space Mono',monospace;color:${failed===0?'var(--green)':'var(--red)'};">${pct}%</div>
+    </div>
+
+    <div class="training-progress-bar" style="margin-bottom:16px;">
+      <div class="training-progress-fill" style="width:${pct}%;background:${failed===0?'var(--green)':'var(--red)'}"></div>
+    </div>
+
+    ${failed > 0 ? `
+    <div style="background:var(--red-bg);border:1px solid var(--red-border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px;letter-spacing:.06em;">FALHAS DETECTADAS — DEPLOY BLOQUEADO</div>
+      ${results.filter(r=>!r.ok).map(r=>`
+      <div style="font-size:12px;color:var(--red);margin-bottom:4px;">
+        ✗ ${r.label}${r.error?' — '+r.error:''}
+      </div>`).join('')}
+    </div>` : `
+    <div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;color:var(--green);">✓ PLATAFORMA ESTÁVEL — Pronto para deploy</div>
+    </div>`}
+
+    <details style="margin-top:8px;">
+      <summary style="font-size:11px;color:var(--text3);cursor:pointer;">Ver todos os ${total} resultados</summary>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:4px;">
+        ${results.map(r=>`
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:${r.ok?'var(--text3)':'var(--red)'};">
+          <span style="color:${r.ok?'var(--green)':'var(--red)'};">${r.ok?'✓':'✗'}</span>
+          ${r.label}
+        </div>`).join('')}
+      </div>
+    </details>
+
+    <div style="margin-top:14px;display:flex;gap:8px;">
+      <button class="btn btn-outline btn-sm" onclick="runTestSuite()">↺ Rodar novamente</button>
+      ${failed===0?`<button class="btn btn-gold btn-sm" onclick="registerDeploy()">✓ Confirmar deploy v${PLATFORM_VERSION}</button>`:''}
+    </div>
+  </div>
+  `;
+
+  area.scrollIntoView({behavior:'smooth'});
+}
+
+function registerDeploy(){
+  const deployed = DB.get('deploys')||[];
+  deployed.push({
+    version: PLATFORM_VERSION,
+    date: today(),
+    deployedAt: new Date().toLocaleString('pt-BR'),
+    deployedBy: currentUser?.name||'Admin',
+    status: 'success'
+  });
+  DB.set('deploys', deployed);
+  toast(`Deploy v${PLATFORM_VERSION} registrado com sucesso!`, 'suc');
+}
 
 
 // ══════════════════════════════════════════════
@@ -5440,6 +5873,11 @@ function bootApp(user){
   // If mentor and training not complete, redirect to training
   if(role === 'mentor' && !isTrainingComplete()){
     setTimeout(()=>showPage('training'), 100);
+  }
+  // Show version badge for admin
+  if(role === 'admin'){
+    const badge = document.getElementById('platform-version-badge');
+    if(badge){ badge.textContent = 'v'+PLATFORM_VERSION; badge.style.display='block'; }
   }
 }
 

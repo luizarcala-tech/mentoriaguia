@@ -1151,7 +1151,7 @@ async function renderAdminUsers(){
     return `<option value="">— Sem empresa —</option>${empresas.map(e=>`<option value="${e.id}" ${sel===e.id?'selected':''}>${e.nome}</option>`).join('')}`;
   }
   function mentorOpts(sel=''){
-    return `<option value="">— Sem mentor —</option>${mentors.map(m=>`<option value="${m.id}" ${sel===m.id?'selected':''}>${m.name}</option>`).join('')}`;
+    return `<option value="">— Sem mentor —</option>${mentors.map(m=>`<option value="${m.id}" ${String(sel)===String(m.id)?'selected':''}>${m.name}</option>`).join('')}`;
   }
   function planOpts(sel=''){
     return ['Ciclo único — 12 semanas','Renovável trimestral','Trial — 2 semanas','Acesso institucional'].map(p=>`<option ${sel===p?'selected':''}>${p}</option>`).join('');
@@ -1262,8 +1262,9 @@ function renderUsersTable(users){
   tbody.innerHTML = users.map(u=>{
     const rolePill = {admin:'pill-admin',mentor:'pill-mentor',mentorado:'pill-mentorado'}[u.role]||'pill-mentorado';
     const empresa = empresas.find(e=>e.id===u.empresa_id);
-    const mentor = allUsers.find(x=>x.id===(u.mentor_id||u.mentor));
-    const isEditing = editingUserId === u.id;
+    const mentorRef = u.mentor_id||u.mentor||null;
+    const mentor = mentorRef ? allUsers.find(x=>String(x.id)===String(mentorRef)) : null;
+    const isEditing = String(editingUserId) === String(u.id);
     return `<tr style="cursor:pointer;${isEditing?'background:rgba(240,192,64,.06);outline:1px solid var(--gold);':''}"
       onclick="editUser('${u.id}')" title="Clique para editar">
       <td><div style="display:flex;align-items:center;gap:10px;">
@@ -1297,8 +1298,7 @@ function filterUsers(searchId){
 }
 
 function editUser(id){
-  editingUserId = id;
-  // Scroll to form
+  editingUserId = String(id);
   document.getElementById('user-form-panel')?.scrollIntoView({behavior:'smooth'});
   renderAdminUsers();
 }
@@ -1311,8 +1311,8 @@ function cancelEdit(){
 async function updateUser(){
   if(!editingUserId) return;
   const users = DB.get('users')||[];
-  const u = users.find(x=>x.id===editingUserId);
-  if(!u){ toast('Usuário não encontrado','err'); return; }
+  const u = users.find(x=>String(x.id)===String(editingUserId));
+  if(!u){ toast('Usuário não encontrado — recarregue a página','err'); editingUserId=null; renderAdminUsers(); return; }
 
   const name     = document.getElementById('nu-name')?.value.trim();
   const role     = document.getElementById('nu-role')?.value;
@@ -6400,14 +6400,17 @@ function renderAdminMatch(){
   const users = DB.get('users')||[];
   // Admins also appear as mentors for testing/visualization
   // Normalize role comparison to handle any case/spacing variations
-  const mentors  = users.filter(u=>['mentor','admin'].includes((u.role||'').toLowerCase().trim()));
-  const mentees  = users.filter(u=>(u.role||'').toLowerCase().trim()==='mentorado');
+  // Normalize role: trim, lowercase, handle any variation
+  const norm = u => (u.role||'').toLowerCase().trim();
+  const mentors  = users.filter(u=>['mentor','admin'].includes(norm(u)));
+  const mentees  = users.filter(u=>norm(u)==='mentorado');
 
   // Build current pairs
   const pairs = [];
   mentees.forEach(m=>{
-    if(m.mentor_id){
-      const mentor = users.find(u=>u.id===m.mentor_id);
+    const mref = m.mentor_id||m.mentor||null;
+    if(mref){
+      const mentor = users.find(u=>String(u.id)===String(mref));
       if(mentor) pairs.push({mentor, mentee: m});
     }
   });
@@ -6485,8 +6488,9 @@ function renderAdminMatch(){
       </div>
       <div>
         ${mentees.length ? mentees.map(m=>{
-          const mentor = m.mentor_id ? users.find(u=>u.id===m.mentor_id) : null;
-          const isSelected = matchSelectedMentee === m.id;
+          const mref2 = m.mentor_id||m.mentor||null;
+          const mentor = mref2 ? users.find(u=>String(u.id)===String(mref2)) : null;
+          const isSelected = String(matchSelectedMentee) === String(m.id);
           return `<div class="match-user-card ${isSelected?'selected':mentor?'matched':''}"
             onclick="selectMatchMentee('${m.id}')">
             <div class="match-avatar ${isSelected?'gold':mentor?'green':''}">${initials(m.name)}</div>
@@ -6573,12 +6577,12 @@ function renderAdminMatch(){
 }
 
 function selectMatchMentor(id){
-  matchSelectedMentor = matchSelectedMentor === id ? null : id;
+  matchSelectedMentor = String(matchSelectedMentor) === String(id) ? null : String(id);
   renderAdminMatch();
 }
 
 function selectMatchMentee(id){
-  matchSelectedMentee = matchSelectedMentee === id ? null : id;
+  matchSelectedMentee = String(matchSelectedMentee) === String(id) ? null : String(id);
   renderAdminMatch();
 }
 

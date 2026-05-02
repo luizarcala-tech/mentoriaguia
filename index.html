@@ -768,6 +768,8 @@ const MENUS = {
     {section:'Inteligência'},
     {id:'admin-ia-insights',icon:'✦',label:'IA GUIA Insights'},
     {id:'admin-nps',icon:'◎',label:'NPS & Métricas'},
+    {section:'Treinamento'},
+    {id:'admin-training',icon:'◈',label:'Gestão de Treinamentos'},
     {section:'Sistema'},
     {id:'admin-config',icon:'◫',label:'Configurações'},
   ],
@@ -913,6 +915,7 @@ function showPage(id){
     'fase-a': renderInstrumentoA,
     'inicio-ciclo': renderInicioCiclo,
     'admin-empresas': renderAdminEmpresas,
+    'admin-training': renderAdminTraining,
     'admin-ia-insights': renderAdminIAInsights,
     'training': renderTraining,
     'lesson': renderLesson,
@@ -4858,6 +4861,425 @@ function submitQuiz(){
 
   if(passed) toast('Aprovado! '+score+'/10','suc');
 }
+
+
+// ══════════════════════════════════════════════
+// TRAINING PART 2 — Recycle System + Admin Panel
+// ══════════════════════════════════════════════
+
+// ── LESSON VERSION MANAGEMENT ────────────────────────────────────────────────
+function getLessonVersions(){
+  return DB.get('lesson_versions') || LESSONS.map(l=>({
+    id: l.id,
+    version: l.version,
+    title: l.title,
+    videoUrl: '',
+    updateNote: '',
+    requiresRecycle: false,
+    updatedAt: ''
+  }));
+}
+
+function saveLessonVersions(versions){
+  DB.set('lesson_versions', versions);
+}
+
+// Check if a mentor needs recycle on any lesson
+function getMentorRecycleNeeds(userId){
+  const p = DB.get('training_progress_'+userId) || {completed:[], scores:{}, recycled:[]};
+  const versions = getLessonVersions();
+  const recycleNeeded = [];
+
+  // Check each completed lesson — if admin marked it as requiresRecycle
+  // and user hasn't re-completed it since
+  versions.forEach(v => {
+    if(v.requiresRecycle && p.completed.includes(v.id) && !p.recycled.includes(v.id)){
+      const userCompletedVersion = p.completedVersions?.[v.id] || '1.0';
+      if(userCompletedVersion !== v.version){
+        recycleNeeded.push(v.id);
+      }
+    }
+  });
+  return recycleNeeded;
+}
+
+// Override isTrainingComplete to account for recycles
+const _origIsTrainingComplete = isTrainingComplete;
+window.isTrainingComplete = function(){
+  if(!currentUser || currentUser.role !== 'mentor') return true;
+  const userId = currentUser.id;
+  const p = DB.get('training_progress_'+userId) || {completed:[], scores:{}, recycled:[]};
+  const versions = getLessonVersions();
+
+  // All lessons must be completed
+  if(p.completed.length < LESSONS.length) return false;
+
+  // Check for mandatory recycles
+  const recycleNeeds = [];
+  versions.forEach(v => {
+    if(v.requiresRecycle){
+      const userVersion = p.completedVersions?.[v.id];
+      if(userVersion !== v.version) recycleNeeds.push(v.id);
+    }
+  });
+
+  return recycleNeeds.length === 0;
+};
+
+// After passing quiz — save version info
+const _origSubmitQuiz = submitQuiz;
+window.submitQuiz = function(){
+  _origSubmitQuiz.call(this);
+  // After quiz, save which version was completed
+  if(currentQuiz){
+    const versions = getLessonVersions();
+    const v = versions.find(x=>x.id===currentQuiz.lessonId);
+    if(v){
+      const p = getTrainingProgress();
+      if(!p.completedVersions) p.completedVersions = {};
+      p.completedVersions[currentQuiz.lessonId] = v.version;
+      saveTrainingProgress(p);
+    }
+  }
+};
+
+// ── ADMIN TRAINING MANAGEMENT PAGE ───────────────────────────────────────────
+function renderAdminTraining(){
+  const versions = getLessonVersions();
+  const users = DB.get('users')||[];
+  const mentors = users.filter(u=>u.role==='mentor'&&u.active);
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Gestão de Treinamentos</div>
+    <div class="page-sub">Gerencie as aulas, versões, vídeos e reciclagens dos mentores</div>
+  </div>
+
+  <!-- Summary KPIs -->
+  <div class="kpi-grid" style="margin-bottom:20px;">
+    <div class="kpi">
+      <div class="kpi-label">Mentores Ativos</div>
+      <div class="kpi-value">${mentors.length}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Totalmente Treinados</div>
+      <div class="kpi-value" style="color:var(--green)">
+        ${mentors.filter(m=>{
+          const p = DB.get('training_progress_'+m.id)||{completed:[]};
+          return p.completed.length >= LESSONS.length;
+        }).length}
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Com Reciclagem Pendente</div>
+      <div class="kpi-value" style="color:var(--amber)">
+        ${mentors.filter(m=>getMentorRecycleNeeds(m.id).length>0).length}
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Sem Iniciar</div>
+      <div class="kpi-value" style="color:var(--red)">
+        ${mentors.filter(m=>{
+          const p = DB.get('training_progress_'+m.id)||{completed:[]};
+          return p.completed.length === 0;
+        }).length}
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:20px;">
+    <!-- Lesson management -->
+    <div>
+      <div class="section-label">Aulas e versões</div>
+      ${versions.map(v=>`
+      <div class="panel" style="margin-bottom:12px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;">
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:600;color:var(--text)">Aula ${v.id} — ${v.title}</div>
+            <div style="font-size:10px;color:var(--text4);margin-top:2px;font-family:'Space Mono',monospace;">v${v.version} ${v.updatedAt?'· '+v.updatedAt:''}</div>
+            ${v.requiresRecycle?`<div style="font-size:10px;color:var(--amber);margin-top:4px;font-weight:600;">⚠ Reciclagem obrigatória ativa</div>`:''}
+            ${v.updateNote?`<div style="font-size:11px;color:var(--text3);margin-top:4px;font-style:italic;">"${v.updateNote}"</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:5px;">
+            <button class="btn btn-outline btn-xs" onclick="editLesson(${v.id})">Editar</button>
+            ${v.requiresRecycle?
+              `<button class="btn btn-xs" style="background:var(--amber-bg);border-color:var(--amber);color:var(--amber);" onclick="cancelRecycle(${v.id})">Cancelar reciclagem</button>`:
+              `<button class="btn btn-xs" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red);" onclick="triggerRecycle(${v.id})">Exigir reciclagem</button>`
+            }
+          </div>
+        </div>
+
+        <!-- Video URL field -->
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="flex:1;position:relative;">
+            <input type="url" class="form-input" id="video-url-${v.id}"
+              placeholder="Cole a URL do YouTube ou Vimeo..."
+              value="${v.videoUrl||''}"
+              style="font-size:11px;padding:7px 12px;">
+          </div>
+          <button class="btn btn-outline btn-xs" onclick="saveVideoUrl(${v.id})">Salvar URL</button>
+          ${v.videoUrl?`<a href="${v.videoUrl}" target="_blank" class="btn btn-outline btn-xs">▶ Ver</a>`:''}
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <!-- Mentor progress -->
+    <div>
+      <div class="section-label">Progresso dos mentores</div>
+      ${mentors.length === 0 ?
+        `<div class="panel" style="color:var(--text3);font-size:12px;">Nenhum mentor ativo ainda.</div>` :
+        mentors.map(m=>{
+          const p = DB.get('training_progress_'+m.id)||{completed:[],scores:{},recycled:[]};
+          const recycleNeeds = getMentorRecycleNeeds(m.id);
+          const pct = Math.round((p.completed.length/LESSONS.length)*100);
+          const allDone = p.completed.length >= LESSONS.length && recycleNeeds.length === 0;
+          return `
+          <div class="panel" style="margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text3);flex-shrink:0;">${initials(m.name)}</div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:600;color:var(--text)">${m.name}</div>
+                <div style="font-size:10px;color:var(--text3)">${m.email}</div>
+              </div>
+              <div>
+                <span class="pill ${allDone?'pill-active':recycleNeeds.length>0?'pill-pending':'pill-locked'}">
+                  ${allDone?'HABILITADO':recycleNeeds.length>0?'RECICLAGEM':'EM PROGRESSO'}
+                </span>
+              </div>
+            </div>
+            <div class="training-progress-bar"><div class="training-progress-fill" style="width:${pct}%"></div></div>
+            <div style="font-size:10px;color:var(--text3);margin-top:5px;margin-bottom:8px;">
+              ${p.completed.length}/${LESSONS.length} aulas · ${pct}%
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              ${LESSONS.map(l=>{
+                const done = p.completed.includes(l.id);
+                const recycle = recycleNeeds.includes(l.id);
+                const score = p.scores[l.id];
+                return `<div title="Aula ${l.id}${score?' · '+score+'/10':''}" style="width:28px;height:28px;border-radius:50%;background:${recycle?'var(--amber-bg)':done?'var(--green)':'var(--bg3)'};border:1.5px solid ${recycle?'var(--amber)':done?'var(--green)':'var(--border2)'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${recycle?'var(--amber)':done?'#fff':'var(--text4)'};">${recycle?'↻':l.id}</div>`;
+              }).join('')}
+            </div>
+            ${recycleNeeds.length>0?`
+            <div style="margin-top:8px;font-size:11px;color:var(--amber);">
+              ⚠ Reciclagem pendente: Aulas ${recycleNeeds.join(', ')}
+            </div>`:''}
+            <div style="margin-top:8px;display:flex;gap:6px;">
+              <button class="btn btn-outline btn-xs" onclick="resetMentorTraining('${m.id}','${m.name}')">Resetar progresso</button>
+              <button class="btn btn-outline btn-xs" onclick="forceMentorRecycle('${m.id}','${m.name}')">Forçar reciclagem total</button>
+            </div>
+          </div>`;
+        }).join('')
+      }
+    </div>
+  </div>
+
+  <!-- Edit lesson modal -->
+  <div id="lesson-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:400;display:none;align-items:center;justify-content:center;">
+    <div style="background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);padding:28px;width:500px;max-width:90vw;">
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:16px;" id="lesson-edit-title">Editar Aula</div>
+      <div class="field"><label class="field-label">Nova versão (ex: 1.1, 2.0)</label><input type="text" class="form-input" id="edit-version" placeholder="1.0"></div>
+      <div class="field"><label class="field-label">Nota sobre a atualização</label><textarea class="form-input" id="edit-note" rows="3" placeholder="Descreva o que mudou nesta versão..."></textarea></div>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="edit-recycle" style="accent-color:var(--gold);width:14px;height:14px;">
+          <span style="font-size:12px;color:var(--text2);">Exigir reciclagem de todos os mentores que já completaram esta aula</span>
+        </label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="btn btn-gold" onclick="saveLessonEdit()">Salvar atualização</button>
+        <button class="btn btn-outline" onclick="closeLessonEdit()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="admin-training-ia" style="display:none;margin-top:16px;"></div>
+  `;
+}
+
+let editingLessonId = null;
+
+function editLesson(id){
+  editingLessonId = id;
+  const versions = getLessonVersions();
+  const v = versions.find(x=>x.id===id);
+  document.getElementById('lesson-edit-title').textContent = `Atualizar Aula ${id} — ${v.title}`;
+  document.getElementById('edit-version').value = v.version || '1.0';
+  document.getElementById('edit-note').value = '';
+  document.getElementById('edit-recycle').checked = false;
+  document.getElementById('lesson-edit-modal').style.display='flex';
+}
+
+function closeLessonEdit(){
+  document.getElementById('lesson-edit-modal').style.display='none';
+  editingLessonId = null;
+}
+
+function saveLessonEdit(){
+  if(!editingLessonId) return;
+  const newVersion = document.getElementById('edit-version').value.trim();
+  const note = document.getElementById('edit-note').value.trim();
+  const requireRecycle = document.getElementById('edit-recycle').checked;
+
+  if(!newVersion){ toast('Informe a versão','err'); return; }
+
+  const versions = getLessonVersions();
+  const idx = versions.findIndex(x=>x.id===editingLessonId);
+  if(idx<0) return;
+
+  versions[idx].version = newVersion;
+  versions[idx].updateNote = note;
+  versions[idx].requiresRecycle = requireRecycle;
+  versions[idx].updatedAt = new Date().toLocaleDateString('pt-BR');
+
+  // Also update LESSONS array in memory
+  const lesson = LESSONS.find(l=>l.id===editingLessonId);
+  if(lesson) lesson.version = newVersion;
+
+  saveLessonVersions(versions);
+  closeLessonEdit();
+  toast(`Aula ${editingLessonId} atualizada para v${newVersion}${requireRecycle?' — reciclagem ativa':''}`, 'suc');
+  renderAdminTraining();
+}
+
+function saveVideoUrl(id){
+  const url = document.getElementById('video-url-'+id)?.value.trim();
+  const versions = getLessonVersions();
+  const idx = versions.findIndex(x=>x.id===id);
+  if(idx<0) return;
+  versions[idx].videoUrl = url;
+  saveLessonVersions(versions);
+  // Update LESSONS array so renderLesson uses it
+  const lesson = LESSONS.find(l=>l.id===id);
+  if(lesson) lesson.videoUrl = url;
+  toast('URL do vídeo salva!','suc');
+  renderAdminTraining();
+}
+
+function triggerRecycle(id){
+  const versions = getLessonVersions();
+  const v = versions.find(x=>x.id===id);
+  if(!v) return;
+  showConfirm(
+    'Exigir reciclagem',
+    `Todos os mentores que concluíram a Aula ${id} deverão refazê-la. Deseja continuar?`,
+    'Confirmar',
+    ()=>{
+      v.requiresRecycle = true;
+      v.updatedAt = new Date().toLocaleDateString('pt-BR');
+      saveLessonVersions(versions);
+      toast(`Reciclagem da Aula ${id} ativada para todos os mentores`,'suc');
+      renderAdminTraining();
+    },
+    true
+  );
+}
+
+function cancelRecycle(id){
+  const versions = getLessonVersions();
+  const v = versions.find(x=>x.id===id);
+  if(!v) return;
+  v.requiresRecycle = false;
+  saveLessonVersions(versions);
+  toast(`Reciclagem da Aula ${id} cancelada`,'suc');
+  renderAdminTraining();
+}
+
+function resetMentorTraining(userId, name){
+  showConfirm(
+    'Resetar treinamento',
+    `Resetar todo o progresso de treinamento de "${name}"? Esta ação não pode ser desfeita.`,
+    'Resetar',
+    ()=>{
+      DB.set('training_progress_'+userId, {completed:[], scores:{}, recycled:[], completedVersions:{}});
+      toast(`Progresso de ${name} resetado`,'suc');
+      renderAdminTraining();
+    }
+  );
+}
+
+function forceMentorRecycle(userId, name){
+  showConfirm(
+    'Forçar reciclagem total',
+    `Exigir que "${name}" refaça todas as aulas completadas?`,
+    'Forçar',
+    ()=>{
+      const p = DB.get('training_progress_'+userId)||{completed:[],scores:{},recycled:[],completedVersions:{}};
+      // Reset completedVersions so all completed lessons need recycle
+      p.completedVersions = {};
+      DB.set('training_progress_'+userId, p);
+      toast(`Reciclagem total ativada para ${name}`,'suc');
+      renderAdminTraining();
+    },
+    true
+  );
+}
+
+// ── PATCH renderLesson to use videoUrl from versions ─────────────────────────
+// Update video placeholder dynamically when lesson renders
+const _origRenderLesson = renderLesson;
+window.renderLesson = function(){
+  _origRenderLesson.call(this);
+  // After render, patch video placeholders with saved URL
+  const lessonId = DB.get('current_lesson') || 1;
+  const versions = getLessonVersions();
+  const v = versions.find(x=>x.id===lessonId);
+  if(v && v.videoUrl){
+    const placeholders = document.querySelectorAll('.video-placeholder');
+    placeholders.forEach(p=>{
+      p.innerHTML = `<iframe src="${convertToEmbedUrl(v.videoUrl)}" allowfullscreen style="width:100%;height:100%;border:0;border-radius:var(--radius);"></iframe>`;
+    });
+  }
+  // Show recycle notice if pending
+  if(currentUser && currentUser.role==='mentor'){
+    const needsRecycle = getMentorRecycleNeeds(currentUser.id);
+    if(needsRecycle.includes(lessonId)){
+      const header = document.querySelector('.page-header');
+      if(header){
+        const notice = document.createElement('div');
+        notice.style.cssText = 'background:var(--amber-bg);border:1px solid var(--amber);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text2);';
+        notice.innerHTML = '⚠ <strong style="color:var(--amber);">Reciclagem obrigatória</strong> — Esta aula foi atualizada. Reveja o conteúdo e refaça a prova para manter sua habilitação.';
+        header.after(notice);
+      }
+    }
+  }
+};
+
+function convertToEmbedUrl(url){
+  // YouTube
+  if(url.includes('youtube.com/watch')){
+    const id = new URL(url).searchParams.get('v');
+    return `https://www.youtube.com/embed/${id}`;
+  }
+  if(url.includes('youtu.be/')){
+    const id = url.split('youtu.be/')[1].split('?')[0];
+    return `https://www.youtube.com/embed/${id}`;
+  }
+  // Vimeo
+  if(url.includes('vimeo.com/')){
+    const id = url.split('vimeo.com/')[1].split('?')[0];
+    return `https://player.vimeo.com/video/${id}`;
+  }
+  return url;
+}
+
+// ── PATCH renderTraining to show recycle warnings ────────────────────────────
+const _origRenderTraining = renderTraining;
+window.renderTraining = function(){
+  _origRenderTraining.call(this);
+  // After render, update recycle status
+  if(currentUser && currentUser.role === 'mentor'){
+    const recycleNeeds = getMentorRecycleNeeds(currentUser.id);
+    recycleNeeds.forEach(id=>{
+      const card = document.querySelector(`.lesson-card:nth-child(${id})`);
+      if(card){
+        card.classList.add('recycle');
+        const statusEl = card.querySelector('.lesson-status');
+        if(statusEl){ statusEl.textContent = 'RECICLAR'; statusEl.className = 'lesson-status recycle'; }
+      }
+    });
+  }
+};
+
 
 // ══════════════════════════════════════════════
 // AUTH SYSTEM

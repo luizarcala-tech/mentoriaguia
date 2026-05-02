@@ -926,11 +926,12 @@ const MENUS = {
     {type:'phase',letter:'G',label:'Gestar Acordo'},
     {id:'inicio-ciclo',icon:'◎',label:'Início do Ciclo'},
     {type:'phase',letter:'U',label:'Unir Diagnóstico'},
-    {id:'peer360',icon:'◷',label:'Feedback 360°'},
-    {id:'disc',icon:'◌',label:'Meu Perfil DISC'},
+    {id:'disc',icon:'◌',label:'Perfil DISC'},
     {id:'comp',icon:'◎',label:'Competências'},
+    {id:'peer360',icon:'◷',label:'Feedback 360°'},
     {id:'swot',icon:'◫',label:'SWOT Pessoal'},
     {id:'vf',icon:'◈',label:'Visão de Futuro'},
+    {id:'mapa-obj',icon:'◉',label:'Mapa de Objetivos'},
     {type:'phase',letter:'I',label:'Implementar'},
     {id:'microplano',icon:'◱',label:'Plano de Ação'},
     {type:'phase',letter:'A',label:'Aferir e Ajustar'},
@@ -946,11 +947,12 @@ const MENUS = {
     {type:'phase',letter:'G',label:'Gestar Acordo'},
     {id:'inicio-ciclo',icon:'◎',label:'Início do Ciclo'},
     {type:'phase',letter:'U',label:'Unir Diagnóstico'},
-    {id:'peer360',icon:'◷',label:'Feedback 360°'},
-    {id:'disc',icon:'◌',label:'Meu Perfil DISC'},
+    {id:'disc',icon:'◌',label:'Perfil DISC'},
     {id:'comp',icon:'◎',label:'Competências'},
+    {id:'peer360',icon:'◷',label:'Feedback 360°'},
     {id:'swot',icon:'◫',label:'SWOT Pessoal'},
     {id:'vf',icon:'◈',label:'Visão de Futuro'},
+    {id:'mapa-obj',icon:'◉',label:'Mapa de Objetivos'},
     {type:'phase',letter:'I',label:'Implementar'},
     {id:'microplano',icon:'◱',label:'Plano de Ação'},
     {type:'phase',letter:'A',label:'Aferir e Ajustar'},
@@ -1071,6 +1073,7 @@ function showPage(id){
     'perfil': renderPerfil,
     'fase-a': renderInstrumentoA,
     'inicio-ciclo': renderInicioCiclo,
+    'mapa-obj': renderMapaObjetivos,
     'admin-empresas': renderAdminEmpresas,
     'admin-training': renderAdminTraining,
     'admin-match': renderAdminMatch,
@@ -2339,13 +2342,18 @@ const SWOT_OPTIONS = {
   a:['Automação da função','Concorrência por posições','Reestruturações corporativas','Instabilidade econômica','Mudança de liderança','Obsolescência tecnológica','Burnout','Crise setorial'],
 };
 
-function renderSWOT(){
+async function renderSWOT(){
   swotData = DB.get('swot');
+  const _swotCycles = currentUser ? await loadCycles(currentUser.email) : [];
+  const _swotCycleId = getCurrentCycleId() || _swotCycles.find(c=>c.status==='active')?.id;
+  const _swotCycle = _swotCycles.find(c=>c.id===_swotCycleId);
+
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
     <div class="page-title">SWOT Pessoal</div>
-    <div class="page-sub">Mapeamento estratégico da trajetória profissional</div>
+    <div class="page-sub">Instrumento 4 da Fase U — Análise estratégica pessoal</div>
   </div>
+  ${cycleBanner(_swotCycleId, _swotCycle, currentUser?.email||'')}
   <div class="swot-grid" id="swot-grid"></div>
   <div style="margin-top:16px;display:flex;gap:10px;">
     <button class="btn btn-gold" onclick="analyzeSWOTWithIA()">✦ Análise estratégica com IA ↗</button>
@@ -2449,7 +2457,7 @@ let discAnswers = Array(DISC_BLOCKS.length).fill(null).map(()=>({most:null,least
 let discShuffled = DISC_BLOCKS.map(b=>({...b,opts:[...b.opts].sort(()=>Math.random()-.5)}));
 let discScores = null;
 
-function renderDISC(){
+async function renderDISC(){
   discSel = DB.get('disc');
   discPage = 0;
   discAnswers = Array(DISC_BLOCKS.length).fill(null).map(()=>({most:null,least:null}));
@@ -2459,11 +2467,15 @@ function renderDISC(){
   const saved = DB.get('disc');
   const savedScores = DB.get('disc_scores');
 
+  const _discCycles3 = currentUser ? await loadCycles(currentUser.email) : [];
+  const _discCycleId = getCurrentCycleId() || _discCycles3.find(c=>c.status==='active')?.id;
+  const _discCycle = _discCycles3.find(c=>c.id===_discCycleId);
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
-    <div class="page-title">Assessment DISC</div>
-    <div class="page-sub">Metodologia de domínio público (Marston, 1928) — responda as situações e identifique seu perfil comportamental</div>
+    <div class="page-title">Perfil DISC</div>
+    <div class="page-sub">Instrumento 1 da Fase U — Mapeamento de perfil comportamental (Marston, 1928)</div>
   </div>
+  ${cycleBanner(_discCycleId, _discCycle, currentUser?.email||'')}
   <div id="disc-assessment-wrap"></div>
   <div id="disc-result-wrap" style="display:none;"></div>`;
 
@@ -2975,7 +2987,7 @@ function saveGROW(){
 // ══════════════════════════════════════════════
 // VISÃO DE FUTURO
 // ══════════════════════════════════════════════
-function renderVF(){
+async function renderVF(){
   const vf = DB.get('vf') || {};
   const history = DB.get('vf_history') || [];
   const tab = DB.get('vf_tab') || 'edit';
@@ -2987,11 +2999,15 @@ function renderVF(){
     ${history.length>=2?`<button class="btn ${tab==='compare'?'btn-gold':'btn-outline'} btn-sm" onclick="DB.set('vf_tab','compare');renderVF()">⇄ Comparar versões</button>`:''}
   ` : '';
 
+  const _vfCycles2 = currentUser ? await loadCycles(currentUser.email) : [];
+  const _vfCycleId2 = getCurrentCycleId() || _vfCycles2.find(c=>c.status==='active')?.id;
+  const _vfCycle2 = _vfCycles2.find(c=>c.id===_vfCycleId2);
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
     <div class="page-title">Visão de Futuro</div>
-    <div class="page-sub">Exercício de storytelling estratégico — "Um dia na vida daqui a 12 meses"</div>
+    <div class="page-sub">Instrumento 5 da Fase U — Storytelling estratégico: Um dia na vida daqui a 12 meses</div>
   </div>
+  ${cycleBanner(_vfCycleId2, _vfCycle2, currentUser?.email||'')}
   <div style="display:flex;gap:8px;margin-bottom:20px;">
     <button class="btn ${tab==='edit'?'btn-gold':'btn-outline'} btn-sm" onclick="DB.set('vf_tab','edit');renderVF()">✎ Nova visão</button>
     ${historyBtns}
@@ -3682,12 +3698,71 @@ function updateCurrentUser(fields){
 // ══════════════════════════════════════════════
 // INÍCIO DO CICLO — Fase G
 // ══════════════════════════════════════════════
-function renderInicioCiclo(){
+async function createCycleFromG(){
+  const name  = document.getElementById('new-cycle-name-g')?.value.trim();
+  const start = document.getElementById('new-cycle-start-g')?.value;
+  const end   = document.getElementById('new-cycle-end-g')?.value;
+  if(!name){ toast('Informe o nome do ciclo','err'); return; }
+  if(!currentUser){ toast('Faça login primeiro','err'); return; }
+
+  const radars = DB.get('comp_radars')||[];
+  const activeRadar = radars.find(r=>r.id===DB.get('comp_active_radar'))||radars[0];
+  const cycle = {
+    id:'cyc'+Date.now(), mentee_email:currentUser.email, name,
+    status:'active', started_at:start||today(), ends_at:end||'',
+    competencias:activeRadar?.competencias||[], questions_360:[],
+    frozen_at:null, frozen_by:null, created_at:new Date().toISOString()
+  };
+  await saveCycle(cycle);
+  DB.set('current_cycle_id', cycle.id);
+  const existing = DB.get('cycles_'+currentUser.email)||[];
+  existing.unshift(cycle);
+  DB.set('cycles_'+currentUser.email, existing);
+  toast('Ciclo "'+name+'" criado!','suc');
+  renderInicioCiclo();
+}
+
+
+async function renderInicioCiclo(){
   const data = DB.get('inicio_ciclo') || {};
+  const menteeEmail = currentUser?.email || '';
+  const cycles = menteeEmail ? await loadCycles(menteeEmail) : [];
+  const activeCycle = cycles.find(c=>c.status==='active');
+  const cycleId = getCurrentCycleId() || activeCycle?.id;
+
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
     <div class="page-title">Início do Ciclo — Fase G</div>
     <div class="page-sub">Gestar acordo · Alinhar escopo, metas e papéis · Semana 1</div>
+  </div>
+
+  <!-- CICLO ATIVO -->
+  <div class="panel" style="margin-bottom:20px;border-color:${activeCycle?'var(--gold-border)':'var(--border)'};">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+      <div>
+        <div class="panel-title" style="margin-bottom:2px;"><div class="panel-title-dot"></div> Ciclo de Mentoria</div>
+        <div style="font-size:11px;color:var(--text3);">O ciclo define o contexto de todos os instrumentos da Fase U</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="showCycleManager('${menteeEmail}').then(()=>{})">⚙ Gerenciar ciclos</button>
+    </div>
+    ${cycles.length ? `
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <select class="form-select" style="max-width:280px;" id="inicio-cycle-sel" onchange="DB.set('current_cycle_id',this.value);renderInicioCiclo()">
+        ${cycles.map(c=>`<option value="${c.id}" ${c.id===cycleId?'selected':''}>${c.name}${c.status==='closed'?' (encerrado)':''}</option>`).join('')}
+      </select>
+      ${activeCycle ? `
+      <div style="font-size:11px;color:var(--text3);">${activeCycle.started_at||'—'} → ${activeCycle.ends_at||'—'}</div>
+      ${activeCycle.frozen_at ? '<span style="font-size:10px;color:var(--green);font-weight:600;">✓ Competências congeladas</span>' : '<span style="font-size:10px;color:var(--amber);">Competências não congeladas</span>'}
+      ` : ''}
+    </div>` : ''}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input class="form-input" id="new-cycle-name-g" placeholder="Nome do novo ciclo..." style="width:220px;font-size:12px;">
+        <input class="form-input" type="date" id="new-cycle-start-g" value="${today()}" style="width:140px;font-size:12px;">
+        <input class="form-input" type="date" id="new-cycle-end-g" style="width:140px;font-size:12px;">
+        <button class="btn btn-gold btn-sm" onclick="createCycleFromG()">+ Criar ciclo</button>
+      </div>
+    </div>
   </div>
 
   <div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius);padding:14px 18px;margin-bottom:20px;font-size:12px;color:var(--text2);line-height:1.7">
@@ -6183,11 +6258,12 @@ function renderPhaseGate(phase, title, subtitle, rel, prog, obs, menteeId){
       {key:'termoAssinado', label:'Termo de Mentoria assinado'},
     ],
     U: [
-      {key:'peer360', label:'Feedback 360° enviado'},
-      {key:'disc', label:'Assessment DISC realizado'},
-      {key:'competencias', label:'Radar de Competências calibrado'},
+      {key:'disc', label:'Perfil DISC realizado'},
+      {key:'competencias', label:'Competências selecionadas e calibradas'},
+      {key:'peer360', label:'Feedback 360° enviado (competências congeladas)'},
       {key:'swot', label:'SWOT Pessoal preenchido'},
       {key:'vf', label:'Visão de Futuro registrada'},
+      {key:'mapa_obj', label:'Mapa de Objetivos Estratégicos preenchido'},
     ],
     I: [
       {key:'okrs', label:'OKRs e Key Results definidos'},
@@ -6515,12 +6591,13 @@ function renderMinhaJornada(){
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
     ${[
       {id:'inicio-ciclo',phase:'G',icon:'◎',label:'Início do Ciclo'},
-      {id:'peer360',phase:'U',icon:'◷',label:'Feedback 360°'},
-      {id:'disc',phase:'U',icon:'◌',label:'Meu Perfil DISC'},
+      {id:'disc',phase:'U',icon:'◌',label:'Perfil DISC'},
       {id:'comp',phase:'U',icon:'◎',label:'Competências'},
+      {id:'peer360',phase:'U',icon:'◷',label:'Feedback 360°'},
       {id:'swot',phase:'U',icon:'◫',label:'SWOT Pessoal'},
       {id:'vf',phase:'U',icon:'◈',label:'Visão de Futuro'},
       {id:'microplano',phase:'I',icon:'◱',label:'Plano de Ação'},
+      {id:'mapa-obj',phase:'U',icon:'◉',label:'Mapa de Objetivos'},
       {id:'fase-a',phase:'A',icon:'◈',label:'Aferir e Ajustar'},
     ].map(item=>{
       const available = canMenteeAccess(item.id);
@@ -7266,6 +7343,224 @@ Responda APENAS em JSON puro (sem markdown):
     console.error('generateQuestions error:', e);
     return null;
   }
+}
+
+
+
+// ══════════════════════════════════════════════
+// MAPA DE OBJETIVOS ESTRATÉGICOS — BSC Pessoal
+// ══════════════════════════════════════════════
+
+function cycleBanner(cycleId, cycle, menteeEmail){
+  if(!cycle) return `<div style="background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:16px;font-size:12px;color:var(--text2);">
+    ⚠ Nenhum ciclo ativo. <a onclick="showPage('inicio-ciclo')" style="color:var(--gold);cursor:pointer;text-decoration:underline;">Crie um ciclo em Início do Ciclo</a> para vincular este instrumento.</div>`;
+  return `<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius-sm);padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.07em;">CICLO</div>
+    <div style="font-size:12px;font-weight:600;color:var(--gold);">${cycle.name}</div>
+    <div style="font-size:11px;color:var(--text3);">${cycle.started_at||''} → ${cycle.ends_at||''}</div>
+    ${cycle.frozen_at?'<span style="font-size:10px;color:var(--green);font-weight:600;">✓ Competências congeladas</span>':''}
+  </div>`;
+}
+
+const MAPA_PERSPECTIVAS = [
+  { id:'resultados',  label:'Resultados & Carreira',         cor:'var(--gold)',  desc:'Metas de crescimento, posição, renda e impacto profissional' },
+  { id:'reputacao',   label:'Reputação & Relacionamentos',   cor:'var(--blue)',  desc:'Marca pessoal, rede de relacionamentos e influência' },
+  { id:'processos',   label:'Processos & Entrega',           cor:'var(--green)', desc:'Excelência operacional, execução e produtividade' },
+  { id:'aprendizado', label:'Aprendizado, Perfil & Energia', cor:'#7c4dff',     desc:'Desenvolvimento de competências, saúde e energia vital' },
+];
+
+const MAPA_COLUNAS = [
+  {id:'objetivo',    label:'Objetivo Estratégico',  w:'22%', placeholder:'O que quero alcançar?'},
+  {id:'kpi',         label:'Indicadores (KPI)',      w:'18%', placeholder:'Como vou medir?'},
+  {id:'meta',        label:'Metas (3–5 anos)',       w:'18%', placeholder:'Qual o alvo concreto?'},
+  {id:'iniciativas', label:'Iniciativas Principais', w:'26%', placeholder:'Quais ações chave?'},
+  {id:'prioridade',  label:'Priorização',            w:'10%', placeholder:'Alta/Média/Baixa'},
+];
+
+function getMapaData(){
+  const cycleId = getCurrentCycleId();
+  const key = cycleId ? 'mapa_obj_'+cycleId : 'mapa_obj';
+  const saved = DB.get(key) || {};
+  // Default: 2 rows per perspectiva
+  MAPA_PERSPECTIVAS.forEach(p=>{
+    if(!saved[p.id]) saved[p.id] = [
+      {objetivo:'',kpi:'',meta:'',iniciativas:'',prioridade:'Alta'},
+      {objetivo:'',kpi:'',meta:'',iniciativas:'',prioridade:'Alta'},
+    ];
+  });
+  return {data: saved, key};
+}
+
+function saveMapaCell(perspId, rowIdx, colId, value){
+  const {data, key} = getMapaData();
+  if(!data[perspId] || !data[perspId][rowIdx]) return;
+  data[perspId][rowIdx][colId] = value;
+  DB.set(key, data);
+}
+
+function addMapaRow(perspId){
+  const {data, key} = getMapaData();
+  if(!data[perspId]) data[perspId] = [];
+  data[perspId].push({objetivo:'',kpi:'',meta:'',iniciativas:'',prioridade:'Alta'});
+  DB.set(key, data);
+  renderMapaObjetivos();
+}
+
+function removeMapaRow(perspId, rowIdx){
+  const {data, key} = getMapaData();
+  if(!data[perspId] || data[perspId].length <= 1) return;
+  data[perspId].splice(rowIdx, 1);
+  DB.set(key, data);
+  renderMapaObjetivos();
+}
+
+async function renderMapaObjetivos(){
+  if(!currentUser) return;
+  const menteeEmail = currentUser.email;
+  const cycles = await loadCycles(menteeEmail);
+  const cycleId = getCurrentCycleId() || cycles.find(c=>c.status==='active')?.id;
+  const cycle = cycles.find(c=>c.id===cycleId);
+  const {data} = getMapaData();
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Mapa de Objetivos Estratégicos</div>
+    <div class="page-sub">BSC Pessoal — Visão de longo prazo estruturada em 4 perspectivas</div>
+  </div>
+
+  <!-- Cycle badge -->
+  ${cycle ? `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.08em;">CICLO</div>
+    <div style="font-size:12px;font-weight:600;color:var(--gold);">${cycle.name}</div>
+    <div style="font-size:11px;color:var(--text3);">${cycle.started_at||''} → ${cycle.ends_at||''}</div>
+    <button class="btn btn-outline btn-xs" onclick="showCycleManager('${menteeEmail}').then(()=>{})">⚙</button>
+    <div style="margin-left:auto;display:flex;gap:8px;">
+      <button class="btn btn-outline btn-sm" onclick="analyzeMapaWithIA()">✦ Análise com IA ↗</button>
+      <button class="btn btn-outline btn-sm" onclick="exportMapa()">Exportar</button>
+    </div>
+  </div>` : `
+  <div style="background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:12px;color:var(--text2);">
+    ⚠ Crie um ciclo em <strong>Início do Ciclo</strong> para vincular este mapa ao ciclo ativo.
+  </div>`}
+
+  <!-- Visao field -->
+  <div style="display:flex;align-items:center;margin-bottom:16px;gap:0;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);">
+    <div style="background:#0a0a0a;color:var(--gold);font-size:11px;font-weight:700;padding:10px 16px;white-space:nowrap;letter-spacing:.05em;">VISÃO</div>
+    <input type="text" id="mapa-visao" 
+      value="${DB.get((cycleId?'mapa_visao_'+cycleId:'mapa_visao'))||''}"
+      placeholder="Declarar a visão de longo prazo..."
+      style="flex:1;background:var(--bg2);border:none;color:var(--text);font-size:13px;padding:10px 16px;font-family:'Sora',sans-serif;"
+      oninput="DB.set('${cycleId?'mapa_visao_'+cycleId:'mapa_visao'}',this.value)">
+  </div>
+
+  <!-- BSC Table -->
+  <div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px;">
+    <!-- Header -->
+    <div style="display:flex;background:#0a0a0a;border-bottom:1px solid var(--border);">
+      <div style="width:130px;flex-shrink:0;padding:10px 12px;font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.07em;border-right:1px solid var(--border);">PERSPECTIVA</div>
+      ${MAPA_COLUNAS.map(c=>`
+      <div style="flex:1;padding:10px 8px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;border-right:1px solid var(--border);text-align:center;">${c.label}</div>`).join('')}
+      <div style="width:36px;flex-shrink:0;"></div>
+    </div>
+
+    <!-- Perspectivas -->
+    ${MAPA_PERSPECTIVAS.map(p=>{
+      const rows = data[p.id] || [];
+      const rowCount = rows.length;
+      return `
+      <div style="display:flex;border-bottom:1px solid var(--border);">
+        <!-- Perspectiva label -->
+        <div style="width:130px;flex-shrink:0;background:${p.cor}15;border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;padding:12px;position:relative;">
+          <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:11px;font-weight:700;color:${p.cor};letter-spacing:.04em;text-align:center;line-height:1.4;">${p.label}</div>
+        </div>
+        <!-- Rows -->
+        <div style="flex:1;display:flex;flex-direction:column;">
+          ${rows.map((row,ri)=>`
+          <div style="display:flex;border-bottom:${ri<rowCount-1?'1px solid var(--border)':'none'};">
+            ${MAPA_COLUNAS.map(col=>`
+            <div style="flex:1;border-right:1px solid var(--border);">
+              ${col.id==='prioridade' ?
+                `<select onchange="saveMapaCell('${p.id}',${ri},'prioridade',this.value)"
+                  style="width:100%;height:100%;min-height:40px;background:transparent;border:none;color:${row.prioridade==='Alta'?'var(--red)':row.prioridade==='Média'?'var(--amber)':'var(--green)'};font-size:11px;font-weight:600;padding:6px 8px;font-family:'Sora',sans-serif;cursor:pointer;text-align:center;">
+                  <option ${row[col.id]==='Alta'?'selected':''}>Alta</option>
+                  <option ${row[col.id]==='Média'?'selected':''}>Média</option>
+                  <option ${row[col.id]==='Baixa'?'selected':''}>Baixa</option>
+                </select>` :
+                `<textarea
+                  onchange="saveMapaCell('${p.id}',${ri},'${col.id}',this.value)"
+                  style="width:100%;height:100%;min-height:56px;background:transparent;border:none;resize:none;color:var(--text2);font-size:11px;padding:8px;font-family:'Sora',sans-serif;line-height:1.5;"
+                  placeholder="${col.placeholder}">${row[col.id]||''}</textarea>`
+              }
+            </div>`).join('')}
+            <div style="width:36px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+              ${ri>0?`<button onclick="removeMapaRow('${p.id}',${ri})" style="background:none;border:none;color:var(--text4);cursor:pointer;font-size:16px;padding:4px;" title="Remover linha">×</button>`:''}
+            </div>
+          </div>`).join('')}
+          <!-- Add row button -->
+          <div style="padding:6px 8px;">
+            <button onclick="addMapaRow('${p.id}')" 
+              style="background:none;border:1px dashed var(--border2);border-radius:4px;color:var(--text4);cursor:pointer;font-size:11px;padding:4px 12px;width:100%;font-family:'Sora',sans-serif;transition:all .12s;"
+              onmouseover="this.style.borderColor='${p.cor}';this.style.color='${p.cor}'"
+              onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text4)'">
+              + adicionar objetivo
+            </button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <div id="mapa-ia-result" style="display:none;margin-top:16px;"></div>
+  `;
+}
+
+async function analyzeMapaWithIA(){
+  const {data} = getMapaData();
+  const visaoKey = getCurrentCycleId() ? 'mapa_visao_'+getCurrentCycleId() : 'mapa_visao';
+  const visao = DB.get(visaoKey)||'';
+  const rows = [];
+  MAPA_PERSPECTIVAS.forEach(p=>{
+    (data[p.id]||[]).forEach(r=>{
+      if(r.objetivo) rows.push(`[${p.label}] ${r.objetivo} | KPI: ${r.kpi||'—'} | Meta: ${r.meta||'—'} | Prioridade: ${r.prioridade||'—'}`);
+    });
+  });
+  if(!rows.length){ toast('Preencha pelo menos um objetivo antes de analisar','err'); return; }
+  showIALoading('mapa-ia-result','Analisando Mapa de Objetivos Estratégicos');
+  const prompt = `Você é um consultor de estratégia executiva sênior analisando o BSC pessoal de um profissional.
+
+VISÃO: ${visao||'Não declarada'}
+
+OBJETIVOS POR PERSPECTIVA:
+${rows.join('\n')}
+
+Analise como um board advisor e produza:
+1. COERÊNCIA ESTRATÉGICA: Os objetivos formam uma narrativa coerente entre as 4 perspectivas? Onde há lacunas ou contradições?
+2. ALAVANCA PRINCIPAL: Qual objetivo, se executado com excelência, mais impacta os demais?
+3. RISCO OCULTO: O que está faltando no mapa que pode comprometer a visão?
+4. CALIBRAÇÃO DE PRIORIDADES: A priorização atual reflete o que realmente importa para a visão?
+5. PERGUNTA ESTRATÉGICA: A pergunta mais importante que este profissional precisa responder antes de executar.
+
+Seja direto, preciso e exigente como um bom conselheiro.`;
+  const result = await callAI(prompt);
+  showIAResult('mapa-ia-result', result, 'Análise do Mapa Estratégico');
+  document.getElementById('mapa-ia-result').scrollIntoView({behavior:'smooth'});
+}
+
+function exportMapa(){
+  const {data} = getMapaData();
+  const visaoKey = getCurrentCycleId() ? 'mapa_visao_'+getCurrentCycleId() : 'mapa_visao';
+  const visao = DB.get(visaoKey)||'';
+  let txt = 'MAPA DE OBJETIVOS ESTRATÉGICOS — Arcala Insight\n'+'='.repeat(50)+'\n\n';
+  txt += 'VISÃO: '+visao+'\n\n';
+  MAPA_PERSPECTIVAS.forEach(p=>{
+    txt += p.label.toUpperCase()+'\n'+'-'.repeat(30)+'\n';
+    (data[p.id]||[]).filter(r=>r.objetivo).forEach((r,i)=>{
+      txt += `${i+1}. ${r.objetivo}\n   KPI: ${r.kpi||'—'} | Meta: ${r.meta||'—'} | Prioridade: ${r.prioridade||'—'}\n   Iniciativas: ${r.iniciativas||'—'}\n\n`;
+    });
+  });
+  downloadText(txt, 'mapa-objetivos-'+today()+'.txt');
+  toast('Mapa exportado!','suc');
 }
 
 

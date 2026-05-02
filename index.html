@@ -5798,7 +5798,11 @@ function renderDash(){
 
 function renderMentorDash(){
   const users = DB.get('users')||[];
-  const mentees = users.filter(u => u.role === 'mentorado' && u.active);
+  // Admin sees all mentorados; mentor sees only their own
+  const isAdmin = currentUser?.role === 'admin';
+  const mentees = isAdmin
+    ? users.filter(u => u.role === 'mentorado')
+    : users.filter(u => u.role === 'mentorado' && (u.mentor_id === currentUser?.id || u.active));
 
   if(!mentees.length){
     document.getElementById('content-area').innerHTML = `
@@ -6277,8 +6281,8 @@ let matchSelectedMentee = null;
 
 function renderAdminMatch(){
   const users = DB.get('users')||[];
-  // Show all users with correct role (active or not - admin can manage)
-  const mentors  = users.filter(u=>u.role==='mentor');
+  // Admins also appear as mentors for testing/visualization
+  const mentors  = users.filter(u=>u.role==='mentor' || u.role==='admin');
   const mentees  = users.filter(u=>u.role==='mentorado');
 
   // Build current pairs

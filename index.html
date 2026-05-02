@@ -1137,54 +1137,117 @@ function renderDash(){
 // ══════════════════════════════════════════════
 // ADMIN — USERS
 // ══════════════════════════════════════════════
+let editingUserId = null;
+
 async function renderAdminUsers(){
   let users = DB.get('users') || [];
   try {
     const sbUsers = await sbFetch('users?order=created_at.desc');
     sbUsers.forEach(u => { if(!users.find(x=>x.email===u.email)) users.push(u); });
   } catch(e) {}
-  const searchId = 'usr-search-'+Date.now();
+  const empresas = DB.get('empresas')||[];
+  const mentors = users.filter(u=>u.role==='mentor'||u.role==='admin');
   const archive = DB.get('users_archive')||[];
+
+  function empOpts(sel=''){
+    return `<option value="">— Sem empresa —</option>${empresas.map(e=>`<option value="${e.id}" ${sel===e.id?'selected':''}>${e.nome}</option>`).join('')}`;
+  }
+  function mentorOpts(sel=''){
+    return `<option value="">— Sem mentor —</option>${mentors.map(m=>`<option value="${m.id}" ${sel===m.id?'selected':''}>${m.name}</option>`).join('')}`;
+  }
+  function planOpts(sel=''){
+    return ['Ciclo único — 12 semanas','Renovável trimestral','Trial — 2 semanas','Acesso institucional'].map(p=>`<option ${sel===p?'selected':''}>${p}</option>`).join('');
+  }
+
+  const editing = editingUserId ? users.find(u=>u.id===editingUserId) : null;
+
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
     <div class="page-title">Usuários & Acessos</div>
-    <div class="page-sub">Controle completo de cadastros, roles e permissões de acesso</div>
+    <div class="page-sub">Clique em um usuário na lista para editar. Campos de empresa e mentor sincronizados com os cadastros.</div>
   </div>
 
   <div class="kpi-grid">
-    <div class="kpi"><div class="kpi-label">Total Usuários</div><div class="kpi-value">${users.length}</div></div>
-    <div class="kpi"><div class="kpi-label">Mentores</div><div class="kpi-value">${users.filter(u=>u.role==='mentor').length}</div></div>
-    <div class="kpi"><div class="kpi-label">Mentorados Ativos</div><div class="kpi-value">${users.filter(u=>u.role==='mentorado'&&u.active).length}</div></div>
-    <div class="kpi"><div class="kpi-label">Aguardando</div><div class="kpi-value">${users.filter(u=>!u.active).length}</div><div class="kpi-sub" style="color:var(--amber)">Liberação pendente</div></div>
+    <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value">${users.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Mentores</div><div class="kpi-value" style="color:var(--gold)">${mentors.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Mentorados ativos</div><div class="kpi-value" style="color:var(--green)">${users.filter(u=>u.role==='mentorado'&&u.active).length}</div></div>
+    <div class="kpi"><div class="kpi-label">Sem acesso</div><div class="kpi-value" style="color:var(--amber)">${users.filter(u=>!u.active).length}</div></div>
   </div>
 
-  <div class="panel" style="margin-bottom:20px;">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-      <div class="panel-title" style="margin-bottom:0;flex:1"><div class="panel-title-dot"></div> Cadastro de usuário</div>
+  <!-- FORM — new or edit -->
+  <div class="panel" style="margin-bottom:16px;" id="user-form-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div class="panel-title" style="margin-bottom:0;">
+        <div class="panel-title-dot" style="${editing?'background:var(--gold);':''}"></div>
+        <span id="form-panel-title">${editing?`Editando: <strong style="color:var(--gold);">${editing.name}</strong>`:'Cadastro de usuário'}</span>
+      </div>
+      ${editing?`<button class="btn btn-outline btn-sm" onclick="cancelEdit()">✕ Cancelar edição</button>`:''}
     </div>
+
     <div class="form-row cols-3">
-      <div class="field"><label class="field-label">Nome completo</label><input type="text" id="nu-name" placeholder="Nome completo"></div>
-      <div class="field"><label class="field-label">E-mail</label><input type="email" id="nu-email" placeholder="email@dominio.com"></div>
-      <div class="field"><label class="field-label">Role</label><select id="nu-role"><option value="mentorado">Mentorado</option><option value="mentor">Mentor</option></select></div>
+      <div class="field"><label class="field-label">Nome completo</label>
+        <input type="text" class="form-input" id="nu-name" placeholder="Nome completo" value="${editing?.name||''}">
+      </div>
+      <div class="field"><label class="field-label">E-mail</label>
+        <input type="email" class="form-input" id="nu-email" placeholder="email@dominio.com" value="${editing?.email||''}" ${editing?'style="opacity:.6;" readonly':''}>
+      </div>
+      <div class="field"><label class="field-label">Role</label>
+        <select class="form-select" id="nu-role">
+          <option value="mentorado" ${editing?.role==='mentorado'?'selected':''}>Mentorado</option>
+          <option value="mentor" ${editing?.role==='mentor'?'selected':''}>Mentor</option>
+          ${editing?.role==='admin'?'<option value="admin" selected>Admin</option>':''}
+        </select>
+      </div>
     </div>
+
     <div class="form-row cols-3">
-      <div class="field"><label class="field-label">Plano</label><select id="nu-plan"><option>Ciclo único — 12 semanas</option><option>Renovável trimestral</option><option>Trial — 2 semanas</option><option>Acesso institucional</option></select></div>
-      <div class="field"><label class="field-label">Empresa</label><select id="nu-empresa"><option value="">— Sem empresa —</option>${(DB.get('empresas')||[]).map(e=>`<option value="${e.id}">${e.nome}</option>`).join('')}</select></div>
-      <div class="field"><label class="field-label">Mentor responsável</label><select id="nu-mentor"><option value="">— Sem mentor —</option>${users.filter(u=>u.role==='mentor').map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select></div>
-      <div class="field"><label class="field-label">Ativar imediatamente</label><select id="nu-active"><option value="1">Sim — acesso liberado</option><option value="0">Não — aguardar</option></select></div>
+      <div class="field"><label class="field-label">Plano</label>
+        <select class="form-select" id="nu-plan">${planOpts(editing?.plan)}</select>
+      </div>
+      <div class="field">
+        <label class="field-label">Empresa</label>
+        <select class="form-select" id="nu-empresa">${empOpts(editing?.empresa_id)}</select>
+      </div>
+      <div class="field">
+        <label class="field-label">Mentor responsável
+          <span style="font-size:9px;color:var(--text4);font-weight:400;"> — espelho da associação</span>
+        </label>
+        <select class="form-select" id="nu-mentor">${mentorOpts(editing?.mentor_id||editing?.mentor)}</select>
+      </div>
     </div>
-    <button class="btn btn-gold" onclick="addUser()">➕ Cadastrar usuário</button>
+
+    <div class="form-row cols-3">
+      <div class="field"><label class="field-label">Acesso</label>
+        <select class="form-select" id="nu-active">
+          <option value="1" ${(editing?.active!==false)?'selected':''}>Sim — acesso liberado</option>
+          <option value="0" ${editing?.active===false?'selected':''}>Não — aguardando</option>
+        </select>
+      </div>
+      ${!editing?`<div class="field"><label class="field-label">Senha inicial</label>
+        <input type="password" class="form-input" id="nu-pass" placeholder="Deixe em branco para gerar">
+      </div>`:''}
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      ${editing
+        ? `<button class="btn btn-gold" onclick="updateUser()">✓ Atualizar usuário</button>
+           <button class="btn btn-outline" onclick="cancelEdit()">Cancelar</button>`
+        : `<button class="btn btn-gold" onclick="addUser()">➕ Cadastrar usuário</button>`
+      }
+      ${archive.length?`<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="showArchive()">◷ Histórico (${archive.length})</button>`:''}
+    </div>
   </div>
 
+  <!-- USER TABLE -->
   <div class="panel">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-      <div class="panel-title" style="margin-bottom:0;flex:1"><div class="panel-title-dot"></div> Todos os usuários</div>
-      <input class="inline-inp" id="${searchId}" placeholder="🔍 Buscar..." style="width:200px;" oninput="filterUsers('${searchId}')">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <div class="panel-title" style="margin-bottom:0;flex:1"><div class="panel-title-dot"></div> Todos os usuários <span style="font-size:11px;color:var(--text4);font-weight:400;">— clique para editar</span></div>
+      <input class="inline-inp" id="usr-search" placeholder="🔍 Buscar..." style="width:200px;" oninput="filterUsers('usr-search')">
     </div>
     <div class="table-wrap">
       <table id="users-table">
         <thead><tr>
-          <th>Usuário</th><th>Role</th><th>Empresa</th><th>Plano</th><th>Criado em</th><th>Fase</th><th>Acesso</th><th>Ações</th>
+          <th>Usuário</th><th>Role</th><th>Empresa</th><th>Mentor</th><th>Plano</th><th>Fase</th><th>Acesso</th><th>Ações</th>
         </tr></thead>
         <tbody id="users-tbody"></tbody>
       </table>
@@ -1196,53 +1259,137 @@ async function renderAdminUsers(){
 function renderUsersTable(users){
   const tbody = document.getElementById('users-tbody');
   if(!tbody) return;
-  tbody.innerHTML = users.map((u,i)=>{
-    const rolePill = {admin:'pill-admin',mentor:'pill-mentor',mentorado:'pill-mentorado'}[u.role];
-    return `<tr>
+  const allUsers = DB.get('users')||[];
+  const empresas = DB.get('empresas')||[];
+  tbody.innerHTML = users.map(u=>{
+    const rolePill = {admin:'pill-admin',mentor:'pill-mentor',mentorado:'pill-mentorado'}[u.role]||'pill-mentorado';
+    const empresa = empresas.find(e=>e.id===u.empresa_id);
+    const mentor = allUsers.find(x=>x.id===(u.mentor_id||u.mentor));
+    const isEditing = editingUserId === u.id;
+    return `<tr style="cursor:pointer;${isEditing?'background:rgba(240,192,64,.06);outline:1px solid var(--gold);':''}"
+      onclick="editUser('${u.id}')" title="Clique para editar">
       <td><div style="display:flex;align-items:center;gap:10px;">
-        <div class="avatar-xs" style="width:30px;height:30px;font-size:10px;">${initials(u.name)}</div>
-        <div><div style="font-size:12px;font-weight:600;color:var(--text)">${u.name}</div><div style="font-size:10px;color:var(--text3)">${u.email}</div></div>
+        <div class="avatar-xs" style="width:32px;height:32px;font-size:10px;${isEditing?'border-color:var(--gold);background:var(--gold-bg);color:var(--gold);':''}">${initials(u.name)}</div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:${isEditing?'var(--gold)':'var(--text)'}">${u.name}</div>
+          <div style="font-size:10px;color:var(--text3)">${u.email}</div>
+        </div>
       </div></td>
       <td><span class="pill ${rolePill}">${u.role.toUpperCase()}</span></td>
-      <td style="font-size:11px;color:var(--text3)">${(DB.get('empresas')||[]).find(e=>e.id===u.empresa_id)?.nome||'—'}</td>
+      <td style="font-size:11px;color:var(--text3)">${empresa?.nome||'—'}</td>
+      <td style="font-size:11px;color:var(--text3)">${mentor?.name||'—'}</td>
       <td style="font-size:11px">${u.plan||'—'}</td>
-      <td style="font-size:11px;color:var(--text3)">${u.created||'—'}</td>
       <td style="font-size:12px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${u.phase||'—'}</td>
-      <td>
-        <div class="toggle ${u.active?'on':''}" onclick="toggleUserAccess('${u.id}',this)" title="${u.active?'Revogar acesso':'Liberar acesso'}"></div>
+      <td onclick="event.stopPropagation()">
+        <div class="toggle ${u.active?'on':''}" onclick="toggleUserAccess('${u.id}',this)"></div>
       </td>
-      <td>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-outline btn-xs" onclick="editUser('${u.id}')">Editar</button>
-          <button class="btn btn-red btn-xs" onclick="deleteUser('${u.id}')">Remover</button>
-        </div>
+      <td onclick="event.stopPropagation()">
+        <button class="btn btn-red btn-xs" onclick="deleteUser('${u.id}')">Remover</button>
       </td>
     </tr>`;
   }).join('');
 }
 
 function filterUsers(searchId){
-  const q = document.getElementById(searchId).value.toLowerCase();
-  const users = DB.get('users').filter(u=>
-    u.name.toLowerCase().includes(q)||u.email.toLowerCase().includes(q)||u.role.includes(q)
+  const q = (document.getElementById(searchId)?.value||'').toLowerCase();
+  const users = (DB.get('users')||[]).filter(u=>
+    u.name.toLowerCase().includes(q)||u.email.toLowerCase().includes(q)||(u.role||'').includes(q)
   );
   renderUsersTable(users);
 }
 
+function editUser(id){
+  editingUserId = id;
+  // Scroll to form
+  document.getElementById('user-form-panel')?.scrollIntoView({behavior:'smooth'});
+  renderAdminUsers();
+}
+
+function cancelEdit(){
+  editingUserId = null;
+  renderAdminUsers();
+}
+
+async function updateUser(){
+  if(!editingUserId) return;
+  const users = DB.get('users')||[];
+  const u = users.find(x=>x.id===editingUserId);
+  if(!u){ toast('Usuário não encontrado','err'); return; }
+
+  const name     = document.getElementById('nu-name')?.value.trim();
+  const role     = document.getElementById('nu-role')?.value;
+  const plan     = document.getElementById('nu-plan')?.value;
+  const empresa  = document.getElementById('nu-empresa')?.value||null;
+  const mentorId = document.getElementById('nu-mentor')?.value||null;
+  const active   = document.getElementById('nu-active')?.value === '1';
+
+  if(!name){ toast('Informe o nome','err'); return; }
+
+  u.name = name;
+  u.role = role;
+  u.plan = plan;
+  u.empresa_id = empresa;
+  u.mentor_id = mentorId;
+  u.active = active;
+
+  // If mentor changed — update mentor's mentorados list
+  if(mentorId){
+    const mentor = users.find(x=>x.id===mentorId);
+    if(mentor){
+      if(!mentor.mentorados) mentor.mentorados = [];
+      if(!mentor.mentorados.includes(editingUserId)) mentor.mentorados.push(editingUserId);
+    }
+    // Auto-release phase G
+    const allRel = DB.get('phase_releases')||{};
+    if(!allRel[editingUserId]) allRel[editingUserId] = {G:true,U:false,I:false,A:false};
+    else allRel[editingUserId].G = true;
+    DB.set('phase_releases', allRel);
+  }
+
+  DB.set('users', users);
+
+  // Sync to Supabase
+  sbFetch('users?id=eq.'+editingUserId, 'PATCH', {name, role, plan, empresa_id: empresa, mentor_id: mentorId, active}).catch(()=>{});
+
+  toast(`${name} atualizado com sucesso!`, 'suc');
+  editingUserId = null;
+  renderAdminUsers();
+}
+
 function addUser(){
-  const name = document.getElementById('nu-name').value.trim();
-  const email = document.getElementById('nu-email').value.trim();
-  const role = document.getElementById('nu-role').value;
-  const plan = document.getElementById('nu-plan').value;
-  const mentor = document.getElementById('nu-mentor').value;
-  const active = document.getElementById('nu-active').value==='1';
+  const name     = document.getElementById('nu-name')?.value.trim();
+  const email    = document.getElementById('nu-email')?.value.trim();
+  const role     = document.getElementById('nu-role')?.value;
+  const plan     = document.getElementById('nu-plan')?.value;
+  const mentorId = document.getElementById('nu-mentor')?.value||null;
+  const empresa  = document.getElementById('nu-empresa')?.value||null;
+  const active   = document.getElementById('nu-active')?.value === '1';
+  const pass     = document.getElementById('nu-pass')?.value;
+
   if(!name||!email){ toast('Preencha nome e e-mail','err'); return; }
-  const users = DB.get('users');
+  const users = DB.get('users')||[];
   if(users.find(u=>u.email===email)){ toast('E-mail já cadastrado','err'); return; }
-  const empresa_id = document.getElementById('nu-empresa')?.value||null;
-  users.push({id:'u'+Date.now(),name,email,role,plan,mentor:mentor||null,empresa_id,active,created:today(),phase:'G',week:0});
-  DB.set('users',users);
-  toast(`${name} cadastrado com sucesso!${active?' Acesso liberado.':' Aguardando liberação.'}`, 'suc');
+
+  const newId = 'u'+Date.now();
+  users.push({
+    id: newId, name, email, role, plan,
+    mentor_id: mentorId||null,
+    empresa_id: empresa,
+    active, created: today(),
+    phase: 'G', week: 0,
+    password: pass ? btoa(pass) : null
+  });
+  DB.set('users', users);
+
+  if(mentorId){
+    const mentor = users.find(u=>u.id===mentorId);
+    if(mentor){ if(!mentor.mentorados) mentor.mentorados=[]; mentor.mentorados.push(newId); DB.set('users',users); }
+    const allRel = DB.get('phase_releases')||{};
+    allRel[newId] = {G:true,U:false,I:false,A:false};
+    DB.set('phase_releases', allRel);
+  }
+
+  toast(`${name} cadastrado!${active?' Acesso liberado.':' Aguardando liberação.'}`, 'suc');
   renderAdminUsers();
 }
 
@@ -1250,43 +1397,11 @@ async function toggleUserAccess(id, el){
   const isOn = el.classList.contains('on');
   const newActive = !isOn;
   el.classList.toggle('on');
-  try {
-    await sbFetch(`users?id=eq.${id}`, 'PATCH', {active: newActive});
-  } catch(e) {
-    const users = DB.get('users')||[];
-    const u = users.find(u=>u.id===id);
-    if(u){ u.active=newActive; DB.set('users',users); }
-  }
-  toast(`Acesso ${newActive?'liberado':'revogado'}!`, newActive?'suc':'err');
-}
-
-function editUser(id){
-  const u = DB.get('users').find(u=>u.id===id);
-  if(!u) return;
-  const name = prompt('Nome:', u.name);
-  if(name===null) return;
-  const users = DB.get('users');
-  users.find(u=>u.id===id).name = name.trim()||u.name;
-  DB.set('users',users);
-  toast('Usuário atualizado','suc');
-  renderAdminUsers();
-}
-
-function deleteUser(id){
-  const users = DB.get('users');
+  const users = DB.get('users')||[];
   const u = users.find(u=>u.id===id);
-  if(!u) return;
-  showConfirm(
-    'Remover usuário',
-    `Tem certeza que deseja remover "${u.name}" permanentemente? Esta ação não pode ser desfeita.`,
-    'Remover',
-    ()=>{
-      const updated = DB.get('users').filter(u=>u.id!==id);
-      DB.set('users', updated);
-      toast('Usuário removido com sucesso','suc');
-      renderAdminUsers();
-    }
-  );
+  if(u){ u.active=newActive; DB.set('users',users); }
+  sbFetch('users?id=eq.'+id,'PATCH',{active:newActive}).catch(()=>{});
+  toast(`Acesso ${newActive?'liberado':'revogado'}!`, newActive?'suc':'err');
 }
 
 // ══════════════════════════════════════════════

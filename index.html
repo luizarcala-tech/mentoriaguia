@@ -1138,54 +1138,120 @@ function renderDash(){
 let editingUserId = null;
 let editingUser = null;
 
+// ══════════════════════════════════════════════
+// USER MANAGEMENT — STABLE SUPABASE-FIRST LAYER
+// ══════════════════════════════════════════════
+
+// ── CORE: Supabase as single source of truth ──────────────────────────────────
+
+// Always use email as the stable key for Supabase operations
+async function sbUser(email){ 
+  try { 
+    const r = await sbFetch('users?email=eq.'+encodeURIComponent(email)+'&select=*');
+    return r&&r[0]||null; 
+  } catch(e){ return null; } 
+}
+
+async function sbUpsertUser(userData){
+  // Upsert: insert or update by email
+  try {
+    await sbFetch('users', 'POST', userData, {'Prefer':'resolution=merge-duplicates,return=representation'});
+  } catch(e){
+    // Fallback: PATCH by email
+    try { await sbFetch('users?email=eq.'+encodeURIComponent(userData.email), 'PATCH', userData); } catch(e2){}
+  }
+}
+
+async function sbPatchUser(email, fields){
+  try { await sbFetch('users?email=eq.'+encodeURIComponent(email), 'PATCH', fields); } catch(e){}
+}
+
+// Load all users: Supabase first, merge local-only users
+async function loadAllUsers(){
+  const local = DB.get('users') || [];
+  try {
+    const sb = await Promise.race([
+      sbFetch('users?select=*'),
+      new Promise((_,r)=>setTimeout(()=>r(new Error('t')),5000))
+    ]);
+    if(!sb || !sb.length) return local;
+
+    // Build final list: start from Supabase
+    const result = sb.map(su => {
+      const lu = local.find(l=>l.email===su.email);
+      if(!lu) return su;
+      // Keep local relational fields if Supabase has null
+      return {
+        ...su,
+        mentor_id: su.mentor_id || lu.mentor_id || lu.mentor || null,
+        empresa_id: su.empresa_id || lu.empresa_id || null,
+        mentorados: su.mentorados || lu.mentorados || null,
+        password: su.password || lu.password || null,
+        phase: su.phase || lu.phase || 'G',
+      };
+    });
+    // Add users that only exist locally (not yet in Supabase)
+    local.forEach(lu=>{ if(!result.find(r=>r.email===lu.email)) result.push(lu); });
+    DB.set('users', result);
+    return result;
+  } catch(e){ return local; }
+}
+
+// ── VARIABLES ─────────────────────────────────────────────────────────────────
+
+
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
 async function renderAdminUsers(){
   const users = await loadAllUsers();
   const empresas = DB.get('empresas')||[];
-  const mentors = users.filter(u=>u.role==='mentor'||u.role==='admin');
-  const archive = DB.get('users_archive')||[];
+  const mentors  = users.filter(u=>['mentor','admin'].includes(u.role));
+  const archive  = DB.get('users_archive')||[];
+  const editing  = editingUser || null;
 
-  function empOpts(sel=''){
-    return `<option value="">— Sem empresa —</option>${empresas.map(e=>`<option value="${e.id}" ${sel===e.id?'selected':''}>${e.nome}</option>`).join('')}`;
-  }
-  function mentorOpts(sel=''){
-    return `<option value="">— Sem mentor —</option>${mentors.map(m=>`<option value="${m.id}" ${String(sel)===String(m.id)?'selected':''}>${m.name}</option>`).join('')}`;
-  }
-  function planOpts(sel=''){
-    return ['Ciclo único — 12 semanas','Renovável trimestral','Trial — 2 semanas','Acesso institucional'].map(p=>`<option ${sel===p?'selected':''}>${p}</option>`).join('');
-  }
+  const empOpts = (sel='') =>
+    `<option value="">— Sem empresa —</option>` +
+    empresas.map(e=>`<option value="${e.id}" ${String(sel)===String(e.id)?'selected':''}>${e.nome}</option>`).join('');
 
-  // Use cached editingUser to avoid ID mismatch issues
-  const editing = editingUser && editingUserId ? editingUser : null;
+  const mentorOpts = (sel='') =>
+    `<option value="">— Sem mentor —</option>` +
+    mentors.map(m=>`<option value="${m.id}" ${String(sel)===String(m.id)?'selected':''}>${m.name}</option>`).join('');
+
+  const planOpts = (sel='') =>
+    ['Ciclo único — 12 semanas','Renovável trimestral','Trial — 2 semanas','Acesso institucional']
+    .map(p=>`<option ${sel===p?'selected':''}>${p}</option>`).join('');
 
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
     <div class="page-title">Usuários & Acessos</div>
-    <div class="page-sub">Clique em um usuário na lista para editar. Campos de empresa e mentor sincronizados com os cadastros.</div>
+    <div class="page-sub">Clique em qualquer usuário para editar. Mentor e empresa sincronizados com Supabase.</div>
   </div>
 
   <div class="kpi-grid">
     <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value">${users.length}</div></div>
-    <div class="kpi"><div class="kpi-label">Mentores</div><div class="kpi-value" style="color:var(--gold)">${mentors.length}</div></div>
-    <div class="kpi"><div class="kpi-label">Mentorados ativos</div><div class="kpi-value" style="color:var(--green)">${users.filter(u=>u.role==='mentorado'&&u.active).length}</div></div>
-    <div class="kpi"><div class="kpi-label">Sem acesso</div><div class="kpi-value" style="color:var(--amber)">${users.filter(u=>!u.active).length}</div></div>
+    <div class="kpi"><div class="kpi-label">Mentores</div><div class="kpi-value" style="color:var(--gold)">${users.filter(u=>u.role==='mentor').length}</div></div>
+    <div class="kpi"><div class="kpi-label">Mentorados ativos</div><div class="kpi-value" style="color:var(--green)">${users.filter(u=>u.role==='mentorado'&&u.active!==false).length}</div></div>
+    <div class="kpi"><div class="kpi-label">Sem acesso</div><div class="kpi-value" style="color:var(--amber)">${users.filter(u=>u.active===false).length}</div></div>
   </div>
 
-  <!-- FORM — new or edit -->
+  <!-- FORM -->
   <div class="panel" style="margin-bottom:16px;" id="user-form-panel">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
       <div class="panel-title" style="margin-bottom:0;">
         <div class="panel-title-dot" style="${editing?'background:var(--gold);':''}"></div>
-        <span id="form-panel-title">${editing?`Editando: <strong style="color:var(--gold);">${editing.name}</strong>`:'Cadastro de usuário'}</span>
+        ${editing
+          ? `Editando: <strong style="color:var(--gold);">${editing.name}</strong>`
+          : 'Cadastro de usuário'}
       </div>
-      ${editing?`<button class="btn btn-outline btn-sm" onclick="cancelEdit()">✕ Cancelar edição</button>`:''}
+      ${editing?`<button class="btn btn-outline btn-sm" onclick="cancelEdit()">✕ Cancelar</button>`:''}
     </div>
 
     <div class="form-row cols-3">
       <div class="field"><label class="field-label">Nome completo</label>
-        <input type="text" class="form-input" id="nu-name" placeholder="Nome completo" value="${editing?.name||''}">
+        <input class="form-input" type="text" id="nu-name" value="${editing?.name||''}" placeholder="Nome completo">
       </div>
       <div class="field"><label class="field-label">E-mail</label>
-        <input type="email" class="form-input" id="nu-email" placeholder="email@dominio.com" value="${editing?.email||''}" ${editing?'style="opacity:.6;" readonly':''}>
+        <input class="form-input" type="email" id="nu-email" value="${editing?.email||''}" placeholder="email@dominio.com" ${editing?'readonly style="opacity:.6;"':''}>
       </div>
       <div class="field"><label class="field-label">Role</label>
         <select class="form-select" id="nu-role">
@@ -1200,14 +1266,11 @@ async function renderAdminUsers(){
       <div class="field"><label class="field-label">Plano</label>
         <select class="form-select" id="nu-plan">${planOpts(editing?.plan)}</select>
       </div>
-      <div class="field">
-        <label class="field-label">Empresa</label>
+      <div class="field"><label class="field-label">Empresa</label>
         <select class="form-select" id="nu-empresa">${empOpts(editing?.empresa_id)}</select>
       </div>
       <div class="field">
-        <label class="field-label">Mentor responsável
-          <span style="font-size:9px;color:var(--text4);font-weight:400;"> — espelho da associação</span>
-        </label>
+        <label class="field-label">Mentor responsável <span style="font-size:9px;color:var(--text4);">— espelho da associação</span></label>
         <select class="form-select" id="nu-mentor">${mentorOpts(editing?.mentor_id||editing?.mentor)}</select>
       </div>
     </div>
@@ -1215,30 +1278,33 @@ async function renderAdminUsers(){
     <div class="form-row cols-3">
       <div class="field"><label class="field-label">Acesso</label>
         <select class="form-select" id="nu-active">
-          <option value="1" ${(editing?.active!==false)?'selected':''}>Sim — acesso liberado</option>
+          <option value="1" ${editing?.active!==false?'selected':''}>Sim — liberado</option>
           <option value="0" ${editing?.active===false?'selected':''}>Não — aguardando</option>
         </select>
       </div>
       ${!editing?`<div class="field"><label class="field-label">Senha inicial</label>
-        <input type="password" class="form-input" id="nu-pass" placeholder="Deixe em branco para gerar">
+        <input class="form-input" type="password" id="nu-pass" placeholder="Opcional">
       </div>`:''}
     </div>
 
-    <div style="display:flex;gap:8px;margin-top:4px;">
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
       ${editing
-        ? `<button class="btn btn-gold" onclick="updateUser()">✓ Atualizar usuário</button>
+        ? `<button class="btn btn-gold" onclick="updateUser()">✓ Atualizar</button>
            <button class="btn btn-outline" onclick="cancelEdit()">Cancelar</button>`
-        : `<button class="btn btn-gold" onclick="addUser()">➕ Cadastrar usuário</button>`
-      }
+        : `<button class="btn btn-gold" onclick="addUser()">➕ Cadastrar usuário</button>`}
       ${archive.length?`<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="showArchive()">◷ Histórico (${archive.length})</button>`:''}
     </div>
   </div>
 
-  <!-- USER TABLE -->
+  <!-- TABLE -->
   <div class="panel">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
-      <div class="panel-title" style="margin-bottom:0;flex:1"><div class="panel-title-dot"></div> Todos os usuários <span style="font-size:11px;color:var(--text4);font-weight:400;">— clique para editar</span></div>
-      <input class="inline-inp" id="usr-search" placeholder="🔍 Buscar..." style="width:200px;" oninput="filterUsers('usr-search')">
+      <div class="panel-title" style="margin-bottom:0;flex:1">
+        <div class="panel-title-dot"></div> Todos os usuários
+        <span style="font-size:11px;color:var(--text4);font-weight:400;"> — clique para editar</span>
+      </div>
+      <input class="inline-inp" id="usr-search" placeholder="🔍 Buscar..." style="width:200px;"
+        oninput="filterUsers('usr-search')">
     </div>
     <div class="table-wrap">
       <table id="users-table">
@@ -1249,180 +1315,183 @@ async function renderAdminUsers(){
       </table>
     </div>
   </div>`;
+
   renderUsersTable(users);
 }
 
 function renderUsersTable(users){
   const tbody = document.getElementById('users-tbody');
   if(!tbody) return;
-  const allUsers = DB.get('users')||[];
+  const all = DB.get('users')||[];
   const empresas = DB.get('empresas')||[];
   tbody.innerHTML = users.map(u=>{
     const rolePill = {admin:'pill-admin',mentor:'pill-mentor',mentorado:'pill-mentorado'}[u.role]||'pill-mentorado';
-    const empresa = empresas.find(e=>e.id===u.empresa_id);
-    const mentorRef = u.mentor_id||u.mentor||null;
-    const mentor = mentorRef ? allUsers.find(x=>String(x.id)===String(mentorRef)) : null;
-    const isEditing = String(editingUserId) === String(u.id);
-    return `<tr style="cursor:pointer;${isEditing?'background:rgba(240,192,64,.06);outline:1px solid var(--gold);':''}"
-      data-uid="${u.id}" data-email="${u.email}"
-      onclick="editUser('${u.id}','${u.email}')" title="Clique para editar">
+    const empresa = empresas.find(e=>String(e.id)===String(u.empresa_id));
+    const mref = u.mentor_id||u.mentor||null;
+    const mentor = mref ? all.find(x=>String(x.id)===String(mref)) : null;
+    const isEd = editingUser && editingUser.email === u.email;
+    return `<tr style="cursor:pointer;${isEd?'background:rgba(240,192,64,.06);outline:1px solid var(--gold);':''}"
+      onclick="editUser('${u.email}')" title="Clique para editar">
       <td><div style="display:flex;align-items:center;gap:10px;">
-        <div class="avatar-xs" style="width:32px;height:32px;font-size:10px;${isEditing?'border-color:var(--gold);background:var(--gold-bg);color:var(--gold);':''}">${initials(u.name)}</div>
+        <div class="avatar-xs" style="width:32px;height:32px;font-size:10px;${isEd?'border-color:var(--gold);background:var(--gold-bg);color:var(--gold);':''}">
+          ${initials(u.name)}</div>
         <div>
-          <div style="font-size:12px;font-weight:600;color:${isEditing?'var(--gold)':'var(--text)'}">${u.name}</div>
+          <div style="font-size:12px;font-weight:600;color:${isEd?'var(--gold)':'var(--text)'}">${u.name}</div>
           <div style="font-size:10px;color:var(--text3)">${u.email}</div>
         </div>
       </div></td>
-      <td><span class="pill ${rolePill}">${u.role.toUpperCase()}</span></td>
+      <td><span class="pill ${rolePill}">${(u.role||'').toUpperCase()}</span></td>
       <td style="font-size:11px;color:var(--text3)">${empresa?.nome||'—'}</td>
       <td style="font-size:11px;color:var(--text3)">${mentor?.name||'—'}</td>
       <td style="font-size:11px">${u.plan||'—'}</td>
       <td style="font-size:12px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${u.phase||'—'}</td>
       <td onclick="event.stopPropagation()">
-        <div class="toggle ${u.active?'on':''}" onclick="toggleUserAccess('${u.id}',this)"></div>
+        <div class="toggle ${u.active!==false?'on':''}" onclick="toggleUserAccess('${u.email}',this)"></div>
       </td>
       <td onclick="event.stopPropagation()">
-        <button class="btn btn-red btn-xs" onclick="event.stopPropagation();deleteUser('${u.id}')">Remover</button>
+        <button class="btn btn-red btn-xs" onclick="event.stopPropagation();deleteUser('${u.email}')">Remover</button>
       </td>
     </tr>`;
   }).join('');
 }
 
-function filterUsers(searchId){
-  const q = (document.getElementById(searchId)?.value||'').toLowerCase();
-  const users = (DB.get('users')||[]).filter(u=>
-    u.name.toLowerCase().includes(q)||u.email.toLowerCase().includes(q)||(u.role||'').includes(q)
-  );
+function filterUsers(sid){
+  const q=(document.getElementById(sid)?.value||'').toLowerCase();
+  const users=(DB.get('users')||[]).filter(u=>
+    (u.name||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q)||(u.role||'').includes(q));
   renderUsersTable(users);
 }
 
-function editUser(id, email){
+// editUser now uses EMAIL as the key (stable across Supabase/local)
+function editUser(email){
   const users = DB.get('users')||[];
-  // Find by ID or by email (handles Supabase vs localStorage ID mismatch)
-  const found = users.find(u=>String(u.id)===String(id)) ||
-                (email ? users.find(u=>u.email===email) : null);
-  if(!found){ toast('Recarregando dados...',''); renderAdminUsers(); return; }
-  editingUserId = String(found.id);
+  const found = users.find(u=>u.email===email);
+  if(!found){ toast('Usuário não encontrado','err'); return; }
   editingUser = {...found};
+  editingUserId = found.id; // keep for compatibility
   document.getElementById('user-form-panel')?.scrollIntoView({behavior:'smooth'});
   renderAdminUsers();
 }
 
 function cancelEdit(){
-  editingUserId = null;
-  editingUser = null;
+  editingUser = null; editingUserId = null;
   renderAdminUsers();
 }
 
 async function updateUser(){
-  if(!editingUserId && !editingUser){ toast('Selecione um usuário para editar','err'); return; }
-
-  // Get current users (reload to ensure fresh data)
-  const users = await loadAllUsers();
-
-  // Find user by ID or email
-  let u = users.find(x=>String(x.id)===String(editingUserId));
-  if(!u && editingUser) u = users.find(x=>x.email===editingUser.email);
-  if(!u){ toast('Usuário não encontrado. Recarregue a página.','err'); return; }
+  if(!editingUser){ toast('Selecione um usuário','err'); return; }
+  const email = editingUser.email;
 
   const name     = document.getElementById('nu-name')?.value.trim();
   const role     = document.getElementById('nu-role')?.value;
   const plan     = document.getElementById('nu-plan')?.value;
   const empresa  = document.getElementById('nu-empresa')?.value||null;
-  const mentorId = document.getElementById('nu-mentor')?.value||null;  // empty string = no mentor
-  const active   = document.getElementById('nu-active')?.value === '1';
-
+  const mentorId = document.getElementById('nu-mentor')?.value||null;
+  const active   = document.getElementById('nu-active')?.value==='1';
   if(!name){ toast('Informe o nome','err'); return; }
 
-  // Handle mentor change
+  // Get fresh users
+  const users = DB.get('users')||[];
+  const u = users.find(x=>x.email===email);
+  if(!u){ toast('Recarregue a página','err'); return; }
+
+  // Update mentor lists
   const oldMentorId = u.mentor_id||u.mentor||null;
-  if(String(oldMentorId||'') !== String(mentorId||'')){
-    // Remove from old mentor's list
+  if(String(oldMentorId||'')!==String(mentorId||'')){
     if(oldMentorId){
-      const oldMentor = users.find(x=>String(x.id)===String(oldMentorId));
-      if(oldMentor && oldMentor.mentorados){
-        oldMentor.mentorados = oldMentor.mentorados.filter(id=>String(id)!==String(u.id));
-      }
+      const om=users.find(x=>String(x.id)===String(oldMentorId));
+      if(om&&om.mentorados) om.mentorados=om.mentorados.filter(id=>String(id)!==String(u.id));
     }
-    // Add to new mentor's list
     if(mentorId){
-      const newMentor = users.find(x=>String(x.id)===String(mentorId));
-      if(newMentor){
-        if(!newMentor.mentorados) newMentor.mentorados = [];
-        if(!newMentor.mentorados.map(String).includes(String(u.id))) newMentor.mentorados.push(u.id);
-      }
+      const nm=users.find(x=>String(x.id)===String(mentorId));
+      if(nm){ if(!nm.mentorados) nm.mentorados=[]; if(!nm.mentorados.map(String).includes(String(u.id))) nm.mentorados.push(u.id); }
+      const rel=DB.get('phase_releases')||{};
+      if(!rel[u.id]) rel[u.id]={G:true,U:false,I:false,A:false}; else rel[u.id].G=true;
+      DB.set('phase_releases',rel);
     }
   }
 
-  // Apply changes to user object
-  u.name = name;
-  u.role = role;
-  u.plan = plan;
-  u.empresa_id = empresa;
-  u.mentor_id = mentorId || null;
-  u.active = active;
+  // Apply
+  Object.assign(u,{name,role,plan,empresa_id:empresa,mentor_id:mentorId||null,active});
+  DB.set('users',users);
 
-  // Save to localStorage
-  DB.set('users', users);
+  // Supabase — patch by email
+  await sbPatchUser(email,{name,role,plan,empresa_id:empresa||null,mentor_id:mentorId||null,active});
 
-  // Save to Supabase by email (most reliable key)
-  const patch = {name, role, plan, empresa_id: empresa||null, mentor_id: mentorId||null, active};
-  await saveUserField(u.id, u.email, patch);
-
-  toast(`${name} atualizado!`, 'suc');
-  editingUserId = null;
-  editingUser = null;
+  toast(`${name} atualizado!`,'suc');
+  editingUser=null; editingUserId=null;
   renderAdminUsers();
 }
 
-
-function addUser(){
+async function addUser(){
   const name     = document.getElementById('nu-name')?.value.trim();
   const email    = document.getElementById('nu-email')?.value.trim();
   const role     = document.getElementById('nu-role')?.value;
   const plan     = document.getElementById('nu-plan')?.value;
   const mentorId = document.getElementById('nu-mentor')?.value||null;
   const empresa  = document.getElementById('nu-empresa')?.value||null;
-  const active   = document.getElementById('nu-active')?.value === '1';
-  const pass     = document.getElementById('nu-pass')?.value;
-
+  const active   = document.getElementById('nu-active')?.value==='1';
+  const pass     = document.getElementById('nu-pass')?.value||'';
   if(!name||!email){ toast('Preencha nome e e-mail','err'); return; }
-  const users = DB.get('users')||[];
+  const users=DB.get('users')||[];
   if(users.find(u=>u.email===email)){ toast('E-mail já cadastrado','err'); return; }
 
-  const newId = 'u'+Date.now();
-  users.push({
-    id: newId, name, email, role, plan,
-    mentor_id: mentorId||null,
-    empresa_id: empresa,
-    active, created: today(),
-    phase: 'G', week: 0,
-    password: pass ? btoa(pass) : null
-  });
-  DB.set('users', users);
+  const newUser={
+    id:'u'+Date.now(), name, email, role, plan,
+    mentor_id:mentorId||null, empresa_id:empresa||null,
+    active, created:today(), phase:'G', week:0,
+    password:pass?btoa(pass):null
+  };
+  users.push(newUser);
+  DB.set('users',users);
+
+  // Supabase upsert
+  await sbUpsertUser(newUser);
 
   if(mentorId){
-    const mentor = users.find(u=>u.id===mentorId);
-    if(mentor){ if(!mentor.mentorados) mentor.mentorados=[]; mentor.mentorados.push(newId); DB.set('users',users); }
-    const allRel = DB.get('phase_releases')||{};
-    allRel[newId] = {G:true,U:false,I:false,A:false};
-    DB.set('phase_releases', allRel);
+    const m=users.find(u=>String(u.id)===String(mentorId));
+    if(m){if(!m.mentorados)m.mentorados=[];m.mentorados.push(newUser.id);DB.set('users',users);}
+    const rel=DB.get('phase_releases')||{};
+    rel[newUser.id]={G:true,U:false,I:false,A:false};
+    DB.set('phase_releases',rel);
   }
-
-  toast(`${name} cadastrado!${active?' Acesso liberado.':' Aguardando liberação.'}`, 'suc');
+  toast(`${name} cadastrado!`,'suc');
   renderAdminUsers();
 }
 
-async function toggleUserAccess(id, el){
-  const isOn = el.classList.contains('on');
-  const newActive = !isOn;
+async function toggleUserAccess(email, el){
+  const isOn=el.classList.contains('on');
   el.classList.toggle('on');
-  const users = DB.get('users')||[];
-  const u = users.find(u=>u.id===id);
-  if(u){ u.active=newActive; DB.set('users',users); }
-  sbFetch('users?id=eq.'+id,'PATCH',{active:newActive}).catch(()=>{});
-  toast(`Acesso ${newActive?'liberado':'revogado'}!`, newActive?'suc':'err');
+  const newActive=!isOn;
+  const users=DB.get('users')||[];
+  const u=users.find(x=>x.email===email);
+  if(u){u.active=newActive;DB.set('users',users);}
+  await sbPatchUser(email,{active:newActive});
+  toast(`Acesso ${newActive?'liberado':'revogado'}!`,newActive?'suc':'err');
 }
+
+function deleteUser(email){
+  const users=DB.get('users')||[];
+  const u=users.find(x=>x.email===email);
+  if(!u){toast('Usuário não encontrado','err');return;}
+  if(u.role==='admin'){toast('Não é possível remover admin','err');return;}
+  showConfirm('Mover para histórico',
+    `Remover "${u.name}"? Os dados serão preservados no histórico.`,
+    'Mover para histórico',
+    async ()=>{
+      const archive=DB.get('users_archive')||[];
+      archive.push({...u,deletedAt:new Date().toLocaleString('pt-BR'),deletedBy:currentUser?.name||'Admin'});
+      DB.set('users_archive',archive);
+      DB.set('users',users.filter(x=>x.email!==email));
+      await sbPatchUser(email,{active:false});
+      if(editingUser?.email===email){editingUser=null;editingUserId=null;}
+      toast(`${u.name} movido para o histórico`,'suc');
+      renderAdminUsers();
+    }
+  );
+}
+
+
 
 // ══════════════════════════════════════════════
 // ADMIN — REGISTRATIONS
@@ -6415,58 +6484,6 @@ function renderMinhaJornada(){
 // ADMIN — ASSOCIAR MENTOR ↔ MENTORADO
 // ══════════════════════════════════════════════
 
-// ══════════════════════════════════════════════
-// CENTRAL USER LOADER — fonte única de dados
-// ══════════════════════════════════════════════
-async function loadAllUsers(){
-  const local = DB.get('users') || [];
-  try {
-    const sb = await Promise.race([
-      sbFetch('users?select=*'),
-      new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),5000))
-    ]);
-    if(sb && sb.length > 0){
-      // Smart merge: local data wins for relational fields (mentor_id, empresa_id)
-      // Supabase wins for auth fields (name, email, role, active, plan)
-      const localFields = ['mentor_id','empresa_id','mentor','mentorados','phase_releases'];
-      const merged = sb.map(su=>{
-        const lu = local.find(l=>l.email===su.email);
-        if(!lu) return su;
-        // Merge: keep local relational fields if Supabase doesn't have them
-        const result = {...su};
-        localFields.forEach(f=>{
-          if(lu[f] !== undefined && (su[f]===null || su[f]===undefined)){
-            result[f] = lu[f];
-          }
-        });
-        return result;
-      });
-      // Add local-only users (not in Supabase yet)
-      local.forEach(lu=>{
-        if(!merged.find(su=>su.email===lu.email)) merged.push(lu);
-      });
-      DB.set('users', merged);
-      return merged;
-    }
-  } catch(e){ /* use localStorage */ }
-  return local;
-}
-
-async function saveUserField(userId, email, fields){
-  // Save to localStorage immediately
-  const users = DB.get('users')||[];
-  const u = users.find(x=>String(x.id)===String(userId)) ||
-            users.find(x=>x.email===email);
-  if(u){ Object.assign(u, fields); DB.set('users', users); }
-
-  // Save to Supabase by email (most reliable key)
-  try {
-    await sbFetch('users?email=eq.'+encodeURIComponent(email), 'PATCH', fields);
-  } catch(e){
-    try { await sbFetch('users?id=eq.'+userId, 'PATCH', fields); } catch(e2){}
-  }
-}
-
 
 let matchSelectedMentor = null;
 let matchSelectedMentee = null;
@@ -6697,7 +6714,7 @@ Um mentorado só pode ter um mentor.`,
       DB.set('users', users);
 
       // Save mentor_id to Supabase via email (reliable key)
-      await saveUserField(mentee.id, mentee.email, {mentor_id: String(matchSelectedMentor)});
+      await sbPatchUser(mentee.email, {mentor_id: String(matchSelectedMentor)});
 
       // Auto-release phase G for mentee
       const allRel = DB.get('phase_releases')||{};
@@ -6737,7 +6754,7 @@ function removeMatch(menteeId, menteeName){
 
       DB.set('users', users);
       const removedMentee = users.find(u=>String(u.id)===String(menteeId));
-      if(removedMentee) await saveUserField(menteeId, removedMentee.email, {mentor_id: null});
+      if(removedMentee) await sbPatchUser(removedMentee.email, {mentor_id: null});
 
       toast(`Associação de ${menteeName} removida`, 'suc');
       renderAdminMatch();

@@ -6277,8 +6277,9 @@ let matchSelectedMentee = null;
 
 function renderAdminMatch(){
   const users = DB.get('users')||[];
-  const mentors  = users.filter(u=>u.role==='mentor' && u.active !== false);
-  const mentees  = users.filter(u=>u.role==='mentorado' && u.active !== false);
+  // Show all users with correct role (active or not - admin can manage)
+  const mentors  = users.filter(u=>u.role==='mentor');
+  const mentees  = users.filter(u=>u.role==='mentorado');
 
   // Build current pairs
   const pairs = [];

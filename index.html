@@ -2652,7 +2652,36 @@ const PEER_QUESTIONS = [
   'Como você avalia o pensamento estratégico e visão de negócio?',
 ];
 
-function renderPeer360(){
+async function renderPeer360(){
+  // Sync from Supabase — pull any new responses for this user
+  if(currentUser){
+    try {
+      const sbResponses = await sbFetch(
+        'peer360_responses?mentee_email=eq.'+encodeURIComponent(currentUser.email)+'&select=*'
+      );
+      if(sbResponses && sbResponses.length){
+        const local = DB.get('peer360')||[];
+        sbResponses.forEach(sr=>{
+          const local_p = local.find(p=>p.token===sr.token);
+          if(!local_p){
+            // New response from Supabase — add to local
+            local.push({
+              avaliador: sr.avaliador, email: sr.avaliador_email,
+              relacao: sr.relacao, token: sr.token,
+              respostas: sr.scores ? (Array.isArray(sr.scores)?sr.scores:Object.values(sr.scores)) : [],
+              obs: sr.obs||'', done: sr.done||false
+            });
+          } else if(sr.done && !local_p.done){
+            // Response was completed on another device — update local
+            local_p.done = true;
+            local_p.respostas = sr.scores ? (Array.isArray(sr.scores)?sr.scores:Object.values(sr.scores)) : [];
+            local_p.obs = sr.obs||'';
+          }
+        });
+        DB.set('peer360', local);
+      }
+    } catch(e){ /* use local */ }
+  }
   const peers = DB.get('peer360');
   const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
   const avg = dims.map((_,di)=>{
@@ -2674,8 +2703,9 @@ function renderPeer360(){
         <div class="field"><label class="field-label">Relação com o mentorado</label>
           <select id="peer-rel"><option>Líder direto</option><option>Par / mesmo nível</option><option>Subordinado direto</option><option>Cliente interno</option><option>Parceiro externo</option></select>
         </div>
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-gold btn-sm" onclick="sendPeer360()">Enviar formulário ↗</button>
+          <button class="btn btn-outline btn-sm" onclick="renderPeer360()">↺ Sincronizar respostas</button>
           <button class="btn btn-outline btn-sm" onclick="simulatePeerResponse()">Simular resposta</button>
         </div>
       </div>
@@ -2726,48 +2756,52 @@ function renderPeer360(){
   },150);
 }
 
-function sendPeer360(){
+async function sendPeer360(){
   const name  = document.getElementById('peer-name')?.value.trim();
   const email = document.getElementById('peer-email')?.value.trim();
   const rel   = document.getElementById('peer-rel')?.value;
   if(!name||!email){ toast('Preencha nome e e-mail','err'); return; }
+  if(!currentUser){ toast('Faça login primeiro','err'); return; }
 
-  // Generate a unique response token
-  const token = btoa(name+'|'+email+'|'+Date.now()).replace(/=/g,'');
+  // Generate unique token
+  const token = btoa(name+'|'+email+'|'+Date.now()).replace(/[^a-zA-Z0-9]/g,'');
 
-  // Save peer with token (pending)
-  const peers = DB.get('peer360');
+  // Save to Supabase first (cross-device)
+  const sbRecord = {
+    token, mentee_email: currentUser.email,
+    avaliador: name, avaliador_email: email,
+    relacao: rel, done: false
+  };
+  try {
+    await sbFetch('peer360_responses', 'POST', sbRecord);
+    toast('Convite registrado no banco ✓','suc');
+  } catch(e){
+    // Fallback to localStorage only
+    console.warn('Supabase 360 save failed:', e);
+  }
+
+  // Always save locally too (for immediate display)
+  const peers = DB.get('peer360')||[];
   peers.push({avaliador:name, email, relacao:rel, token, respostas:[], obs:'', done:false});
   DB.set('peer360', peers);
 
-  // Build the response URL — links to the platform with the token
+  // Build response URL
   const baseUrl = window.location.href.split('?')[0];
   const responseUrl = baseUrl + '?responder360=' + token;
-
-  // Build the email body
-  const mentoradoName = currentUser?.name || 'um(a) profissional';
-  const subject = encodeURIComponent(`[Arcala Insight] Convite para avaliação 360° — ${mentoradoName}`);
+  const mentoradoName = currentUser.name;
+  const subject = encodeURIComponent('[Arcala Insight] Avaliação 360° — '+mentoradoName);
   const body = encodeURIComponent(
-`Olá, ${name}!
-
-${mentoradoName} está participando de um programa de mentoria executiva e gostaria da sua avaliação honesta como ${rel}.
-
-Esta avaliação é confidencial e leva cerca de 3 minutos para responder.
-
-👉 Acesse aqui para responder: ${responseUrl}
-
-Se o link não abrir, copie e cole no seu navegador.
-
-Obrigado pela sua contribuição!
-Equipe Arcala Insight`
+'Olá, '+name+'!\n\n'+
+mentoradoName+' está em um programa de mentoria executiva e gostaria da sua avaliação como '+rel+'.\n\n'+
+'A avaliação é confidencial e leva menos de 3 minutos.\n\n'+
+'👉 Responda aqui: '+responseUrl+'\n\n'+
+'Se o link não abrir, copie e cole no seu navegador.\n\n'+
+'Obrigado!\nEquipe Arcala Insight'
   );
-
-  // Open email client
-  window.open('mailto:' + email + '?subject=' + subject + '&body=' + body, '_blank');
-
-  toast(`E-mail preparado para ${name}! Verifique seu cliente de e-mail.`, 'suc');
-  document.getElementById('peer-name').value = '';
-  document.getElementById('peer-email').value = '';
+  window.open('mailto:'+email+'?subject='+subject+'&body='+body,'_blank');
+  toast('E-mail preparado! Confirme o envio no seu cliente de e-mail.','suc');
+  document.getElementById('peer-name').value='';
+  document.getElementById('peer-email').value='';
   renderPeer360();
 }
 
@@ -2814,6 +2848,8 @@ Seja analítico e específico. Trate os dados como evidências, não como impres
 }
 
 
+function closeThanks360(){ var el=document.getElementById("thanks360"); if(el) el.remove(); }
+
 function show360ResponseForm(token){
   // Find peer by token in any user's peer360 data
   // Since this is localStorage-based, the form is shown on the same browser
@@ -2855,39 +2891,60 @@ function show360ResponseForm(token){
   window._360scores = {};
 }
 
-function submit360Response(token){
+async function submit360Response(token){
   const scores = window._360scores || {};
   const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
   if(Object.keys(scores).length < dims.length){
     const missing = dims.length - Object.keys(scores).length;
-    document.getElementById('resp360-msg').textContent = `Avalie todas as ${dims.length} dimensões (faltam ${missing}).`;
-    document.getElementById('resp360-msg').style.color = 'var(--red)';
+    const msg = document.getElementById('resp360-msg');
+    if(msg){ msg.textContent='Avalie todas as '+dims.length+' dimensões (faltam '+missing+').'; msg.style.color='var(--red)'; }
     return;
   }
   const obs = document.getElementById('resp360-obs')?.value||'';
   const respostas = dims.map((_,i)=>scores[i]);
 
-  // Save response to this peer
+  const msg = document.getElementById('resp360-msg');
+  if(msg){ msg.textContent='Salvando...'; msg.style.color='var(--text3)'; }
+
+  // Save to Supabase (cross-device)
+  let savedToSB = false;
+  try {
+    await sbFetch(
+      'peer360_responses?token=eq.'+token, 'PATCH',
+      { done: true, scores: respostas, obs, responded_at: new Date().toISOString() }
+    );
+    savedToSB = true;
+  } catch(e){ console.warn('360 Supabase save failed:', e); }
+
+  // Always save to localStorage
   const peers = DB.get('peer360')||[];
   const peer = peers.find(p=>p.token===token);
   if(peer){
-    peer.done = true;
-    peer.respostas = respostas;
-    peer.obs = obs;
-    peer.respondedAt = new Date().toLocaleString('pt-BR');
-    DB.set('peer360', peers);
+    peer.done=true; peer.respostas=respostas; peer.obs=obs;
+    peer.respondedAt=new Date().toLocaleString('pt-BR');
+    DB.set('peer360',peers);
+  } else {
+    // Response came from another device — just store it
+    peers.push({avaliador:'Avaliador',relacao:'—',token,respostas,obs,done:true});
+    DB.set('peer360',peers);
   }
 
   // Remove overlay
   document.querySelector('[style*="z-index:900"]')?.remove();
+  window.history.replaceState({},document.title,window.location.pathname);
 
-  // Clean URL
-  window.history.replaceState({}, document.title, window.location.pathname);
+  // Show thank you screen
+  const thanks = document.createElement('div');
+  thanks.id = 'thanks360';
+  thanks.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:950;display:flex;align-items:center;justify-content:center;text-align:center;padding:40px;';
+  thanks.innerHTML='<div><div style="font-size:48px;margin-bottom:20px;">✓</div>'+
+    '<div style="font-size:22px;font-weight:600;color:var(--green);margin-bottom:10px;">Avaliação enviada!</div>'+
+    '<div style="font-size:14px;color:var(--text2);line-height:1.7;max-width:400px;margin:0 auto 24px;">'+
+    'Obrigado pela contribuição. Registrada'+(savedToSB?' no banco de dados':' localmente')+'.</div>'+
+    '<button onclick="closeThanks360()" style="padding:10px 24px;background:var(--gold);border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Fechar</button></div>';
+  document.body.appendChild(thanks);
 
-  toast('Avaliação enviada! Obrigado pela sua contribuição.', 'suc');
-
-  // Refresh if on 360 page
-  if(currentPage === 'peer360') renderPeer360();
+  if(currentPage==='peer360') renderPeer360();
 }
 
 // ══════════════════════════════════════════════

@@ -1139,26 +1139,7 @@ let editingUserId = null;
 let editingUser = null;
 
 async function renderAdminUsers(){
-  // Supabase is source of truth — load from there, sync to localStorage
-  let users = [];
-  try {
-    users = await sbFetch('users?order=created_at.desc&select=*');
-    if(users && users.length > 0){
-      // Supabase returned data — merge with localStorage extras (admin-seeded users)
-      const local = DB.get('users') || [];
-      local.forEach(lu => {
-        if(!users.find(su=>su.email===lu.email)) users.push(lu);
-      });
-      // Sync back to localStorage as canonical list
-      DB.set('users', users);
-    } else {
-      // Supabase empty or failed — use localStorage
-      users = DB.get('users') || [];
-    }
-  } catch(e) {
-    // Supabase unreachable — fallback to localStorage
-    users = DB.get('users') || [];
-  }
+  const users = await loadAllUsers();
   const empresas = DB.get('empresas')||[];
   const mentors = users.filter(u=>u.role==='mentor'||u.role==='admin');
   const archive = DB.get('users_archive')||[];
@@ -6425,14 +6406,50 @@ function renderMinhaJornada(){
 // ADMIN — ASSOCIAR MENTOR ↔ MENTORADO
 // ══════════════════════════════════════════════
 
+// ══════════════════════════════════════════════
+// CENTRAL USER LOADER — fonte única de dados
+// ══════════════════════════════════════════════
+async function loadAllUsers(){
+  let users = DB.get('users') || [];
+  try {
+    const sb = await Promise.race([
+      sbFetch('users?select=*'),
+      new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),5000))
+    ]);
+    if(sb && sb.length > 0){
+      // Merge: Supabase wins on conflicts, keep local-only users
+      const merged = [...sb];
+      (DB.get('users')||[]).forEach(lu=>{
+        if(!merged.find(su=>su.email===lu.email)) merged.push(lu);
+      });
+      users = merged;
+      DB.set('users', users);
+    }
+  } catch(e){ /* use localStorage */ }
+  return users;
+}
+
+async function saveUserField(userId, email, fields){
+  // Save to localStorage immediately
+  const users = DB.get('users')||[];
+  const u = users.find(x=>String(x.id)===String(userId)) ||
+            users.find(x=>x.email===email);
+  if(u){ Object.assign(u, fields); DB.set('users', users); }
+
+  // Save to Supabase by email (most reliable key)
+  try {
+    await sbFetch('users?email=eq.'+encodeURIComponent(email), 'PATCH', fields);
+  } catch(e){
+    try { await sbFetch('users?id=eq.'+userId, 'PATCH', fields); } catch(e2){}
+  }
+}
+
+
 let matchSelectedMentor = null;
 let matchSelectedMentee = null;
 
-function renderAdminMatch(){
-  const users = DB.get('users')||[];
-  // Admins also appear as mentors for testing/visualization
-  // Normalize role comparison to handle any case/spacing variations
-  // Normalize role: trim, lowercase, handle any variation
+async function renderAdminMatch(){
+  const users = await loadAllUsers();
   const norm = u => (u.role||'').toLowerCase().trim();
   const mentors  = users.filter(u=>['mentor','admin'].includes(norm(u)));
   const mentees  = users.filter(u=>norm(u)==='mentorado');
@@ -6458,7 +6475,7 @@ function renderAdminMatch(){
     <div class="kpi"><div class="kpi-label">Mentores</div><div class="kpi-value" style="color:var(--gold)">${mentors.length}</div></div>
     <div class="kpi"><div class="kpi-label">Mentorados</div><div class="kpi-value">${mentees.length}</div></div>
     <div class="kpi"><div class="kpi-label">Pareados</div><div class="kpi-value" style="color:var(--green)">${pairs.length}</div></div>
-    <div class="kpi"><div class="kpi-label">Sem mentor</div><div class="kpi-value" style="color:var(--amber)">${mentees.filter(m=>!m.mentor_id).length}</div></div>
+    <div class="kpi"><div class="kpi-label">Sem mentor</div><div class="kpi-value" style="color:var(--amber)">${mentees.filter(m=>!(m.mentor_id||m.mentor)).length}</div></div>
   </div>
 
   <!-- Drag and drop board -->
@@ -6475,7 +6492,7 @@ function renderAdminMatch(){
       </div>
       <div>
         ${mentors.length ? mentors.map(m=>{
-          const myMentees = mentees.filter(x=>x.mentor_id===m.id);
+          const myMentees = mentees.filter(x=>String(x.mentor_id||x.mentor||'')===String(m.id));
           const isSelected = matchSelectedMentor === m.id;
           return `<div class="match-user-card ${isSelected?'selected':myMentees.length?'matched':''}"
             onclick="selectMatchMentor('${m.id}')">
@@ -6596,10 +6613,10 @@ function renderAdminMatch(){
   </div>`}
 
   <!-- Unmatched mentees -->
-  ${mentees.filter(m=>!m.mentor_id).length ? `
+  ${mentees.filter(m=>!(m.mentor_id||m.mentor)).length ? `
   <div class="section-label">Sem mentor (${mentees.filter(m=>!m.mentor_id).length})</div>
   <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
-    ${mentees.filter(m=>!m.mentor_id).map(m=>`
+    ${mentees.filter(m=>!(m.mentor_id||m.mentor)).map(m=>`
     <div onclick="selectMatchMentee('${m.id}')" style="padding:8px 14px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius-sm);cursor:pointer;transition:all .12s;" onmouseover="this.style.borderColor='var(--amber)'" onmouseout="this.style.borderColor='var(--amber-border)'">
       <div style="font-size:12px;font-weight:600;color:var(--text)">${m.name}</div>
       <div style="font-size:10px;color:var(--amber);margin-top:2px;">Clique para selecionar</div>
@@ -6651,16 +6668,13 @@ Um mentorado só pode ter um mentor.`,
     'Associar',
     async ()=>{
       // Update mentee with mentor_id
-      mentee.mentor_id = matchSelectedMentor;
-      // Update mentor's mentorados list
+      mentee.mentor_id = String(matchSelectedMentor);
       if(!mentor.mentorados) mentor.mentorados = [];
-      if(!mentor.mentorados.includes(mentee.id)) mentor.mentorados.push(mentee.id);
+      if(!mentor.mentorados.map(String).includes(String(mentee.id))) mentor.mentorados.push(mentee.id);
       DB.set('users', users);
 
-      // Sync to Supabase
-      try {
-        await sbFetch('users?id=eq.'+mentee.id, 'PATCH', {mentor_id: matchSelectedMentor});
-      } catch(e){}
+      // Save mentor_id to Supabase via email (reliable key)
+      await saveUserField(mentee.id, mentee.email, {mentor_id: String(matchSelectedMentor)});
 
       // Auto-release phase G for mentee
       const allRel = DB.get('phase_releases')||{};
@@ -6699,7 +6713,8 @@ function removeMatch(menteeId, menteeName){
       }
 
       DB.set('users', users);
-      try { await sbFetch('users?id=eq.'+menteeId, 'PATCH', {mentor_id: null}); } catch(e){}
+      const removedMentee = users.find(u=>String(u.id)===String(menteeId));
+      if(removedMentee) await saveUserField(menteeId, removedMentee.email, {mentor_id: null});
 
       toast(`Associação de ${menteeName} removida`, 'suc');
       renderAdminMatch();

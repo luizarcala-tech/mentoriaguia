@@ -2727,13 +2727,47 @@ function renderPeer360(){
 }
 
 function sendPeer360(){
-  const name = document.getElementById('peer-name').value.trim();
-  const email = document.getElementById('peer-email').value.trim();
+  const name  = document.getElementById('peer-name')?.value.trim();
+  const email = document.getElementById('peer-email')?.value.trim();
+  const rel   = document.getElementById('peer-rel')?.value;
   if(!name||!email){ toast('Preencha nome e e-mail','err'); return; }
+
+  // Generate a unique response token
+  const token = btoa(name+'|'+email+'|'+Date.now()).replace(/=/g,'');
+
+  // Save peer with token (pending)
   const peers = DB.get('peer360');
-  peers.push({avaliador:name,relacao:document.getElementById('peer-rel').value,respostas:[],obs:'',done:false});
-  DB.set('peer360',peers);
-  toast(`Formulário enviado para ${email}!`,'suc');
+  peers.push({avaliador:name, email, relacao:rel, token, respostas:[], obs:'', done:false});
+  DB.set('peer360', peers);
+
+  // Build the response URL — links to the platform with the token
+  const baseUrl = window.location.href.split('?')[0];
+  const responseUrl = baseUrl + '?responder360=' + token;
+
+  // Build the email body
+  const mentoradoName = currentUser?.name || 'um(a) profissional';
+  const subject = encodeURIComponent(`[Arcala Insight] Convite para avaliação 360° — ${mentoradoName}`);
+  const body = encodeURIComponent(
+`Olá, ${name}!
+
+${mentoradoName} está participando de um programa de mentoria executiva e gostaria da sua avaliação honesta como ${rel}.
+
+Esta avaliação é confidencial e leva cerca de 3 minutos para responder.
+
+👉 Acesse aqui para responder: ${responseUrl}
+
+Se o link não abrir, copie e cole no seu navegador.
+
+Obrigado pela sua contribuição!
+Equipe Arcala Insight`
+  );
+
+  // Open email client
+  window.open('mailto:' + email + '?subject=' + subject + '&body=' + body, '_blank');
+
+  toast(`E-mail preparado para ${name}! Verifique seu cliente de e-mail.`, 'suc');
+  document.getElementById('peer-name').value = '';
+  document.getElementById('peer-email').value = '';
   renderPeer360();
 }
 
@@ -2777,6 +2811,83 @@ Produza:
 Seja analítico e específico. Trate os dados como evidências, não como impressões.`;
   const result = await callAI(prompt);
   showIAResult('peer360-ia', result, 'Análise 360°');
+}
+
+
+function show360ResponseForm(token){
+  // Find peer by token in any user's peer360 data
+  // Since this is localStorage-based, the form is shown on the same browser
+  // For real multi-device: would need Supabase table for responses
+  const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
+  const scores = {};
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+  <div style="background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);width:540px;max-width:95vw;max-height:90vh;overflow-y:auto;padding:28px;">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="font-family:'Sacramento',cursive;font-size:24px;color:rgba(215,215,215,.9);margin-bottom:8px;">AI Arcala Insight</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;">Avaliação 360°</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6;">Avalie o profissional em cada dimensão de 1 a 5.<br>Suas respostas são confidenciais.</div>
+    </div>
+    ${dims.map((d,i)=>`
+    <div style="margin-bottom:18px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">${d}</div>
+      <div style="display:flex;gap:8px;">
+        ${[1,2,3,4,5].map(n=>`
+        <div onclick="this.parentElement.querySelectorAll('[data-score]').forEach(x=>x.style.background='var(--bg3)');this.style.background='var(--gold)';this.style.color='#0a0a0a';window._360scores=window._360scores||{};window._360scores[${i}]=${n};"
+          data-score="${n}" data-dim="${i}"
+          style="flex:1;padding:10px 0;text-align:center;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);cursor:pointer;font-weight:700;font-size:14px;color:var(--text);transition:all .12s;">
+          ${n}
+        </div>`).join('')}
+      </div>
+    </div>`).join('')}
+    <div style="margin-bottom:18px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">Comentário livre (opcional)</div>
+      <textarea id="resp360-obs" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Sora',sans-serif;font-size:12px;padding:10px;resize:vertical;min-height:80px;" placeholder="Compartilhe sua perspectiva sobre o profissional..."></textarea>
+    </div>
+    <button onclick="submit360Response('${token}')" style="width:100%;padding:12px;background:var(--gold);border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif;">
+      Enviar avaliação
+    </button>
+    <div id="resp360-msg" style="text-align:center;margin-top:10px;font-size:12px;color:var(--text3);"></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  window._360scores = {};
+}
+
+function submit360Response(token){
+  const scores = window._360scores || {};
+  const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
+  if(Object.keys(scores).length < dims.length){
+    const missing = dims.length - Object.keys(scores).length;
+    document.getElementById('resp360-msg').textContent = `Avalie todas as ${dims.length} dimensões (faltam ${missing}).`;
+    document.getElementById('resp360-msg').style.color = 'var(--red)';
+    return;
+  }
+  const obs = document.getElementById('resp360-obs')?.value||'';
+  const respostas = dims.map((_,i)=>scores[i]);
+
+  // Save response to this peer
+  const peers = DB.get('peer360')||[];
+  const peer = peers.find(p=>p.token===token);
+  if(peer){
+    peer.done = true;
+    peer.respostas = respostas;
+    peer.obs = obs;
+    peer.respondedAt = new Date().toLocaleString('pt-BR');
+    DB.set('peer360', peers);
+  }
+
+  // Remove overlay
+  document.querySelector('[style*="z-index:900"]')?.remove();
+
+  // Clean URL
+  window.history.replaceState({}, document.title, window.location.pathname);
+
+  toast('Avaliação enviada! Obrigado pela sua contribuição.', 'suc');
+
+  // Refresh if on 360 page
+  if(currentPage === 'peer360') renderPeer360();
 }
 
 // ══════════════════════════════════════════════
@@ -7174,6 +7285,17 @@ window.approveReg = async function(id){
 
 renderSidebar();
 checkSession();
+
+// Handle 360 response link
+(function handle360Response(){
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('responder360');
+  if(!token) return;
+  // Show 360 response form
+  setTimeout(()=>{
+    show360ResponseForm(token);
+  }, 800);
+})();
 </script>
 </body>
 </html>

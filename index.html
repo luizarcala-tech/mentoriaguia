@@ -745,21 +745,7 @@ DB.init();
   if(adminIdx === -1) users.unshift(admin);
   else users[adminIdx] = {...users[adminIdx], ...admin};
 
-  // Only seed demo users if never deleted (check archive)
-  const archive = DB.get('users_archive') || [];
-  const deletedEmails = archive.map(u => u.email);
-
-  const demoUsers = [
-    {id:'u3',name:'Ana Paula Mentor',email:'ana.mentor@arcala.com',role:'mentor',active:true,created:'2026-01-20',plan:'Mentor',password:'bWVudG9yMTIz'},
-    {id:'u2',name:'Lucas Mendes',email:'lucas.mendes@petro.com',role:'mentorado',active:true,created:'2026-02-01',plan:'Ciclo único — 12 semanas',phase:'G',week:0,password:'bWVudGVlMTIz',mentor_id:'u3'},
-  ];
-
-  demoUsers.forEach(demo => {
-    if(deletedEmails.includes(demo.email)) return; // Skip if user was deleted
-    const idx = users.findIndex(u => u.email === demo.email);
-    if(idx === -1) users.push(demo);
-  });
-
+  // Do NOT auto-seed demo users — admin manages users manually
   DB.set('users', users);
 })();
 
@@ -1284,7 +1270,7 @@ function renderUsersTable(users){
         <div class="toggle ${u.active?'on':''}" onclick="toggleUserAccess('${u.id}',this)"></div>
       </td>
       <td onclick="event.stopPropagation()">
-        <button class="btn btn-red btn-xs" onclick="deleteUser('${u.id}')">Remover</button>
+        <button class="btn btn-red btn-xs" onclick="event.stopPropagation();deleteUser('${u.id}')">Remover</button>
       </td>
     </tr>`;
   }).join('');
@@ -6668,6 +6654,37 @@ function removeMatch(menteeId, menteeName){
 
       toast(`Associação de ${menteeName} removida`, 'suc');
       renderAdminMatch();
+    }
+  );
+}
+
+
+function deleteUser(id){
+  const users = DB.get('users')||[];
+  const u = users.find(x=>x.id===id);
+  if(!u){ toast('Usuário não encontrado','err'); return; }
+  if(u.role==='admin'){ toast('Não é possível remover um administrador','err'); return; }
+  showConfirm(
+    'Mover para histórico',
+    `Remover "${u.name}"? Todos os dados serão preservados no histórico e podem ser restaurados.`,
+    'Mover para histórico',
+    ()=>{
+      // Archive with full data
+      const archive = DB.get('users_archive')||[];
+      archive.push({
+        ...u,
+        deletedAt: new Date().toLocaleString('pt-BR'),
+        deletedBy: currentUser?.name||'Admin',
+      });
+      DB.set('users_archive', archive);
+      // Remove from active
+      DB.set('users', (DB.get('users')||[]).filter(x=>x.id!==id));
+      // Soft delete in Supabase
+      sbFetch('users?id=eq.'+id,'PATCH',{active:false}).catch(()=>{});
+      // Clear editing if was editing this user
+      if(editingUserId === id) editingUserId = null;
+      toast(`${u.name} movido para o histórico`,'suc');
+      renderAdminUsers();
     }
   );
 }

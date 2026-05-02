@@ -6329,10 +6329,12 @@ function renderAdminMatch(){
             <div class="match-avatar ${isSelected?'gold':myMentees.length?'green':''}">${initials(m.name)}</div>
             <div class="match-user-info">
               <div class="match-user-name">${m.name}</div>
-              <div class="match-user-sub">${myMentees.length ? myMentees.length+' mentorado(s)' : 'Sem mentorados'}</div>
+              <div class="match-user-sub">${myMentees.length
+                ? myMentees.map(x=>x.name.split(' ')[0]).join(', ')
+                : '<span style="color:var(--text4);">Nenhum mentorado</span>'}</div>
             </div>
-            ${isSelected?'<span style="color:var(--gold);font-size:14px;">●</span>':''}
-            ${!isSelected&&myMentees.length?'<span style="color:var(--green);font-size:10px;font-weight:700;">'+myMentees.length+'</span>':''}
+            ${isSelected?'<span style="color:var(--gold);font-size:14px;">●</span>':
+              myMentees.length?`<span style="font-size:11px;font-weight:700;color:var(--green);font-family:'Space Mono',monospace;">${myMentees.length}</span>`:''}
           </div>`;
         }).join('') : `<div style="padding:20px;text-align:center;font-size:12px;color:var(--text4);">Nenhum mentor ativo</div>`}
       </div>
@@ -6372,9 +6374,13 @@ function renderAdminMatch(){
             <div class="match-avatar ${isSelected?'gold':mentor?'green':''}">${initials(m.name)}</div>
             <div class="match-user-info">
               <div class="match-user-name">${m.name}</div>
-              <div class="match-user-sub">${mentor ? '→ '+mentor.name : 'Sem mentor'}</div>
+              <div class="match-user-sub">${mentor
+                ? '<span style="color:var(--green);">✓</span> '+mentor.name
+                : '<span style="color:var(--amber);">sem mentor</span>'}</div>
             </div>
-            ${isSelected?'<span style="color:var(--gold);font-size:14px;">●</span>':''}
+            ${isSelected?'<span style="color:var(--gold);font-size:14px;">●</span>':
+              mentor?'<span style="font-size:9px;font-weight:700;color:var(--green);background:var(--green-bg);border:1px solid var(--green-border);padding:2px 6px;border-radius:20px;">1:1</span>':
+              '<span style="font-size:9px;font-weight:700;color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-border);padding:2px 6px;border-radius:20px;">livre</span>'}
           </div>`;
         }).join('') : `<div style="padding:20px;text-align:center;font-size:12px;color:var(--text4);">Nenhum mentorado ativo</div>`}
       </div>
@@ -6471,9 +6477,23 @@ function doMatch(){
   const mentee = users.find(u=>u.id===matchSelectedMentee);
   if(!mentor||!mentee) return;
 
+  // Rule: mentee can only have ONE mentor
+  if(mentee.mentor_id && mentee.mentor_id !== matchSelectedMentor){
+    const currentMentor = users.find(u=>u.id===mentee.mentor_id);
+    toast(`${mentee.name} já tem um mentor (${currentMentor?.name||'outro'}). Desfaça a associação atual primeiro.`,'err');
+    return;
+  }
+
+  if(mentee.mentor_id === matchSelectedMentor){
+    toast(`${mentee.name} já está associado a ${mentor.name}.`,'err');
+    return;
+  }
+
   showConfirm(
     'Confirmar associação',
-    `Associar ${mentor.name} como mentor de ${mentee.name}?`,
+    `Associar ${mentor.name} como mentor de ${mentee.name}?
+
+Um mentorado só pode ter um mentor.`,
     'Associar',
     async ()=>{
       // Update mentee with mentor_id

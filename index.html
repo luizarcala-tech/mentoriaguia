@@ -738,10 +738,25 @@ DB.init();
 // Garante que o admin luizarcala@outlook.com sempre existe, mesmo com localStorage antigo
 (function ensureAdmin(){
   const users = DB.get('users') || [];
+
+  // Always ensure admin
   const admin = {id:'u0',name:'Luiz Arcala',email:'luizarcala@outlook.com',role:'admin',active:true,created:'2026-04-29',plan:'Admin',password:'QXJjYWxhQDIwMjY='};
-  const idx = users.findIndex(u => u.email === admin.email);
-  if(idx === -1) users.unshift(admin);
-  else users[idx] = {...users[idx], ...admin};
+  const adminIdx = users.findIndex(u => u.email === admin.email);
+  if(adminIdx === -1) users.unshift(admin);
+  else users[adminIdx] = {...users[adminIdx], ...admin};
+
+  // Ensure demo mentor exists
+  const demoMentor = {id:'u3',name:'Ana Paula Mentor',email:'ana.mentor@arcala.com',role:'mentor',active:true,created:'2026-01-20',plan:'Mentor',password:'bWVudG9yMTIz',mentorados:['u2']};
+  const mentorIdx = users.findIndex(u => u.email === demoMentor.email);
+  if(mentorIdx === -1) users.push(demoMentor);
+  else users[mentorIdx] = {...users[mentorIdx], ...demoMentor, role:'mentor', active:true};
+
+  // Ensure demo mentorado exists
+  const demoMentee = {id:'u2',name:'Lucas Mendes',email:'lucas.mendes@petro.com',role:'mentorado',active:true,created:'2026-02-01',plan:'Ciclo único — 12 semanas',phase:'G',week:0,password:'bWVudGVlMTIz',mentor_id:'u3'};
+  const menteeIdx = users.findIndex(u => u.email === demoMentee.email);
+  if(menteeIdx === -1) users.push(demoMentee);
+  else users[menteeIdx] = {...users[menteeIdx], ...demoMentee, role:'mentorado', active:true};
+
   DB.set('users', users);
 })();
 
@@ -6262,8 +6277,8 @@ let matchSelectedMentee = null;
 
 function renderAdminMatch(){
   const users = DB.get('users')||[];
-  const mentors  = users.filter(u=>u.role==='mentor' && u.active);
-  const mentees  = users.filter(u=>u.role==='mentorado' && u.active);
+  const mentors  = users.filter(u=>u.role==='mentor' && u.active !== false);
+  const mentees  = users.filter(u=>u.role==='mentorado' && u.active !== false);
 
   // Build current pairs
   const pairs = [];

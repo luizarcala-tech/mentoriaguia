@@ -745,17 +745,20 @@ DB.init();
   if(adminIdx === -1) users.unshift(admin);
   else users[adminIdx] = {...users[adminIdx], ...admin};
 
-  // Ensure demo mentor exists
-  const demoMentor = {id:'u3',name:'Ana Paula Mentor',email:'ana.mentor@arcala.com',role:'mentor',active:true,created:'2026-01-20',plan:'Mentor',password:'bWVudG9yMTIz',mentorados:['u2']};
-  const mentorIdx = users.findIndex(u => u.email === demoMentor.email);
-  if(mentorIdx === -1) users.push(demoMentor);
-  else users[mentorIdx] = {...users[mentorIdx], ...demoMentor, role:'mentor', active:true};
+  // Only seed demo users if never deleted (check archive)
+  const archive = DB.get('users_archive') || [];
+  const deletedEmails = archive.map(u => u.email);
 
-  // Ensure demo mentorado exists
-  const demoMentee = {id:'u2',name:'Lucas Mendes',email:'lucas.mendes@petro.com',role:'mentorado',active:true,created:'2026-02-01',plan:'Ciclo único — 12 semanas',phase:'G',week:0,password:'bWVudGVlMTIz',mentor_id:'u3'};
-  const menteeIdx = users.findIndex(u => u.email === demoMentee.email);
-  if(menteeIdx === -1) users.push(demoMentee);
-  else users[menteeIdx] = {...users[menteeIdx], ...demoMentee, role:'mentorado', active:true};
+  const demoUsers = [
+    {id:'u3',name:'Ana Paula Mentor',email:'ana.mentor@arcala.com',role:'mentor',active:true,created:'2026-01-20',plan:'Mentor',password:'bWVudG9yMTIz'},
+    {id:'u2',name:'Lucas Mendes',email:'lucas.mendes@petro.com',role:'mentorado',active:true,created:'2026-02-01',plan:'Ciclo único — 12 semanas',phase:'G',week:0,password:'bWVudGVlMTIz',mentor_id:'u3'},
+  ];
+
+  demoUsers.forEach(demo => {
+    if(deletedEmails.includes(demo.email)) return; // Skip if user was deleted
+    const idx = users.findIndex(u => u.email === demo.email);
+    if(idx === -1) users.push(demo);
+  });
 
   DB.set('users', users);
 })();
@@ -1141,6 +1144,7 @@ async function renderAdminUsers(){
     sbUsers.forEach(u => { if(!users.find(x=>x.email===u.email)) users.push(u); });
   } catch(e) {}
   const searchId = 'usr-search-'+Date.now();
+  const archive = DB.get('users_archive')||[];
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
     <div class="page-title">Usuários & Acessos</div>
@@ -6551,6 +6555,72 @@ function removeMatch(menteeId, menteeName){
       renderAdminMatch();
     }
   );
+}
+
+
+function showArchive(){
+  const archive = DB.get('users_archive')||[];
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:600;display:flex;align-items:center;justify-content:center;';
+  modal.innerHTML = `
+  <div style="background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);width:700px;max-width:92vw;max-height:82vh;display:flex;flex-direction:column;">
+    <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:15px;font-weight:600;color:var(--text);">Histórico de usuários removidos</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">${archive.length} registro(s) — dados preservados</div>
+      </div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:1px solid var(--border2);color:var(--text3);border-radius:6px;padding:5px 12px;cursor:pointer;font-family:'Sora',sans-serif;">Fechar</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;">
+      ${archive.length ? archive.slice().reverse().map(u=>`
+      <div style="padding:16px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px;">
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text3);flex-shrink:0;">${initials(u.name)}</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;color:var(--text);">${u.name}</div>
+          <div style="font-size:11px;color:var(--text4);">${u.email} · <span style="color:var(--text3);">${u.role}</span> · ${u.plan||'—'}</div>
+          <div style="font-size:10px;color:var(--red);margin-top:3px;">Removido em ${u.deletedAt||'—'} por ${u.deletedBy||'Admin'}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="restoreUser('${u.id}')" style="padding:5px 12px;background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);border-radius:6px;font-size:11px;cursor:pointer;font-family:'Sora',sans-serif;">Restaurar</button>
+          <button onclick="purgeUser('${u.id}')" style="padding:5px 12px;background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);border-radius:6px;font-size:11px;cursor:pointer;font-family:'Sora',sans-serif;">Excluir definitivo</button>
+        </div>
+      </div>`).join('') : '<div style="padding:40px;text-align:center;color:var(--text4);font-size:13px;">Nenhum usuário no histórico</div>'}
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function restoreUser(id){
+  const archive = DB.get('users_archive')||[];
+  const u = archive.find(x=>x.id===id);
+  if(!u) return;
+  showConfirm('Restaurar usuário', `Restaurar "${u.name}" como usuário ativo?`, 'Restaurar', ()=>{
+    // Remove from archive
+    DB.set('users_archive', archive.filter(x=>x.id!==id));
+    // Add back to users (without deletedAt/deletedBy fields)
+    const {deletedAt, deletedBy, ...cleanUser} = u;
+    cleanUser.active = true;
+    const users = DB.get('users')||[];
+    users.push(cleanUser);
+    DB.set('users', users);
+    // Close modal
+    document.querySelector('[style*="position:fixed"][style*="z-index:600"]')?.remove();
+    toast(`${u.name} restaurado com sucesso!`, 'suc');
+    renderAdminUsers();
+  }, false);
+}
+
+function purgeUser(id){
+  const archive = DB.get('users_archive')||[];
+  const u = archive.find(x=>x.id===id);
+  if(!u) return;
+  showConfirm('Excluir permanentemente', `Excluir "${u.name}" de forma definitiva? Esta ação não pode ser desfeita.`, 'Excluir', ()=>{
+    DB.set('users_archive', archive.filter(x=>x.id!==id));
+    sbFetch('users?id=eq.'+id, 'DELETE').catch(()=>{});
+    document.querySelector('[style*="position:fixed"][style*="z-index:600"]')?.remove();
+    toast(`${u.name} excluído permanentemente`, 'suc');
+    renderAdminUsers();
+  });
 }
 
 // ══════════════════════════════════════════════

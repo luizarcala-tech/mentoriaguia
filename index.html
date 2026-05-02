@@ -747,6 +747,15 @@ DB.init();
 
   // Do NOT auto-seed demo users — admin manages users manually
   DB.set('users', users);
+
+  // Force release Phase U for luizarcala@gmail.com so 360 is accessible
+  const luizMentorado = users.find(u=>u.email==='luizarcala@gmail.com');
+  if(luizMentorado){
+    const allRel = DB.get('phase_releases')||{};
+    if(!allRel[luizMentorado.id]) allRel[luizMentorado.id] = {G:true,U:true,I:false,A:false};
+    else { allRel[luizMentorado.id].G = true; allRel[luizMentorado.id].U = true; }
+    DB.set('phase_releases', allRel);
+  }
 })();
 
 // ══════════════════════════════════════════════

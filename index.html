@@ -6419,23 +6419,37 @@ function renderMinhaJornada(){
 // CENTRAL USER LOADER — fonte única de dados
 // ══════════════════════════════════════════════
 async function loadAllUsers(){
-  let users = DB.get('users') || [];
+  const local = DB.get('users') || [];
   try {
     const sb = await Promise.race([
       sbFetch('users?select=*'),
       new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),5000))
     ]);
     if(sb && sb.length > 0){
-      // Merge: Supabase wins on conflicts, keep local-only users
-      const merged = [...sb];
-      (DB.get('users')||[]).forEach(lu=>{
+      // Smart merge: local data wins for relational fields (mentor_id, empresa_id)
+      // Supabase wins for auth fields (name, email, role, active, plan)
+      const localFields = ['mentor_id','empresa_id','mentor','mentorados','phase_releases'];
+      const merged = sb.map(su=>{
+        const lu = local.find(l=>l.email===su.email);
+        if(!lu) return su;
+        // Merge: keep local relational fields if Supabase doesn't have them
+        const result = {...su};
+        localFields.forEach(f=>{
+          if(lu[f] !== undefined && (su[f]===null || su[f]===undefined)){
+            result[f] = lu[f];
+          }
+        });
+        return result;
+      });
+      // Add local-only users (not in Supabase yet)
+      local.forEach(lu=>{
         if(!merged.find(su=>su.email===lu.email)) merged.push(lu);
       });
-      users = merged;
-      DB.set('users', users);
+      DB.set('users', merged);
+      return merged;
     }
   } catch(e){ /* use localStorage */ }
-  return users;
+  return local;
 }
 
 async function saveUserField(userId, email, fields){

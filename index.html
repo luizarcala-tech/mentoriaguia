@@ -1315,57 +1315,66 @@ function cancelEdit(){
 }
 
 async function updateUser(){
-  if(!editingUserId) return;
-  const users = DB.get('users')||[];
-  // Find by ID, then email, then any field match
+  if(!editingUserId && !editingUser){ toast('Selecione um usuário para editar','err'); return; }
+
+  // Get current users (reload to ensure fresh data)
+  const users = await loadAllUsers();
+
+  // Find user by ID or email
   let u = users.find(x=>String(x.id)===String(editingUserId));
   if(!u && editingUser) u = users.find(x=>x.email===editingUser.email);
-  if(!u){
-    // Last resort: reload and retry
-    toast('Sincronizando dados...','');
-    await renderAdminUsers();
-    return;
-  }
+  if(!u){ toast('Usuário não encontrado. Recarregue a página.','err'); return; }
 
   const name     = document.getElementById('nu-name')?.value.trim();
   const role     = document.getElementById('nu-role')?.value;
   const plan     = document.getElementById('nu-plan')?.value;
   const empresa  = document.getElementById('nu-empresa')?.value||null;
-  const mentorId = document.getElementById('nu-mentor')?.value||null;
+  const mentorId = document.getElementById('nu-mentor')?.value||null;  // empty string = no mentor
   const active   = document.getElementById('nu-active')?.value === '1';
 
   if(!name){ toast('Informe o nome','err'); return; }
 
+  // Handle mentor change
+  const oldMentorId = u.mentor_id||u.mentor||null;
+  if(String(oldMentorId||'') !== String(mentorId||'')){
+    // Remove from old mentor's list
+    if(oldMentorId){
+      const oldMentor = users.find(x=>String(x.id)===String(oldMentorId));
+      if(oldMentor && oldMentor.mentorados){
+        oldMentor.mentorados = oldMentor.mentorados.filter(id=>String(id)!==String(u.id));
+      }
+    }
+    // Add to new mentor's list
+    if(mentorId){
+      const newMentor = users.find(x=>String(x.id)===String(mentorId));
+      if(newMentor){
+        if(!newMentor.mentorados) newMentor.mentorados = [];
+        if(!newMentor.mentorados.map(String).includes(String(u.id))) newMentor.mentorados.push(u.id);
+      }
+    }
+  }
+
+  // Apply changes to user object
   u.name = name;
   u.role = role;
   u.plan = plan;
   u.empresa_id = empresa;
-  u.mentor_id = mentorId;
+  u.mentor_id = mentorId || null;
   u.active = active;
 
-  // If mentor changed — update mentor's mentorados list
-  if(mentorId){
-    const mentor = users.find(x=>x.id===mentorId);
-    if(mentor){
-      if(!mentor.mentorados) mentor.mentorados = [];
-      if(!mentor.mentorados.includes(editingUserId)) mentor.mentorados.push(editingUserId);
-    }
-    // Auto-release phase G
-    const allRel = DB.get('phase_releases')||{};
-    if(!allRel[editingUserId]) allRel[editingUserId] = {G:true,U:false,I:false,A:false};
-    else allRel[editingUserId].G = true;
-    DB.set('phase_releases', allRel);
-  }
-
+  // Save to localStorage
   DB.set('users', users);
 
-  // Sync to Supabase
-  sbFetch('users?id=eq.'+editingUserId, 'PATCH', {name, role, plan, empresa_id: empresa, mentor_id: mentorId, active}).catch(()=>{});
+  // Save to Supabase by email (most reliable key)
+  const patch = {name, role, plan, empresa_id: empresa||null, mentor_id: mentorId||null, active};
+  await saveUserField(u.id, u.email, patch);
 
-  toast(`${name} atualizado com sucesso!`, 'suc');
+  toast(`${name} atualizado!`, 'suc');
   editingUserId = null;
+  editingUser = null;
   renderAdminUsers();
 }
+
 
 function addUser(){
   const name     = document.getElementById('nu-name')?.value.trim();

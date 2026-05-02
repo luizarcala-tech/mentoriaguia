@@ -2661,300 +2661,184 @@ const PEER_QUESTIONS = [
   'Como você avalia o pensamento estratégico e visão de negócio?',
 ];
 
+
+// ══════════════════════════════════════════════
+// PEER 360° V2 — Cycle-aware with AI questions
+// ══════════════════════════════════════════════
+
 async function renderPeer360(){
-  // Sync from Supabase — pull any new responses for this user
-  if(currentUser){
-    try {
-      const sbResponses = await sbFetch(
-        'peer360_responses?mentee_email=eq.'+encodeURIComponent(currentUser.email)+'&select=*'
-      );
-      if(sbResponses && sbResponses.length){
-        const local = DB.get('peer360')||[];
-        sbResponses.forEach(sr=>{
-          const local_p = local.find(p=>p.token===sr.token);
-          if(!local_p){
-            // New response from Supabase — add to local
-            local.push({
-              avaliador: sr.avaliador, email: sr.avaliador_email,
-              relacao: sr.relacao, token: sr.token,
-              respostas: sr.scores ? (Array.isArray(sr.scores)?sr.scores:Object.values(sr.scores)) : [],
-              obs: sr.obs||'', done: sr.done||false
-            });
-          } else if(sr.done && !local_p.done){
-            // Response was completed on another device — update local
-            local_p.done = true;
-            local_p.respostas = sr.scores ? (Array.isArray(sr.scores)?sr.scores:Object.values(sr.scores)) : [];
-            local_p.obs = sr.obs||'';
-          }
-        });
-        DB.set('peer360', local);
-      }
-    } catch(e){ /* use local */ }
+  if(!currentUser){ return; }
+  const menteeEmail = currentUser.email;
+
+  // Sync responses from Supabase
+  try {
+    const sbResponses = await sbFetch('peer360_responses?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&select=*');
+    if(sbResponses && sbResponses.length){
+      const local = DB.get('peer360')||[];
+      sbResponses.forEach(sr=>{
+        const lp = local.find(p=>p.token===sr.token);
+        if(!lp){
+          local.push({avaliador:sr.avaliador,email:sr.avaliador_email,relacao:sr.relacao,
+            token:sr.token,respostas:sr.scores||(sr.done?[]:null),obs:sr.obs||'',done:sr.done||false});
+        } else if(sr.done && !lp.done){
+          lp.done=true; lp.respostas=sr.scores; lp.obs=sr.obs||'';
+        }
+      });
+      DB.set('peer360', local);
+    }
+  } catch(e){}
+
+  const peers = DB.get('peer360')||[];
+  
+  // Load cycles
+  const cycles = await loadCycles(menteeEmail);
+  const cycleId = getCurrentCycleId() || cycles.find(c=>c.status==='active')?.id;
+  const cycle = cycleId ? cycles.find(c=>c.id===cycleId) : null;
+  const frozen = cycle && !!cycle.frozen_at;
+  const hasQuestions = cycle && cycle.questions_360 && cycle.questions_360.length > 0;
+  const comps = cycle?.competencias || [];
+
+  // Compute scores mapped back to competencias
+  const donePeers = peers.filter(p=>p.done);
+  const compScores = {};
+  if(hasQuestions && donePeers.length){
+    cycle.questions_360.forEach((qblock, bi)=>{
+      const scores = [];
+      donePeers.forEach(p=>{
+        const raw = p.respostas;
+        if(!raw) return;
+        // respostas is either array of all answers or object
+        const q1score = Array.isArray(raw) ? raw[bi*2] : raw['q'+(bi*2+1)];
+        const q2score = Array.isArray(raw) ? raw[bi*2+1] : raw['q'+(bi*2+2)];
+        if(q1score) scores.push(Number(q1score));
+        if(q2score) scores.push(Number(q2score));
+      });
+      if(scores.length) compScores[bi] = (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1);
+    });
   }
-  const peers = DB.get('peer360');
-  const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
-  const avg = dims.map((_,di)=>{
-    const vals = peers.filter(p=>p.done&&p.respostas[di]!=null).map(p=>p.respostas[di]);
-    return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : 0;
-  });
 
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
     <div class="page-title">Feedback 360°</div>
-    <div class="page-sub">Avaliação por pares, líderes e subordinados — consolidação e análise</div>
+    <div class="page-sub">Avaliação por pares, líderes e subordinados — mapeada às competências do ciclo</div>
   </div>
+
+  <!-- Cycle selector -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.08em;">CICLO</div>
+    ${cycles.length ? `
+    <select style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-size:12px;padding:6px 10px;border-radius:6px;font-family:'Sora',sans-serif;" 
+      id="cycle-selector" onchange="DB.set('current_cycle_id',this.value);renderPeer360()">
+      ${cycles.map(c=>`<option value="${c.id}" ${c.id===cycleId?'selected':''}>${c.name}${c.status==='closed'?' (encerrado)':''}</option>`).join('')}
+    </select>` : '<span style="font-size:12px;color:var(--amber);">Nenhum ciclo criado</span>'}
+    <button class="btn btn-outline btn-xs" onclick="showCycleManager('${menteeEmail}').then(()=>{})">⚙ Gerenciar ciclos</button>
+    ${cycle ? (frozen ?
+      `<span style="font-size:10px;color:var(--green);font-weight:600;">✓ ${comps.length} competências congeladas · ${hasQuestions?cycle.questions_360.length+' perguntas':'sem perguntas'}</span>` :
+      `<span style="font-size:10px;color:var(--red);font-weight:600;">⚠ Congele as competências antes de enviar avaliações</span>`) : ''}
+  </div>
+
+  ${!cycle ? `
+  <div class="panel" style="text-align:center;padding:40px;">
+    <div style="font-size:32px;margin-bottom:14px;">◈</div>
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;">Crie um ciclo para começar</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">O ciclo define as competências que serão avaliadas e gera as perguntas do 360°.</div>
+    <button class="btn btn-gold" onclick="showCycleManager('${menteeEmail}').then(()=>{})">Criar primeiro ciclo</button>
+  </div>` : `
+
   <div class="grid-2">
     <div>
+      <!-- Send invite -->
       <div class="panel" style="margin-bottom:14px;">
         <div class="panel-title"><div class="panel-title-dot"></div> Convidar avaliador</div>
-        <div class="field"><label class="field-label">Nome do avaliador</label><input type="text" id="peer-name" placeholder="Nome completo"></div>
-        <div class="field"><label class="field-label">E-mail</label><input type="email" id="peer-email" placeholder="email@empresa.com"></div>
-        <div class="field"><label class="field-label">Relação com o mentorado</label>
-          <select id="peer-rel"><option>Líder direto</option><option>Par / mesmo nível</option><option>Subordinado direto</option><option>Cliente interno</option><option>Parceiro externo</option></select>
+        ${!frozen ? `
+        <div style="background:var(--red-bg);border:1px solid var(--red-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--red);">
+          ⚠ Congele as competências do ciclo antes de enviar convites. <button class="btn btn-outline btn-xs" style="margin-left:8px;" onclick="showCycleManager('${menteeEmail}').then(()=>{})">Congelar agora</button>
+        </div>` : ''}
+        <div class="field"><label class="field-label">Nome do avaliador</label>
+          <input type="text" class="form-input" id="peer-name" placeholder="Nome completo" ${!frozen?'disabled':''}>
+        </div>
+        <div class="field"><label class="field-label">E-mail</label>
+          <input type="email" class="form-input" id="peer-email" placeholder="email@empresa.com" ${!frozen?'disabled':''}>
+        </div>
+        <div class="field"><label class="field-label">Relação</label>
+          <select class="form-select" id="peer-rel" ${!frozen?'disabled':''}>
+            <option>Líder direto</option><option>Par / mesmo nível</option>
+            <option>Subordinado direto</option><option>Cliente interno</option><option>Parceiro externo</option>
+          </select>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-gold btn-sm" onclick="sendPeer360()">Enviar formulário ↗</button>
-          <button class="btn btn-outline btn-sm" onclick="renderPeer360()">↺ Sincronizar respostas</button>
+          <button class="btn btn-gold btn-sm" onclick="sendPeer360()" ${!frozen?'disabled':''}>Enviar formulário ↗</button>
+          <button class="btn btn-outline btn-sm" onclick="renderPeer360()">↺ Sincronizar</button>
           <button class="btn btn-outline btn-sm" onclick="simulatePeerResponse()">Simular resposta</button>
         </div>
       </div>
 
+      <!-- Responses list -->
       <div class="panel">
-        <div class="panel-title"><div class="panel-title-dot"></div> Respostas recebidas (${peers.filter(p=>p.done).length}/${peers.length})</div>
-        ${peers.map((p,pi)=>`
+        <div class="panel-title"><div class="panel-title-dot"></div> Respostas (${donePeers.length}/${peers.length})</div>
+        ${peers.length ? peers.map((p,pi)=>`
         <div class="peer-q-card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <div style="font-size:11px;font-weight:600;color:var(--text)">${p.avaliador} <span style="font-weight:400;color:var(--text3)">— ${p.relacao}</span></div>
             <span class="pill ${p.done?'pill-active':'pill-pending'}">${p.done?'RECEBIDO':'PENDENTE'}</span>
           </div>
-          ${p.done?`<div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-style:italic">"${p.obs}"</div>
-          <div style="display:flex;gap:8px;">${dims.map((d,di)=>`<div style="text-align:center"><div style="font-size:9px;color:var(--text4);margin-bottom:2px">${d.substring(0,4)}</div><div style="font-size:13px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${p.respostas[di]}</div></div>`).join('')}</div>`
-          :'<div style="font-size:11px;color:var(--text4)">Aguardando resposta...</div>'}
-        </div>`).join('')}
+          ${p.done && p.obs ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:6px;">"${p.obs}"</div>` : ''}
+          ${!p.done ? `<div style="font-size:11px;color:var(--text4);">Aguardando resposta...</div>` : ''}
+        </div>`).join('') : `<div style="font-size:12px;color:var(--text4);padding:10px 0;">Nenhum avaliador convidado ainda.</div>`}
       </div>
     </div>
+
+    <!-- Results -->
     <div>
+      ${hasQuestions && donePeers.length ? `
       <div class="panel" style="margin-bottom:14px;">
-        <div class="panel-title"><div class="panel-title-dot"></div> Resultado consolidado</div>
-        <div class="chart-wrap" style="height:230px;"><canvas id="chart360" role="img" aria-label="Resultado 360 graus por dimensão"></canvas></div>
-      </div>
-      <div class="panel">
-        <div class="panel-title"><div class="panel-title-dot"></div> Médias por dimensão</div>
-        ${dims.map((d,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
-          <div style="font-size:11px;color:var(--text2);width:100px">${d}</div>
-          <div style="flex:1;background:var(--bg3);border-radius:4px;height:6px;overflow:hidden">
-            <div style="width:${avg[i]*20}%;background:var(--gold);height:100%;border-radius:4px;transition:width .3s"></div>
-          </div>
-          <div style="font-size:13px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace;width:30px;text-align:right">${avg[i]}</div>
-        </div>`).join('')}
-        <div style="margin-top:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Resultado por competência</div>
+        ${cycle.questions_360.map((qblock,bi)=>{
+          const score = compScores[bi] || '—';
+          const pct = score !== '—' ? ((Number(score)/4)*100).toFixed(0) : 0;
+          const color = score==='—'?'var(--text4)':Number(score)>=3?'var(--green)':Number(score)>=2?'var(--amber)':'var(--red)';
+          return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <div style="font-size:12px;font-weight:600;color:var(--text);">${comps[bi]?.name||qblock.competencia}</div>
+              <div style="font-size:14px;font-weight:700;color:${color};font-family:'Space Mono',monospace;">${score}<span style="font-size:10px;color:var(--text4)">/4</span></div>
+            </div>
+            <div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;">
+              <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;transition:width .4s;"></div>
+            </div>
+          </div>`;
+        }).join('')}
+        <div style="margin-top:12px;">
           <button class="btn btn-gold btn-sm" onclick="analyze360WithIA()">✦ Análise integrada com IA ↗</button>
         </div>
-      </div>
-      <div id="peer360-ia" style="margin-top:14px;display:none;"></div>
-    </div>
-  </div>`;
+      </div>` : `
+      <div class="panel" style="margin-bottom:14px;text-align:center;padding:30px;">
+        <div style="font-size:24px;margin-bottom:12px;">◷</div>
+        <div style="font-size:13px;color:var(--text3);">
+          ${!hasQuestions ? 'Congele as competências para gerar as perguntas' : 'Aguardando respostas dos avaliadores'}
+        </div>
+      </div>`}
 
-  setTimeout(()=>{
-    const ctx = document.getElementById('chart360');
-    if(ctx) charts.c360 = new Chart(ctx,{
-      type:'bar',
-      data:{labels:dims,datasets:[{label:'Média 360°',data:avg.map(v=>parseFloat(v)),backgroundColor:'rgba(240,192,64,.3)',borderColor:'#f0c040',borderWidth:1,borderRadius:4}]},
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:5,ticks:{stepSize:1,color:'#666'},grid:{color:'#1a1a1a'}},x:{ticks:{color:'#888'},grid:{display:false}}}}
-    });
-  },150);
-}
-
-async function sendPeer360(){
-  const name  = document.getElementById('peer-name')?.value.trim();
-  const email = document.getElementById('peer-email')?.value.trim();
-  const rel   = document.getElementById('peer-rel')?.value;
-  if(!name||!email){ toast('Preencha nome e e-mail','err'); return; }
-  if(!currentUser){ toast('Faça login primeiro','err'); return; }
-
-  // Generate unique token
-  const token = btoa(name+'|'+email+'|'+Date.now()).replace(/[^a-zA-Z0-9]/g,'');
-
-  // Save to Supabase first (cross-device)
-  const sbRecord = {
-    token, mentee_email: currentUser.email,
-    avaliador: name, avaliador_email: email,
-    relacao: rel, done: false
-  };
-  try {
-    await sbFetch('peer360_responses', 'POST', sbRecord);
-    toast('Convite registrado no banco ✓','suc');
-  } catch(e){
-    // Fallback to localStorage only
-    console.warn('Supabase 360 save failed:', e);
-  }
-
-  // Always save locally too (for immediate display)
-  const peers = DB.get('peer360')||[];
-  peers.push({avaliador:name, email, relacao:rel, token, respostas:[], obs:'', done:false});
-  DB.set('peer360', peers);
-
-  // Build response URL
-  const baseUrl = window.location.href.split('?')[0];
-  const responseUrl = baseUrl + '?responder360=' + token;
-  const mentoradoName = currentUser.name;
-  const subject = encodeURIComponent('[Arcala Insight] Avaliação 360° — '+mentoradoName);
-  const body = encodeURIComponent(
-'Olá, '+name+'!\n\n'+
-mentoradoName+' está em um programa de mentoria executiva e gostaria da sua avaliação como '+rel+'.\n\n'+
-'A avaliação é confidencial e leva menos de 3 minutos.\n\n'+
-'👉 Responda aqui: '+responseUrl+'\n\n'+
-'Se o link não abrir, copie e cole no seu navegador.\n\n'+
-'Obrigado!\nEquipe Arcala Insight'
-  );
-  window.open('mailto:'+email+'?subject='+subject+'&body='+body,'_blank');
-  toast('E-mail preparado! Confirme o envio no seu cliente de e-mail.','suc');
-  document.getElementById('peer-name').value='';
-  document.getElementById('peer-email').value='';
-  renderPeer360();
-}
-
-function simulatePeerResponse(){
-  const peers = DB.get('peer360');
-  const pending = peers.find(p=>!p.done);
-  if(!pending){ toast('Nenhum avaliador pendente','err'); return; }
-  pending.done=true;
-  pending.respostas=[Math.floor(Math.random()*2)+3,Math.floor(Math.random()*2)+3,Math.floor(Math.random()*2)+3,Math.floor(Math.random()*2)+3,Math.floor(Math.random()*2)+3];
-  pending.obs='Profissional dedicado com grande potencial. Recomendo desenvolvimento de visão sistêmica.';
-  DB.set('peer360',peers);
-  toast('Resposta simulada recebida!','suc');
-  renderPeer360();
-}
-
-async function analyze360WithIA(){
-  const peers = DB.get('peer360').filter(p=>p.done);
-  const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
-  const avgs = dims.map((_,di)=>{
-    const vals = peers.map(p=>p.respostas[di]).filter(v=>v!=null);
-    return vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1):0;
-  });
-  const comments = peers.map(p=>`[${p.relacao}]: "${p.obs}"`).join('\n');
-  showIALoading('peer360-ia','Analisando feedbacks 360°');
-  const prompt = `Você é um especialista em avaliação 360° e desenvolvimento de lideranças executivas.
-
-RESULTADO 360° DO PROFISSIONAL:
-${dims.map((d,i)=>`${d}: ${avgs[i]}/5`).join('\n')}
-
-COMENTÁRIOS RECEBIDOS:
-${comments}
-
-Produza:
-1. LEITURA DOS DADOS: O que os números revelam sobre a percepção de impacto deste profissional (2-3 frases)
-2. MAIOR ATIVO PERCEBIDO: A dimensão que mais contribui para a reputação executiva atual
-3. GAP CRÍTICO: A dimensão com maior impacto negativo no potencial de ascensão
-4. CONTRADIÇÕES: Há divergências entre avaliadores de diferentes níveis hierárquicos? O que isso revela?
-5. PLANO DE AÇÃO: Três ações concretas para as próximas 4 semanas baseadas nestes dados
-6. PERGUNTA PARA A PRÓXIMA SESSÃO: A pergunta mais poderosa para o mentor fazer ao mentorado
-
-Seja analítico e específico. Trate os dados como evidências, não como impressões.`;
-  const result = await callAI(prompt);
-  showIAResult('peer360-ia', result, 'Análise 360°');
-}
-
-
-function closeThanks360(){ var el=document.getElementById("thanks360"); if(el) el.remove(); }
-
-function show360ResponseForm(token){
-  // Find peer by token in any user's peer360 data
-  // Since this is localStorage-based, the form is shown on the same browser
-  // For real multi-device: would need Supabase table for responses
-  const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
-  const scores = {};
-
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;';
-  overlay.innerHTML = `
-  <div style="background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);width:540px;max-width:95vw;max-height:90vh;overflow-y:auto;padding:28px;">
-    <div style="text-align:center;margin-bottom:24px;">
-      <div style="font-family:'Sacramento',cursive;font-size:24px;color:rgba(215,215,215,.9);margin-bottom:8px;">AI Arcala Insight</div>
-      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;">Avaliação 360°</div>
-      <div style="font-size:12px;color:var(--text3);line-height:1.6;">Avalie o profissional em cada dimensão de 1 a 5.<br>Suas respostas são confidenciais.</div>
-    </div>
-    ${dims.map((d,i)=>`
-    <div style="margin-bottom:18px;">
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">${d}</div>
-      <div style="display:flex;gap:8px;">
-        ${[1,2,3,4,5].map(n=>`
-        <div onclick="this.parentElement.querySelectorAll('[data-score]').forEach(x=>x.style.background='var(--bg3)');this.style.background='var(--gold)';this.style.color='#0a0a0a';window._360scores=window._360scores||{};window._360scores[${i}]=${n};"
-          data-score="${n}" data-dim="${i}"
-          style="flex:1;padding:10px 0;text-align:center;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg3);cursor:pointer;font-weight:700;font-size:14px;color:var(--text);transition:all .12s;">
-          ${n}
+      ${hasQuestions ? `
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Perguntas do formulário (${cycle.questions_360.length} blocos)</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Perguntas geradas pela IA para este ciclo. Todos os avaliadores recebem o mesmo formulário.</div>
+        ${cycle.questions_360.map((qblock,bi)=>`
+        <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg2);border-radius:var(--radius-sm);">
+          <div style="font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.07em;margin-bottom:6px;">BLOCO ${bi+1} — ${comps[bi]?.name||qblock.competencia}</div>
+          ${qblock.situacoes.map((s,si)=>`
+          <div style="font-size:11px;color:var(--text2);padding:4px 0;border-bottom:${si<qblock.situacoes.length-1?'1px solid var(--border)':'none'};">
+            ${bi*2+si+1}. ${s.texto}
+          </div>`).join('')}
         </div>`).join('')}
-      </div>
-    </div>`).join('')}
-    <div style="margin-bottom:18px;">
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">Comentário livre (opcional)</div>
-      <textarea id="resp360-obs" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'Sora',sans-serif;font-size:12px;padding:10px;resize:vertical;min-height:80px;" placeholder="Compartilhe sua perspectiva sobre o profissional..."></textarea>
+      </div>` : ''}
+
+      <div id="peer360-ia" style="display:none;"></div>
     </div>
-    <button onclick="submit360Response('${token}')" style="width:100%;padding:12px;background:var(--gold);border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif;">
-      Enviar avaliação
-    </button>
-    <div id="resp360-msg" style="text-align:center;margin-top:10px;font-size:12px;color:var(--text3);"></div>
-  </div>`;
-  document.body.appendChild(overlay);
-  window._360scores = {};
+  </div>`}
+  `;
 }
 
-async function submit360Response(token){
-  const scores = window._360scores || {};
-  const dims = ['Comunicação','Liderança','Colaboração','Entrega','Estratégia'];
-  if(Object.keys(scores).length < dims.length){
-    const missing = dims.length - Object.keys(scores).length;
-    const msg = document.getElementById('resp360-msg');
-    if(msg){ msg.textContent='Avalie todas as '+dims.length+' dimensões (faltam '+missing+').'; msg.style.color='var(--red)'; }
-    return;
-  }
-  const obs = document.getElementById('resp360-obs')?.value||'';
-  const respostas = dims.map((_,i)=>scores[i]);
 
-  const msg = document.getElementById('resp360-msg');
-  if(msg){ msg.textContent='Salvando...'; msg.style.color='var(--text3)'; }
-
-  // Save to Supabase (cross-device)
-  let savedToSB = false;
-  try {
-    await sbFetch(
-      'peer360_responses?token=eq.'+token, 'PATCH',
-      { done: true, scores: respostas, obs, responded_at: new Date().toISOString() }
-    );
-    savedToSB = true;
-  } catch(e){ console.warn('360 Supabase save failed:', e); }
-
-  // Always save to localStorage
-  const peers = DB.get('peer360')||[];
-  const peer = peers.find(p=>p.token===token);
-  if(peer){
-    peer.done=true; peer.respostas=respostas; peer.obs=obs;
-    peer.respondedAt=new Date().toLocaleString('pt-BR');
-    DB.set('peer360',peers);
-  } else {
-    // Response came from another device — just store it
-    peers.push({avaliador:'Avaliador',relacao:'—',token,respostas,obs,done:true});
-    DB.set('peer360',peers);
-  }
-
-  // Remove overlay
-  document.querySelector('[style*="z-index:900"]')?.remove();
-  window.history.replaceState({},document.title,window.location.pathname);
-
-  // Show thank you screen
-  const thanks = document.createElement('div');
-  thanks.id = 'thanks360';
-  thanks.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:950;display:flex;align-items:center;justify-content:center;text-align:center;padding:40px;';
-  thanks.innerHTML='<div><div style="font-size:48px;margin-bottom:20px;">✓</div>'+
-    '<div style="font-size:22px;font-weight:600;color:var(--green);margin-bottom:10px;">Avaliação enviada!</div>'+
-    '<div style="font-size:14px;color:var(--text2);line-height:1.7;max-width:400px;margin:0 auto 24px;">'+
-    'Obrigado pela contribuição. Registrada'+(savedToSB?' no banco de dados':' localmente')+'.</div>'+
-    '<button onclick="closeThanks360()" style="padding:10px 24px;background:var(--gold);border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Fechar</button></div>';
-  document.body.appendChild(thanks);
-
-  if(currentPage==='peer360') renderPeer360();
-}
 
 // ══════════════════════════════════════════════
 // MICROPLANO
@@ -7088,6 +6972,303 @@ OKRs: ${(mp.okrs||[]).map(o=>o.desc).join('; ')||'—'}`;
   }
 }
 
+
+// ══════════════════════════════════════════════
+// CYCLE MANAGEMENT — Ciclo Formal por Mentorado
+// ══════════════════════════════════════════════
+
+// ── DB helpers for cycles ─────────────────────────────────────────────────────
+async function loadCycles(menteeEmail){
+  try {
+    const sb = await sbFetch('cycles?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&order=created_at.desc');
+    if(sb && sb.length) { DB.set('cycles_'+menteeEmail, sb); return sb; }
+  } catch(e){}
+  return DB.get('cycles_'+menteeEmail) || [];
+}
+
+async function saveCycle(cycle){
+  DB.set('cycle_'+cycle.id, cycle);
+  // Upsert to Supabase
+  try {
+    await sbFetch('cycles', 'POST', cycle, {'Prefer':'resolution=merge-duplicates,return=representation'});
+  } catch(e){
+    try { await sbFetch('cycles?id=eq.'+cycle.id, 'PATCH', cycle); } catch(e2){}
+  }
+}
+
+function getActiveCycle(menteeEmail){
+  const cycles = DB.get('cycles_'+menteeEmail) || [];
+  return cycles.find(c=>c.status==='active') || null;
+}
+
+// ── CYCLE SELECTOR — shown at top of each instrument page ────────────────────
+async function renderCycleSelector(menteeEmail, onSelectCallback){
+  const cycles = await loadCycles(menteeEmail);
+  const active = cycles.find(c=>c.status==='active');
+
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;';
+  wrap.innerHTML = `
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.08em;">CICLO ATIVO</div>
+    ${cycles.length ? `
+    <select style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-size:12px;padding:6px 10px;border-radius:6px;font-family:'Sora',sans-serif;flex:1;max-width:280px;" 
+      id="cycle-selector" onchange="onCycleSelect(this.value)">
+      ${cycles.map(c=>`<option value="${c.id}" ${c.id===active?.id?'selected':''}>${c.name} ${c.status==='closed'?'(encerrado)':''}</option>`).join('')}
+    </select>` : '<span style="font-size:12px;color:var(--amber);">Nenhum ciclo criado ainda</span>'}
+    <button class="btn btn-outline btn-xs" onclick="showCycleManager('${menteeEmail}')">⚙ Gerenciar ciclos</button>
+    ${active?.frozen_at ? 
+      `<span style="font-size:10px;color:var(--green);font-weight:600;">✓ Competências congeladas</span>` :
+      `<span style="font-size:10px;color:var(--amber);">⚠ Competências não congeladas</span>`}
+  `;
+  return wrap;
+}
+
+window.onCycleSelect = function(cycleId){
+  DB.set('current_cycle_id', cycleId);
+  // Re-render current page
+  if(currentPage) showPage(currentPage);
+};
+
+function getCurrentCycleId(){
+  return DB.get('current_cycle_id') || null;
+}
+
+async function getCurrentCycle(){
+  const id = getCurrentCycleId();
+  if(!id) return null;
+  // Try local first
+  const local = DB.get('cycle_'+id);
+  if(local) return local;
+  // Try from cycles list
+  const email = currentUser?.email;
+  if(!email) return null;
+  const cycles = DB.get('cycles_'+email) || [];
+  return cycles.find(c=>c.id===id) || null;
+}
+
+// ── CYCLE MANAGER MODAL ───────────────────────────────────────────────────────
+async function showCycleManager(menteeEmail){
+  const cycles = await loadCycles(menteeEmail);
+  const radars = DB.get('comp_radars') || [];
+
+  const modal = document.createElement('div');
+  modal.id = 'cycle-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+  <div style="background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);width:620px;max-width:95vw;max-height:88vh;overflow-y:auto;">
+    <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:15px;font-weight:600;color:var(--text);">Gerenciar Ciclos</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">Cada ciclo tem suas próprias competências e avaliações 360°</div>
+      </div>
+      <button onclick="document.getElementById('cycle-modal').remove()" style="background:none;border:1px solid var(--border2);color:var(--text3);border-radius:6px;padding:5px 12px;cursor:pointer;font-family:'Sora',sans-serif;font-size:12px;">Fechar</button>
+    </div>
+
+    <!-- Create new cycle -->
+    <div style="padding:20px 24px;border-bottom:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:12px;">CRIAR NOVO CICLO</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:160px;">
+          <label style="font-size:10px;color:var(--text4);display:block;margin-bottom:4px;">NOME DO CICLO</label>
+          <input class="form-input" id="new-cycle-name" placeholder="Ex: Ciclo 1 — Q2 2026" style="font-size:12px;">
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text4);display:block;margin-bottom:4px;">INÍCIO</label>
+          <input class="form-input" type="date" id="new-cycle-start" value="${today()}" style="font-size:12px;">
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text4);display:block;margin-bottom:4px;">TÉRMINO PREVISTO</label>
+          <input class="form-input" type="date" id="new-cycle-end" style="font-size:12px;">
+        </div>
+      </div>
+      <button class="btn btn-gold btn-sm" style="margin-top:10px;" onclick="createCycle('${menteeEmail}')">+ Criar ciclo</button>
+    </div>
+
+    <!-- Existing cycles -->
+    <div style="padding:20px 24px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:12px;">CICLOS (${cycles.length})</div>
+      ${cycles.length ? cycles.map(c=>{
+        const comps = c.competencias || [];
+        const frozen = !!c.frozen_at;
+        const hasQuestions = c.questions_360 && c.questions_360.length > 0;
+        return `
+        <div style="border:1px solid ${c.status==='active'?'var(--gold-border)':'var(--border)'};border-radius:var(--radius);padding:16px;margin-bottom:10px;background:${c.status==='active'?'rgba(240,192,64,.04)':'var(--bg2)'};">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text);">${c.name}</div>
+              <div style="font-size:10px;color:var(--text4);margin-top:2px;">${c.started_at||'—'} → ${c.ends_at||'—'}</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span style="font-size:9px;font-weight:700;padding:3px 8px;border-radius:20px;background:${c.status==='active'?'var(--gold-bg)':'var(--bg3)'};color:${c.status==='active'?'var(--gold)':'var(--text4)'};border:1px solid ${c.status==='active'?'var(--gold-border)':'var(--border)'};">
+                ${c.status==='active'?'ATIVO':'ENCERRADO'}
+              </span>
+              ${c.status==='active' ? `<button class="btn btn-outline btn-xs" onclick="closeCycle('${c.id}','${menteeEmail}')">Encerrar</button>` : ''}
+            </div>
+          </div>
+          
+          <!-- Competencias status -->
+          <div style="font-size:11px;margin-bottom:8px;">
+            <span style="color:var(--text3);">Competências: </span>
+            ${comps.length ? 
+              `<span style="color:var(--text2);">${comps.map(c=>c.name).join(', ')}</span>` :
+              `<span style="color:var(--amber);">Nenhuma selecionada</span>`}
+          </div>
+
+          <!-- Freeze status -->
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            ${frozen ? 
+              `<div style="font-size:11px;color:var(--green);">✓ Competências congeladas em ${new Date(c.frozen_at).toLocaleDateString('pt-BR')}</div>
+               ${hasQuestions ? 
+                 `<div style="font-size:11px;color:var(--green);">✓ ${c.questions_360.length} perguntas geradas</div>` :
+                 `<button class="btn btn-outline btn-xs" onclick="generateCycle360Questions('${c.id}','${menteeEmail}')">↺ Regenerar perguntas</button>`
+               }` :
+              `<button class="btn btn-gold btn-xs" onclick="freezeCycleCompetencias('${c.id}','${menteeEmail}')">
+                🔒 Congelar competências e gerar perguntas 360°
+              </button>
+              <span style="font-size:10px;color:var(--text4);">Obrigatório antes de enviar avaliações</span>`
+            }
+          </div>
+        </div>`;
+      }).join('') : `<div style="text-align:center;padding:30px;color:var(--text4);font-size:13px;">Nenhum ciclo criado ainda.</div>`}
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function createCycle(menteeEmail){
+  const name  = document.getElementById('new-cycle-name')?.value.trim();
+  const start = document.getElementById('new-cycle-start')?.value;
+  const end   = document.getElementById('new-cycle-end')?.value;
+  if(!name){ toast('Informe o nome do ciclo','err'); return; }
+
+  // Get current active radar competencias as starting point
+  const radars = DB.get('comp_radars') || [];
+  const activeRadar = radars.find(r=>r.id===DB.get('comp_active_radar')) || radars[0];
+
+  const cycle = {
+    id: 'cyc'+Date.now(),
+    mentee_email: menteeEmail,
+    name,
+    status: 'active',
+    started_at: start || today(),
+    ends_at: end || '',
+    competencias: activeRadar?.competencias || [],
+    questions_360: [],
+    frozen_at: null,
+    frozen_by: null,
+    created_at: new Date().toISOString()
+  };
+
+  await saveCycle(cycle);
+  DB.set('current_cycle_id', cycle.id);
+
+  // Update local cycles list
+  const existing = DB.get('cycles_'+menteeEmail) || [];
+  existing.unshift(cycle);
+  DB.set('cycles_'+menteeEmail, existing);
+
+  toast(`Ciclo "${name}" criado!`, 'suc');
+  document.getElementById('cycle-modal')?.remove();
+  showCycleManager(menteeEmail);
+}
+
+async function closeCycle(cycleId, menteeEmail){
+  showConfirm('Encerrar ciclo', 'Encerrar este ciclo? Ele ficará no histórico mas não receberá mais avaliações.', 'Encerrar', async ()=>{
+    const cycles = DB.get('cycles_'+menteeEmail) || [];
+    const c = cycles.find(x=>x.id===cycleId);
+    if(c){ c.status='closed'; DB.set('cycles_'+menteeEmail, cycles); }
+    DB.set('cycle_'+cycleId, {...(DB.get('cycle_'+cycleId)||{}), status:'closed'});
+    await sbFetch('cycles?id=eq.'+cycleId, 'PATCH', {status:'closed'});
+    toast('Ciclo encerrado','suc');
+    document.getElementById('cycle-modal')?.remove();
+    showCycleManager(menteeEmail);
+  });
+}
+
+async function freezeCycleCompetencias(cycleId, menteeEmail){
+  const cycles = DB.get('cycles_'+menteeEmail) || [];
+  const cycle = cycles.find(c=>c.id===cycleId);
+  if(!cycle){ toast('Ciclo não encontrado','err'); return; }
+
+  if(!cycle.competencias || !cycle.competencias.length){
+    toast('Adicione competências ao ciclo antes de congelar','err'); return;
+  }
+
+  toast('Congelando competências e gerando perguntas via IA...','');
+  
+  // Generate questions via AI
+  const questions = await generateQuestionsForCompetencias(cycle.competencias);
+  if(!questions){ toast('Erro ao gerar perguntas. Tente novamente.','err'); return; }
+
+  // Freeze
+  cycle.frozen_at = new Date().toISOString();
+  cycle.frozen_by = currentUser?.name || 'Admin';
+  cycle.questions_360 = questions;
+  DB.set('cycle_'+cycleId, cycle);
+  DB.set('cycles_'+menteeEmail, cycles);
+  await saveCycle(cycle);
+
+  toast(`✓ ${cycle.competencias.length} competências congeladas! ${questions.length} perguntas geradas.`, 'suc');
+  document.getElementById('cycle-modal')?.remove();
+  showCycleManager(menteeEmail);
+}
+
+async function generateCycle360Questions(cycleId, menteeEmail){
+  const cycles = DB.get('cycles_'+menteeEmail) || [];
+  const cycle = cycles.find(c=>c.id===cycleId);
+  if(!cycle || !cycle.frozen_at){ toast('Congele as competências primeiro','err'); return; }
+  toast('Regenerando perguntas via IA...','');
+  const questions = await generateQuestionsForCompetencias(cycle.competencias);
+  if(!questions){ toast('Erro ao gerar perguntas','err'); return; }
+  cycle.questions_360 = questions;
+  DB.set('cycle_'+cycleId, cycle);
+  DB.set('cycles_'+menteeEmail, cycles);
+  await saveCycle(cycle);
+  toast(`${questions.length} perguntas regeneradas!`, 'suc');
+  document.getElementById('cycle-modal')?.remove();
+  showCycleManager(menteeEmail);
+}
+
+async function generateQuestionsForCompetencias(competencias){
+  if(!competencias || !competencias.length) return null;
+  const compNames = competencias.map(c=>c.name).join(', ');
+  
+  const prompt = `Você é especialista em assessment de competências executivas. Gere perguntas comportamentais para avaliação 360° baseadas nas seguintes competências: ${compNames}
+
+REGRAS CRÍTICAS:
+- Gere EXATAMENTE 2 situações/afirmações por competência
+- NÃO mencione o nome da competência nas perguntas
+- Use linguagem de observação comportamental (o que o avaliador VÊ, não o que imagina)
+- Escala de resposta: 1=Nunca, 2=Raramente, 3=Frequentemente, 4=Sempre
+- Situações devem ser concretas e observáveis no dia a dia corporativo
+
+Responda APENAS em JSON puro (sem markdown):
+{
+  "questions": [
+    {
+      "competencia": "Nome da competência",
+      "competencia_index": 0,
+      "situacoes": [
+        {"id": "q1", "texto": "Em reuniões de equipe, este profissional..."},
+        {"id": "q2", "texto": "Quando surge um problema inesperado, este profissional..."}
+      ]
+    }
+  ]
+}`;
+
+  try {
+    const result = await callAI(prompt, false);
+    const clean = result.trim().replace(/^```json\s*/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+    const data = JSON.parse(clean);
+    if(!data.questions || !data.questions.length) return null;
+    return data.questions;
+  } catch(e){
+    console.error('generateQuestions error:', e);
+    return null;
+  }
+}
+
+
 // ══════════════════════════════════════════════
 // AUTH SYSTEM
 // ══════════════════════════════════════════════
@@ -7351,6 +7532,157 @@ window.approveReg = async function(id){
 
 renderSidebar();
 checkSession();
+
+function closeThanks360(){ const e=document.getElementById("thanks360"); if(e) e.remove(); }
+
+async function sendPeer360(){
+  const name  = document.getElementById('peer-name')?.value.trim();
+  const email = document.getElementById('peer-email')?.value.trim();
+  const rel   = document.getElementById('peer-rel')?.value;
+  if(!name||!email){ toast('Preencha nome e e-mail','err'); return; }
+  if(!currentUser){ toast('Faça login primeiro','err'); return; }
+
+  // GUARDRAIL: must have a frozen cycle with questions
+  const cycleId = getCurrentCycleId();
+  const cycles  = DB.get('cycles_'+currentUser.email)||[];
+  const cycle   = cycles.find(c=>c.id===cycleId);
+  if(!cycle){ toast('Crie e selecione um ciclo primeiro','err'); return; }
+  if(!cycle.frozen_at){ toast('Congele as competências do ciclo antes de enviar convites','err'); return; }
+  if(!cycle.questions_360||!cycle.questions_360.length){ toast('Regenere as perguntas do ciclo','err'); return; }
+
+  const token = btoa(name+'|'+email+'|'+Date.now()).replace(/[^a-zA-Z0-9]/g,'');
+  try {
+    await sbFetch('peer360_responses','POST',{
+      token, mentee_email: currentUser.email, avaliador: name,
+      avaliador_email: email, relacao: rel, done: false, cycle_id: cycleId
+    });
+  } catch(e){ console.warn('SB 360:', e); }
+
+  const peers = DB.get('peer360')||[];
+  peers.push({avaliador:name,email,relacao:rel,token,cycle_id:cycleId,respostas:null,obs:'',done:false});
+  DB.set('peer360',peers);
+
+  const baseUrl = window.location.href.split('?')[0];
+  const responseUrl = baseUrl+'?responder360='+token;
+  const subject = encodeURIComponent('[Arcala Insight] Avaliação 360° — '+currentUser.name);
+  const body = encodeURIComponent('Olá, '+name+'!\n\n'+currentUser.name+' está em um programa de mentoria executiva e gostaria da sua avaliação como '+rel+'.\n\nA avaliação é confidencial e leva cerca de 5 minutos.\n\n👉 Responda aqui: '+responseUrl+'\n\nObrigado!\nEquipe Arcala Insight');
+  window.open('mailto:'+email+'?subject='+subject+'&body='+body,'_blank');
+  toast('E-mail preparado para '+name+'!','suc');
+  document.getElementById('peer-name').value='';
+  document.getElementById('peer-email').value='';
+  renderPeer360();
+}
+
+function select360Score(qi, val){
+  window._360scores = window._360scores||{};
+  window._360scores[qi] = val;
+  [1,2,3,4].forEach(v=>{
+    const el = document.getElementById('scale-'+qi+'-'+v);
+    if(!el) return;
+    if(v===val){ el.style.background='var(--gold)'; el.style.borderColor='var(--gold)'; el.firstElementChild.style.color='#0a0a0a'; }
+    else { el.style.background='var(--bg3)'; el.style.borderColor='var(--border)'; el.firstElementChild.style.color='var(--text)'; }
+  });
+}
+
+async function show360ResponseForm(token){
+  window._360scores = {};
+  let questions = null, mentoradoName = '', cycleId = null;
+
+  try {
+    const records = await sbFetch('peer360_responses?token=eq.'+token+'&select=*');
+    if(records&&records[0]){
+      cycleId = records[0].cycle_id;
+      try { const m=await sbFetch('users?email=eq.'+encodeURIComponent(records[0].mentee_email)+'&select=name'); if(m&&m[0]) mentoradoName=m[0].name; } catch(e){}
+      if(cycleId){
+        try { const cy=await sbFetch('cycles?id=eq.'+cycleId+'&select=questions_360'); if(cy&&cy[0]) questions=cy[0].questions_360; } catch(e){}
+      }
+    }
+  } catch(e){ console.warn('load 360:', e); }
+
+  // Fallback: localStorage
+  if(!questions){
+    const peers = DB.get('peer360')||[];
+    const peer = peers.find(p=>p.token===token);
+    if(peer&&peer.cycle_id){
+      const c = DB.get('cycle_'+peer.cycle_id);
+      if(c) questions = c.questions_360;
+    }
+  }
+
+  if(!questions||!questions.length){
+    alert('Formulário não disponível. As perguntas ainda não foram geradas. Peça ao mentorado para congelar as competências e reenviar o convite.');
+    return;
+  }
+
+  // Flatten questions
+  const allQ = [];
+  questions.forEach((qblock,bi)=>{ qblock.situacoes.forEach((s,si)=>{ allQ.push({text:s.texto,bi,si,gi:allQ.length}); }); });
+
+  const scale = [{v:1,desc:'Nunca'},{v:2,desc:'Raramente'},{v:3,desc:'Frequentemente'},{v:4,desc:'Sempre'}];
+
+  const ov = document.createElement('div');
+  ov.id='overlay360';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:900;overflow-y:auto;padding:20px;display:flex;justify-content:center;';
+  ov.innerHTML=`<div style="background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);width:580px;max-width:95vw;padding:28px;margin:auto;">
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-family:'Sacramento',cursive;font-size:24px;color:rgba(215,215,215,.9);">Arcala Insight</div>
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin:6px 0;">Avaliação 360°${mentoradoName?' — '+mentoradoName:''}</div>
+      <div style="font-size:11px;color:var(--text3);">Respostas anônimas e confidenciais. Avalie com base no que observa no dia a dia.</div>
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:20px;padding:10px;background:var(--bg2);border-radius:var(--radius-sm);">
+      ${scale.map(s=>`<div style="flex:1;text-align:center;"><div style="font-size:13px;font-weight:700;color:var(--gold);">${s.v}</div><div style="font-size:9px;color:var(--text4);">${s.desc}</div></div>`).join('')}
+    </div>
+    ${allQ.map((q,gi)=>`
+    <div style="margin-bottom:18px;${gi<allQ.length-1?'padding-bottom:18px;border-bottom:1px solid var(--border);':''}">
+      <div style="font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:8px;"><span style="font-size:10px;font-weight:700;color:var(--text4);margin-right:5px;">${gi+1}.</span>${q.text}</div>
+      <div style="display:flex;gap:6px;" id="scale-row-${gi}">
+        ${scale.map(s=>`<div onclick="select360Score(${gi},${s.v})" id="scale-${gi}-${s.v}"
+          style="flex:1;padding:8px 0;text-align:center;border-radius:var(--radius-sm);border:1.5px solid var(--border);background:var(--bg3);cursor:pointer;transition:all .1s;">
+          <div style="font-size:14px;font-weight:700;color:var(--text);">${s.v}</div></div>`).join('')}
+      </div>
+    </div>`).join('')}
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px;">Comentário (opcional)</div>
+      <textarea id="resp360-obs" class="obs-field" rows="3" placeholder="Compartilhe sua perspectiva..."></textarea>
+    </div>
+    <button onclick="submit360Response('${token}',${allQ.length})"
+      style="width:100%;padding:13px;background:var(--gold);border:none;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;font-family:'Sora',sans-serif;">
+      Enviar avaliação
+    </button>
+    <div id="resp360-msg" style="text-align:center;margin-top:10px;font-size:12px;color:var(--red);"></div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+
+async function submit360Response(token, totalQ){
+  const scores = window._360scores||{};
+  const answered = Object.keys(scores).length;
+  if(answered < totalQ){
+    const msg=document.getElementById('resp360-msg');
+    if(msg) msg.textContent='Responda todas as perguntas (faltam '+(totalQ-answered)+').';
+    return;
+  }
+  const obs=document.getElementById('resp360-obs')?.value||'';
+  const respostas=Array.from({length:totalQ},(_,i)=>scores[i]||null);
+  const msg=document.getElementById('resp360-msg');
+  if(msg){ msg.textContent='Salvando...'; msg.style.color='var(--text3)'; }
+  let savedToSB=false;
+  try {
+    await sbFetch('peer360_responses?token=eq.'+token,'PATCH',{done:true,scores:respostas,obs,responded_at:new Date().toISOString()});
+    savedToSB=true;
+  } catch(e){}
+  const peers=DB.get('peer360')||[];
+  const peer=peers.find(p=>p.token===token);
+  if(peer){ peer.done=true; peer.respostas=respostas; peer.obs=obs; DB.set('peer360',peers); }
+  document.getElementById('overlay360')?.remove();
+  window.history.replaceState({},document.title,window.location.pathname);
+  const thanks=document.createElement('div');
+  thanks.id='thanks360';
+  thanks.style.cssText='position:fixed;inset:0;background:var(--bg);z-index:950;display:flex;align-items:center;justify-content:center;text-align:center;padding:40px;';
+  thanks.innerHTML='<div><div style="font-size:48px;margin-bottom:16px;">✓</div><div style="font-size:22px;font-weight:600;color:var(--green);margin-bottom:10px;">Avaliação enviada!</div><div style="font-size:14px;color:var(--text2);line-height:1.7;max-width:400px;margin:0 auto 24px;">Obrigado pela contribuição. Registrada'+(savedToSB?' com sucesso.':' localmente.')+'</div><button onclick="closeThanks360()" style="padding:10px 24px;background:var(--gold);border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">Fechar</button></div>';
+  document.body.appendChild(thanks);
+  if(currentPage==='peer360') renderPeer360();
+}
 
 // Handle 360 response link
 (function handle360Response(){

@@ -1139,11 +1139,26 @@ let editingUserId = null;
 let editingUser = null;
 
 async function renderAdminUsers(){
-  let users = DB.get('users') || [];
+  // Supabase is source of truth — load from there, sync to localStorage
+  let users = [];
   try {
-    const sbUsers = await sbFetch('users?order=created_at.desc');
-    sbUsers.forEach(u => { if(!users.find(x=>x.email===u.email)) users.push(u); });
-  } catch(e) {}
+    users = await sbFetch('users?order=created_at.desc&select=*');
+    if(users && users.length > 0){
+      // Supabase returned data — merge with localStorage extras (admin-seeded users)
+      const local = DB.get('users') || [];
+      local.forEach(lu => {
+        if(!users.find(su=>su.email===lu.email)) users.push(lu);
+      });
+      // Sync back to localStorage as canonical list
+      DB.set('users', users);
+    } else {
+      // Supabase empty or failed — use localStorage
+      users = DB.get('users') || [];
+    }
+  } catch(e) {
+    // Supabase unreachable — fallback to localStorage
+    users = DB.get('users') || [];
+  }
   const empresas = DB.get('empresas')||[];
   const mentors = users.filter(u=>u.role==='mentor'||u.role==='admin');
   const archive = DB.get('users_archive')||[];
@@ -1268,7 +1283,8 @@ function renderUsersTable(users){
     const mentor = mentorRef ? allUsers.find(x=>String(x.id)===String(mentorRef)) : null;
     const isEditing = String(editingUserId) === String(u.id);
     return `<tr style="cursor:pointer;${isEditing?'background:rgba(240,192,64,.06);outline:1px solid var(--gold);':''}"
-      onclick="editUser('${u.id}')" title="Clique para editar">
+      data-uid="${u.id}" data-email="${u.email}"
+      onclick="editUser('${u.id}','${u.email}')" title="Clique para editar">
       <td><div style="display:flex;align-items:center;gap:10px;">
         <div class="avatar-xs" style="width:32px;height:32px;font-size:10px;${isEditing?'border-color:var(--gold);background:var(--gold-bg);color:var(--gold);':''}">${initials(u.name)}</div>
         <div>
@@ -1299,12 +1315,14 @@ function filterUsers(searchId){
   renderUsersTable(users);
 }
 
-function editUser(id){
+function editUser(id, email){
   const users = DB.get('users')||[];
-  const found = users.find(u=>String(u.id)===String(id));
-  if(!found){ toast('Usuário não encontrado — recarregue a página','err'); return; }
-  editingUserId = String(id);
-  editingUser = found;
+  // Find by ID or by email (handles Supabase vs localStorage ID mismatch)
+  const found = users.find(u=>String(u.id)===String(id)) ||
+                (email ? users.find(u=>u.email===email) : null);
+  if(!found){ toast('Recarregando dados...',''); renderAdminUsers(); return; }
+  editingUserId = String(found.id);
+  editingUser = {...found};
   document.getElementById('user-form-panel')?.scrollIntoView({behavior:'smooth'});
   renderAdminUsers();
 }
@@ -1318,15 +1336,15 @@ function cancelEdit(){
 async function updateUser(){
   if(!editingUserId) return;
   const users = DB.get('users')||[];
-  // Find by ID with fallback to email
+  // Find by ID, then email, then any field match
   let u = users.find(x=>String(x.id)===String(editingUserId));
   if(!u && editingUser) u = users.find(x=>x.email===editingUser.email);
   if(!u){
-    toast('Usuário não encontrado — recarregue a página','err');
-    editingUserId=null; editingUser=null; renderAdminUsers(); return;
+    // Last resort: reload and retry
+    toast('Sincronizando dados...','');
+    await renderAdminUsers();
+    return;
   }
-  // Sync ID in case it drifted
-  editingUserId = String(u.id);
 
   const name     = document.getElementById('nu-name')?.value.trim();
   const role     = document.getElementById('nu-role')?.value;

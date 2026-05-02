@@ -6387,8 +6387,9 @@ let matchSelectedMentee = null;
 function renderAdminMatch(){
   const users = DB.get('users')||[];
   // Admins also appear as mentors for testing/visualization
-  const mentors  = users.filter(u=>u.role==='mentor' || u.role==='admin');
-  const mentees  = users.filter(u=>u.role==='mentorado');
+  // Normalize role comparison to handle any case/spacing variations
+  const mentors  = users.filter(u=>['mentor','admin'].includes((u.role||'').toLowerCase().trim()));
+  const mentees  = users.filter(u=>(u.role||'').toLowerCase().trim()==='mentorado');
 
   // Build current pairs
   const pairs = [];
@@ -6982,7 +6983,7 @@ window.approveReg = async function(id){
         name: reg.name,
         email: reg.email,
         password: reg.password || btoa('Arcala@2026'),
-        role: (reg.goal||'').toLowerCase().includes('mentor') ? 'mentor' : (reg.role||'mentorado'),
+        role: (reg.goal||'').toLowerCase() === 'ser mentor na plataforma' ? 'mentor' : 'mentorado',
         plan: reg.plan || 'Ciclo único',
         active: true,
         phase: 'G',

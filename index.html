@@ -416,6 +416,41 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .timeline-desc{font-size:12px;color:var(--text3);line-height:1.6;margin-top:4px;}
 .training-progress-bar{height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-bottom:8px;}
 .training-progress-fill{height:100%;background:linear-gradient(90deg,var(--gold) 0%,#f4d570 100%);border-radius:3px;transition:width .4s;}
+
+/* ─── MENTOR PANEL ─── */
+.mentee-selector{background:var(--bg1);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:54px;z-index:10;}
+.mentee-selector select{flex:1;max-width:280px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-family:'Sora',sans-serif;font-size:13px;padding:8px 12px;border-radius:var(--radius-sm);}
+.mentee-badge{font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.05em;}
+.phase-gate{border-radius:var(--radius);overflow:hidden;margin-bottom:16px;}
+.phase-gate-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;transition:background .12s;}
+.phase-gate-header:hover{background:rgba(255,255,255,.02);}
+.phase-gate-letter{font-size:28px;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace;width:40px;flex-shrink:0;}
+.phase-gate-info{flex:1;}
+.phase-gate-title{font-size:14px;font-weight:600;color:var(--text);}
+.phase-gate-sub{font-size:11px;color:var(--text3);margin-top:2px;}
+.phase-gate-status{font-size:11px;font-weight:700;letter-spacing:.05em;flex-shrink:0;}
+.phase-gate-body{padding:0 18px 18px;display:none;}
+.phase-gate-body.open{display:block;}
+.instrument-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);}
+.instrument-row:last-child{border-bottom:none;}
+.instrument-check{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;}
+.instrument-check.done{background:var(--green);border-color:var(--green);color:#fff;}
+.instrument-check.partial{background:var(--amber-bg);border-color:var(--amber);color:var(--amber);}
+.instrument-label{flex:1;font-size:12px;color:var(--text2);}
+.obs-field{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-family:'Sora',sans-serif;font-size:11px;padding:7px 10px;border-radius:var(--radius-sm);resize:vertical;min-height:50px;margin-top:6px;transition:border-color .12s;}
+.obs-field:focus{border-color:var(--gold);outline:none;}
+.release-btn{padding:8px 18px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;border:none;font-family:'Sora',sans-serif;transition:all .15s;}
+.release-btn.unlocked{background:var(--green);color:#fff;}
+.release-btn.locked{background:var(--gold);color:#0a0a0a;}
+.release-btn.blocked{background:var(--bg3);border:1px solid var(--border2);color:var(--text4);cursor:not-allowed;}
+.mentee-overview-card{background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;gap:16px;margin-bottom:10px;transition:all .15s;cursor:pointer;}
+.mentee-overview-card:hover{border-color:var(--gold);background:var(--bg2);}
+.mentee-avatar{width:44px;height:44px;border-radius:50%;background:var(--gold-bg);border:2px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;font-family:'Space Mono',monospace;flex-shrink:0;}
+.phase-progress{display:flex;gap:4px;align-items:center;}
+.phase-pip{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'Space Mono',monospace;color:var(--text4);}
+.phase-pip.done{background:var(--green);border-color:var(--green);color:#fff;}
+.phase-pip.active{background:var(--gold-bg);border-color:var(--gold);color:var(--gold);}
+.phase-pip.locked{background:var(--bg3);}
 </style>
 </head>
 <body>
@@ -652,6 +687,8 @@ const DB = {
       {avaliador:'Subordinado',relacao:'Subordinado',respostas:[3,4,5,3,3],obs:'Bom mentor interno, mas poderia dar mais autonomia',done:true},
     ]);
     if(!this.get('grow_sessions')) this.set('grow_sessions',[]);
+    if(!this.get('mentor_observations')) this.set('mentor_observations',{});
+    if(!this.get('phase_releases')) this.set('phase_releases',{});
     if(!this.get('empresas')) this.set('empresas',[
       {id:'e1',nome:'Arcala Insight',setor:'Consultoria',cnpj:'',contato:'luizarcala@outlook.com',ativa:true,created:'2026-01-01'},
     ]);
@@ -3040,144 +3077,7 @@ function submitNPS(){
 // ══════════════════════════════════════════════
 // MINHA JORNADA (mentorado)
 // ══════════════════════════════════════════════
-function renderMinhaJornada(){
-  const disc = DB.get('disc');
-  const comps = DB.get('competencias');
-  const swot = DB.get('swot');
-  const vfDone = !!(DB.get('vf')?.profissional);
-  const steps = [
-    {label:'Kick-off realizado',done:true,phase:'G'},
-    {label:'Radar de competências',done:comps.some(c=>c.me>0),phase:'U'},
-    {label:'SWOT pessoal',done:Object.values(swot||{}).flat().length>0,phase:'U'},
-    {label:'Assessment DISC',done:!!disc,phase:'U'},
-    {label:'Visão de Futuro',done:vfDone,phase:'U'},
-    {label:'Microplano ativo',done:true,phase:'I'},
-    {label:'Feedback 360° enviado',done:DB.get('peer360').length>3,phase:'I'},
-    {label:'Análise IA realizada',done:false,phase:'I'},
-    {label:'Revisão final',done:false,phase:'A'},
-  ];
-  const done = steps.filter(s=>s.done).length;
-  const pct = Math.round(done/steps.length*100);
-
-  document.getElementById('content-area').innerHTML = `
-  <div class="page-header">
-    <div class="page-title">Minha Jornada de Mentoria</div>
-    <div class="page-sub">Ciclo Q2 2026 — Metodologia GUIA · Semana 6/12</div>
-  </div>
-  <div class="kpi-grid">
-    <div class="kpi"><div class="kpi-label">Progresso</div><div class="kpi-value" style="color:var(--gold)">${pct}%</div><div class="kpi-sub">${done}/${steps.length} etapas</div></div>
-    <div class="kpi"><div class="kpi-label">Fase atual</div><div class="kpi-value" style="color:var(--green)">I</div><div class="kpi-sub">Implementação</div></div>
-    <div class="kpi"><div class="kpi-label">Próxima sessão</div><div class="kpi-value" style="font-size:16px">Sex</div><div class="kpi-sub">02 Mai · 09h00</div></div>
-    <div class="kpi"><div class="kpi-label">DISC identificado</div><div class="kpi-value" style="font-size:18px">${disc||'—'}</div><div class="kpi-sub">${disc?DISC_DATA[disc]?.name:'Não realizado'}</div></div>
-  </div>
-
-  <div class="grid-2">
-    <div class="panel">
-      <div class="panel-title"><div class="panel-title-dot"></div> Progresso da jornada</div>
-      <div style="background:var(--bg3);border-radius:6px;height:8px;margin-bottom:18px;overflow:hidden">
-        <div style="width:${pct}%;height:100%;background:var(--gold);border-radius:6px;transition:width .5s"></div>
-      </div>
-      ${steps.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);">
-        <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid ${s.done?'var(--green)':'var(--border2)'};background:${s.done?'var(--green-bg)':'transparent'};display:flex;align-items:center;justify-content:center;font-size:10px;color:${s.done?'var(--green)':'var(--text4)'};flex-shrink:0">${s.done?'✓':'○'}</div>
-        <div style="font-size:12px;color:${s.done?'var(--text)':'var(--text3)'}">${s.label}</div>
-        <div style="margin-left:auto;font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--bg3);color:var(--text4);font-family:'Space Mono',monospace">${s.phase}</div>
-      </div>`).join('')}
-    </div>
-    <div>
-      <div class="panel" style="margin-bottom:14px;">
-        <div class="panel-title"><div class="panel-title-dot"></div> Próximas ações desta semana</div>
-        <div style="font-size:12px;color:var(--text2);line-height:1.8">
-          1. Completar Sessão GROW #2 com mentor<br>
-          2. Publicar post de posicionamento no LinkedIn<br>
-          3. Enviar memo estratégico para revisão<br>
-          4. Responder autoavaliação de competências
-        </div>
-        <div class="divider"></div>
-        <button class="btn btn-gold btn-sm" onclick="runQuickInsight();showPage('ia-main')">✦ Pedir orientação à IA ↗</button>
-      </div>
-      <div class="ai-panel">
-        <div class="ai-header"><div class="ai-badge">INSIGHT DA SEMANA</div></div>
-        <div class="ai-rec">Você está na semana crítica da fase I — a implementação começa a revelar os gaps reais que o diagnóstico apenas antecipou. O que você executa agora determina o relatório de encerramento. Não deixe a perfeição paralisar a ação.</div>
-      </div>
-    </div>
-  </div>`;
-}
-
-// ══════════════════════════════════════════════
-// AI ENGINE
-// ══════════════════════════════════════════════
-async function callAI(prompt, includeUserContext=true){
-  try{
-    // Build rich user context from all collected data
-    let systemContext = 'Você é um estrategista sênior de desenvolvimento executivo e career coach da plataforma Arcala Insight. Seja direto, específico e orientado à ação. Evite clichês e textos genéricos.';
-
-    if(includeUserContext && currentUser){
-      const disc = DB.get('disc');
-      const comps = DB.get('competencias') || [];
-      const swot = DB.get('swot') || {};
-      const vf = DB.get('vf') || {};
-      const peers = (DB.get('peer360') || []).filter(p=>p.done);
-      const mp = DB.get('microplano') || {};
-      const discScores = DB.get('disc_scores') || {};
-
-      const gaps = comps.filter(c=>c.me<c.mentor).map(c=>c.name).join(', ');
-      const strengths = comps.filter(c=>c.me>=4).map(c=>c.name).join(', ');
-
-      systemContext += `
-
-PERFIL DO MENTORADO:
-Nome: ${currentUser.name}
-Plano: ${currentUser.plan || 'Não informado'}
-Fase atual: ${currentUser.phase || 'G'} — Semana ${currentUser.week || 0}/12
-
-PERFIL DISC: ${disc ? disc + ' — ' + (DISC_DATA[disc]?.name || '') : 'Não realizado'}
-${Object.keys(discScores).length ? 'Distribuição DISC: ' + Object.entries(discScores).map(([k,v])=>k+':'+v).join(', ') : ''}
-
-RADAR DE COMPETÊNCIAS:
-Forças (≥4/5): ${strengths || 'Nenhum mapeado'}
-Gaps (abaixo do mentor): ${gaps || 'Nenhum'}
-
-SWOT PESSOAL:
-Forças: ${(swot.f||[]).join(', ') || 'Não mapeado'}
-Fraquezas: ${(swot.fr||[]).join(', ') || 'Não mapeado'}
-Oportunidades: ${(swot.o||[]).join(', ') || 'Não mapeado'}
-Ameaças: ${(swot.a||[]).join(', ') || 'Não mapeado'}
-
-VISÃO DE FUTURO:
-${vf.profissional ? 'Carreira: ' + vf.profissional : ''}
-${vf.contribuicao ? 'Impacto: ' + vf.contribuicao : ''}
-${vf.legado ? 'Legado: ' + vf.legado : ''}
-
-FEEDBACK 360°: ${peers.length} respondentes
-${peers.map(p=>p.relacao+': média '+((p.respostas||[]).reduce((a,b)=>a+b,0)/(p.respostas||[1]).length).toFixed(1)).join(' | ')}
-
-OKRs ATIVOS: ${(mp.okrs||[]).map(o=>o.desc+(o.done?' ✓':'')).join('; ')}`;
-    }
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ['sk-ant-api03--fM1Z3wc0iP_LAoe4SdJx3ds0PwmpXFVlYXNgX7RH','tPJNyHB4fv9y8z0iaiNWrmMYqwN1HbhU17N2hjH-EqBmw-c9NtkAAA'].join(''),
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1024,
-        system: systemContext,
-        messages: [{role:'user', content: prompt}]
-      })
-    });
-
-    const data = await response.json();
-    if(data.content && data.content[0]) return data.content[0].text;
-    if(data.error) return 'Erro da API: ' + data.error.message;
-    return 'Erro ao processar resposta.';
-  } catch(e){
-    return 'Erro de conexão: ' + e.message;
-  }
-}
+// renderMinhaJornada moved to mentor panel
 
 function showIALoading(targetId, msg){
   const el = document.getElementById(targetId);
@@ -5713,6 +5613,615 @@ function registerDeploy(){
   toast(`Deploy v${PLATFORM_VERSION} registrado com sucesso!`, 'suc');
 }
 
+
+
+// ══════════════════════════════════════════════
+// MENTOR PANEL — Guide & Liberation System
+// ══════════════════════════════════════════════
+
+// ── PHASE LIBERATION LOGIC ────────────────────────────────────────────────────
+
+// Get liberation state for a mentee
+function getPhaseReleases(menteeId){
+  const all = DB.get('phase_releases') || {};
+  if(!all[menteeId]) all[menteeId] = {G: true, U: false, I: false, A: false};
+  return all[menteeId];
+}
+
+function savePhaseReleases(menteeId, releases){
+  const all = DB.get('phase_releases') || {};
+  all[menteeId] = releases;
+  DB.set('phase_releases', all);
+  // Sync to Supabase
+  sbFetch('users?id=eq.'+menteeId,'PATCH',{phase_releases: releases}).catch(()=>{});
+}
+
+// Check if mentee has a phase released
+function isPhaseReleased(menteeId, phase){
+  const rel = getPhaseReleases(menteeId);
+  return !!rel[phase];
+}
+
+// Get checklist completion for a mentee (reads their localStorage keys)
+// Since data is per-user in localStorage, mentor sees a summary view
+function getMenteeProgress(menteeId){
+  // In a real multi-device app this would come from Supabase
+  // For now we store mentor-visible progress summaries in phase_releases
+  const all = DB.get('mentee_progress') || {};
+  return all[menteeId] || {
+    G: {inicioCiclo: false, termoAssinado: false},
+    U: {disc: false, competencias: false, swot: false, vf: false, peer360: false},
+    I: {okrs: false, kanban: false, grow: false},
+    A: {krs: false, entrevista: false, nps: false, aferimento: false}
+  };
+}
+
+function saveMenteeProgress(menteeId, progress){
+  const all = DB.get('mentee_progress') || {};
+  all[menteeId] = progress;
+  DB.set('mentee_progress', all);
+}
+
+// Mark instrument done (called when mentee saves data)
+function markMenteeProgress(instrument, done){
+  if(!currentUser) return;
+  const userId = currentUser.id;
+  // Find who is the mentor of this user
+  const users = DB.get('users')||[];
+  const me = users.find(u=>u.id===userId);
+  if(!me) return;
+
+  const allProgress = DB.get('mentee_progress')||{};
+  if(!allProgress[userId]){
+    allProgress[userId] = {
+      G:{inicioCiclo:false,termoAssinado:false},
+      U:{disc:false,competencias:false,swot:false,vf:false,peer360:false},
+      I:{okrs:false,kanban:false,grow:false},
+      A:{krs:false,entrevista:false,nps:false,aferimento:false}
+    };
+  }
+
+  // Map instrument name to phase and key
+  const map = {
+    'inicio_ciclo': ['G','inicioCiclo'],
+    'termo': ['G','termoAssinado'],
+    'disc': ['U','disc'],
+    'competencias': ['U','competencias'],
+    'swot': ['U','swot'],
+    'vf': ['U','vf'],
+    'peer360': ['U','peer360'],
+    'microplano_okr': ['I','okrs'],
+    'microplano_kanban': ['I','kanban'],
+    'grow': ['I','grow'],
+    'fase_a_krs': ['A','krs'],
+    'fase_a_entrevista': ['A','entrevista'],
+    'fase_a_nps': ['A','nps'],
+    'fase_a_aferimento': ['A','aferimento'],
+  };
+  if(map[instrument]){
+    const [phase, key] = map[instrument];
+    allProgress[userId][phase][key] = done;
+    DB.set('mentee_progress', allProgress);
+  }
+}
+
+// Check if mentee can access a given page based on phase releases
+function canMenteeAccess(page){
+  if(!currentUser || currentUser.role !== 'mentorado') return true;
+  const userId = currentUser.id;
+  const rel = getPhaseReleases(userId);
+
+  // Map pages to required phase
+  const phaseMap = {
+    'inicio-ciclo': 'G',
+    'disc': 'U', 'comp': 'U', 'swot': 'U', 'vf': 'U', 'peer360': 'U',
+    'microplano': 'I',
+    'fase-a': 'A',
+    'minha-jornada': null, 'ia-main': null, 'perfil': null,
+  };
+
+  const required = phaseMap[page];
+  if(!required) return true;
+  return !!rel[required];
+}
+
+// Get mentor observations for a mentee
+function getMentorObservations(menteeId){
+  const all = DB.get('mentor_observations')||{};
+  return all[menteeId] || {};
+}
+
+function saveMentorObservation(menteeId, instrument, text){
+  const all = DB.get('mentor_observations')||{};
+  if(!all[menteeId]) all[menteeId] = {};
+  all[menteeId][instrument] = {text, updatedAt: new Date().toLocaleString('pt-BR')};
+  DB.set('mentor_observations', all);
+  toast('Observação salva','suc');
+}
+
+// ── MENTOR DASHBOARD ──────────────────────────────────────────────────────────
+let selectedMenteeId = null;
+
+function renderDash(){
+  if(currentRole === 'mentor'){
+    renderMentorDash();
+  } else if(currentRole === 'mentorado'){
+    renderMinhaJornada();
+  } else {
+    renderAdminDash();
+  }
+}
+
+function renderMentorDash(){
+  const users = DB.get('users')||[];
+  const mentees = users.filter(u => u.role === 'mentorado' && u.active);
+
+  if(!mentees.length){
+    document.getElementById('content-area').innerHTML = `
+    <div class="page-header">
+      <div class="page-title">Painel do Mentor</div>
+      <div class="page-sub">Nenhum mentorado associado ainda. Solicite ao admin que associe mentorados à sua conta.</div>
+    </div>
+    <div class="panel" style="text-align:center;padding:40px;">
+      <div style="font-size:40px;margin-bottom:14px;">◈</div>
+      <div style="font-size:14px;color:var(--text2);margin-bottom:8px;">Aguardando mentorados</div>
+      <div style="font-size:12px;color:var(--text3);">O admin da plataforma precisa associar mentorados à sua conta para você começar a orientá-los.</div>
+    </div>`;
+    return;
+  }
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Painel do Mentor</div>
+    <div class="page-sub">Selecione um mentorado para acompanhar sua jornada e liberar as fases</div>
+  </div>
+
+  <div class="section-label">Seus mentorados (${mentees.length})</div>
+  <div style="margin-bottom:20px;">
+    ${mentees.map(m => {
+      const rel = getPhaseReleases(m.id);
+      const prog = getMenteeProgress(m.id);
+      const phaseDone = {
+        G: rel.G && (prog.G.inicioCiclo || prog.G.termoAssinado),
+        U: rel.U && Object.values(prog.U).some(Boolean),
+        I: rel.I && Object.values(prog.I).some(Boolean),
+        A: rel.A && Object.values(prog.A).some(Boolean)
+      };
+      return `
+      <div class="mentee-overview-card" onclick="selectMentee('${m.id}')">
+        <div class="mentee-avatar">${initials(m.name)}</div>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:600;color:var(--text)">${m.name}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${m.email} · ${m.plan||'—'}</div>
+        </div>
+        <div class="phase-progress">
+          ${['G','U','I','A'].map(p=>`
+          <div class="phase-pip ${rel[p]?(phaseDone[p]?'done':'active'):'locked'}">${p}</div>`).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--gold);font-weight:600;margin-left:8px;">Ver →</div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  ${selectedMenteeId ? `<div id="mentee-detail"></div>` : `
+  <div class="panel" style="text-align:center;padding:30px;border-style:dashed;">
+    <div style="font-size:13px;color:var(--text4);">Clique em um mentorado para ver o painel completo de acompanhamento</div>
+  </div>`}
+  `;
+
+  if(selectedMenteeId) renderMenteeDetail(selectedMenteeId);
+}
+
+function selectMentee(id){
+  selectedMenteeId = id;
+  renderMentorDash();
+  setTimeout(()=>{
+    const el = document.getElementById('mentee-detail');
+    if(el) el.scrollIntoView({behavior:'smooth'});
+  }, 100);
+}
+
+function renderMenteeDetail(menteeId){
+  const users = DB.get('users')||[];
+  const m = users.find(u=>u.id===menteeId);
+  if(!m) return;
+
+  const rel = getPhaseReleases(menteeId);
+  const prog = getMenteeProgress(menteeId);
+  const obs = getMentorObservations(menteeId);
+
+  const el = document.getElementById('mentee-detail');
+  if(!el) return;
+
+  el.innerHTML = `
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div class="mentee-avatar" style="width:52px;height:52px;font-size:18px;">${initials(m.name)}</div>
+      <div>
+        <div style="font-size:16px;font-weight:600;color:var(--text)">${m.name}</div>
+        <div style="font-size:12px;color:var(--text3)">${m.email} · ${m.plan||'—'}</div>
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="selectedMenteeId=null;renderMentorDash()">← Voltar</button>
+  </div>
+
+  ${renderPhaseGate('G', 'Gestar Acordo', 'Semana 1', rel, prog, obs, menteeId)}
+  ${renderPhaseGate('U', 'Unir Diagnóstico e Visão', 'Semanas 2-3', rel, prog, obs, menteeId)}
+  ${renderPhaseGate('I', 'Implementar — Plano de Ação', 'Semanas 4-9', rel, prog, obs, menteeId)}
+  ${renderPhaseGate('A', 'Aferir e Ajustar', 'Semanas 10-12', rel, prog, obs, menteeId)}
+
+  <div id="mentee-ia-result" style="display:none;margin-top:14px;"></div>
+  <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+    <button class="btn btn-gold" onclick="analyzeMenteeWithIA('${menteeId}')">✦ Análise completa do mentorado com IA ↗</button>
+    <button class="btn btn-outline" onclick="exportMenteeReport('${menteeId}')">Exportar relatório</button>
+  </div>
+  `;
+}
+
+function renderPhaseGate(phase, title, subtitle, rel, prog, obs, menteeId){
+  const released = !!rel[phase];
+  const phaseInstruments = {
+    G: [
+      {key:'inicioCiclo', label:'Início do Ciclo preenchido'},
+      {key:'termoAssinado', label:'Termo de Mentoria assinado'},
+    ],
+    U: [
+      {key:'peer360', label:'Feedback 360° enviado'},
+      {key:'disc', label:'Assessment DISC realizado'},
+      {key:'competencias', label:'Radar de Competências calibrado'},
+      {key:'swot', label:'SWOT Pessoal preenchido'},
+      {key:'vf', label:'Visão de Futuro registrada'},
+    ],
+    I: [
+      {key:'okrs', label:'OKRs e Key Results definidos'},
+      {key:'kanban', label:'Kanban atualizado'},
+      {key:'grow', label:'Sessão GROW registrada'},
+    ],
+    A: [
+      {key:'krs', label:'Atingimento dos KRs registrado'},
+      {key:'entrevista', label:'Entrevista de Aprendizado realizada'},
+      {key:'nps', label:'NPS do ciclo registrado'},
+      {key:'aferimento', label:'Competências aferidas (3ª dimensão)'},
+    ]
+  };
+
+  const instruments = phaseInstruments[phase]||[];
+  const phaseProgress = prog[phase]||{};
+  const doneCount = instruments.filter(i=>phaseProgress[i.key]).length;
+  const allDone = doneCount === instruments.length;
+  const obsPhase = obs[phase]||{};
+
+  // Can this phase be released? (previous phase must be released)
+  const phaseOrder = ['G','U','I','A'];
+  const phaseIdx = phaseOrder.indexOf(phase);
+  const prevReleased = phaseIdx === 0 || !!rel[phaseOrder[phaseIdx-1]];
+
+  const colors = {G:'var(--gold)',U:'var(--blue)',I:'var(--green)',A:'#7c4dff'};
+  const bgColors = {G:'rgba(240,192,64,.06)',U:'rgba(50,102,173,.06)',I:'rgba(75,200,100,.06)',A:'rgba(124,77,255,.06)'};
+  const borderColors = {G:'var(--gold-border)',U:'rgba(50,102,173,.3)',I:'rgba(75,200,100,.3)',A:'rgba(124,77,255,.3)'};
+
+  return `
+  <div class="phase-gate" style="border:1px solid ${released?borderColors[phase]:'var(--border)'};background:${released?bgColors[phase]:'var(--bg1)'};margin-bottom:12px;">
+    <div class="phase-gate-header" onclick="togglePhaseGate('${phase}')">
+      <div class="phase-gate-letter" style="color:${released?colors[phase]:'var(--text4)'};">${phase}</div>
+      <div class="phase-gate-info">
+        <div class="phase-gate-title">${title}</div>
+        <div class="phase-gate-sub">${subtitle} · ${doneCount}/${instruments.length} atividades concluídas</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="mentee-badge" style="background:${released?colors[phase]+'20':'var(--bg3)'};color:${released?colors[phase]:'var(--text4)'};border:1px solid ${released?colors[phase]+'40':'var(--border)'};">
+          ${released ? 'LIBERADO' : 'BLOQUEADO'}
+        </span>
+        <span style="color:var(--text4);font-size:12px;" id="gate-arrow-${phase}">▾</span>
+      </div>
+    </div>
+
+    <div class="phase-gate-body" id="gate-body-${phase}">
+      <!-- Checklist -->
+      <div style="margin-bottom:14px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.07em;margin-bottom:8px;">CHECKLIST DE ATIVIDADES</div>
+        ${instruments.map(inst=>{
+          const done = !!phaseProgress[inst.key];
+          return `
+          <div class="instrument-row">
+            <div class="instrument-check ${done?'done':''}">${done?'✓':''}</div>
+            <div class="instrument-label">${inst.label}</div>
+            <div style="display:flex;gap:5px;">
+              <button class="btn btn-xs ${done?'':'btn-outline'}" onclick="toggleMenteeItem('${menteeId}','${phase}','${inst.key}',${!done})"
+                style="${done?'background:var(--green);border-color:var(--green);color:#fff;':''}">
+                ${done?'✓ Feito':'Marcar feito'}
+              </button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <!-- Observation field -->
+      <div style="margin-bottom:14px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.07em;margin-bottom:6px;">OBSERVAÇÃO DO MENTOR</div>
+        <textarea class="obs-field" id="obs-${phase}-${menteeId}" placeholder="Registre suas observações sobre o desempenho do mentorado nesta fase...">${obsPhase.text||''}</textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+          <div style="font-size:10px;color:var(--text4);">${obsPhase.updatedAt?'Salvo em '+obsPhase.updatedAt:''}</div>
+          <button class="btn btn-outline btn-xs" onclick="saveObs('${menteeId}','${phase}')">Salvar observação</button>
+        </div>
+      </div>
+
+      <!-- Release button -->
+      <div style="padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div style="font-size:12px;color:var(--text3);line-height:1.6;">
+          ${released
+            ? `<span style="color:var(--green);">✓ Fase liberada</span> — o mentorado tem acesso a todos os instrumentos desta etapa`
+            : prevReleased
+              ? `Revise as atividades e libere o acesso quando o mentorado estiver pronto para esta fase`
+              : `Libere a fase anterior primeiro`
+          }
+        </div>
+        <button
+          class="release-btn ${released?'unlocked':prevReleased?'locked':'blocked'}"
+          onclick="${prevReleased?`togglePhaseRelease('${menteeId}','${phase}',${!released})`:'toast(\'Libere a fase anterior primeiro\',\'err\')'}"
+        >
+          ${released ? '🔓 Revogar acesso' : '🔒 Liberar fase '+phase}
+        </button>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+function togglePhaseGate(phase){
+  const body = document.getElementById('gate-body-'+phase);
+  const arrow = document.getElementById('gate-arrow-'+phase);
+  if(!body) return;
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if(arrow) arrow.textContent = isOpen ? '▾' : '▴';
+}
+
+function toggleMenteeItem(menteeId, phase, key, done){
+  const allProg = DB.get('mentee_progress')||{};
+  if(!allProg[menteeId]) allProg[menteeId] = {G:{},U:{},I:{},A:{}};
+  if(!allProg[menteeId][phase]) allProg[menteeId][phase] = {};
+  allProg[menteeId][phase][key] = done;
+  DB.set('mentee_progress', allProg);
+  toast(done ? '✓ Marcado como concluído' : 'Marcado como pendente', 'suc');
+  renderMenteeDetail(menteeId);
+  // Re-open the gate that was being viewed
+  setTimeout(()=>togglePhaseGate(phase), 50);
+}
+
+function saveObs(menteeId, phase){
+  const text = document.getElementById('obs-'+phase+'-'+menteeId)?.value||'';
+  saveMentorObservation(menteeId, phase, text);
+}
+
+function togglePhaseRelease(menteeId, phase, release){
+  const msg = release
+    ? `Liberar a Fase ${phase} para este mentorado? Ele terá acesso aos instrumentos desta etapa.`
+    : `Revogar o acesso à Fase ${phase}? O mentorado não poderá mais acessar os instrumentos desta etapa.`;
+
+  showConfirm(
+    release ? `Liberar Fase ${phase}` : `Revogar Fase ${phase}`,
+    msg,
+    release ? 'Liberar' : 'Revogar',
+    ()=>{
+      const rel = getPhaseReleases(menteeId);
+      rel[phase] = release;
+      // If releasing, also set mentee phase in users
+      if(release){
+        const users = DB.get('users')||[];
+        const u = users.find(x=>x.id===menteeId);
+        if(u){ u.phase = phase; DB.set('users',users); }
+      }
+      savePhaseReleases(menteeId, rel);
+      toast(release ? `Fase ${phase} liberada!` : `Fase ${phase} revogada`, 'suc');
+      renderMenteeDetail(menteeId);
+      setTimeout(()=>togglePhaseGate(phase), 50);
+    },
+    !release
+  );
+}
+
+async function analyzeMenteeWithIA(menteeId){
+  const users = DB.get('users')||[];
+  const m = users.find(u=>u.id===menteeId);
+  if(!m) return;
+  const rel = getPhaseReleases(menteeId);
+  const prog = getMenteeProgress(menteeId);
+  const obs = getMentorObservations(menteeId);
+
+  showIALoading('mentee-ia-result', 'Analisando jornada de '+m.name);
+
+  const prompt = `Você é um coach executivo sênior analisando o progresso de um mentorado.
+
+MENTORADO: ${m.name}
+PLANO: ${m.plan||'—'}
+FASE ATUAL: ${m.phase||'G'}
+
+FASES LIBERADAS: ${Object.entries(rel).filter(([,v])=>v).map(([k])=>k).join(', ')||'Apenas G'}
+
+PROGRESSO POR FASE:
+G — Gestar Acordo: Início do Ciclo=${prog.G?.inicioCiclo?'✓':'✗'} | Termo=${prog.G?.termoAssinado?'✓':'✗'}
+U — Diagnóstico: 360°=${prog.U?.peer360?'✓':'✗'} | DISC=${prog.U?.disc?'✓':'✗'} | Competências=${prog.U?.competencias?'✓':'✗'} | SWOT=${prog.U?.swot?'✓':'✗'} | Visão=${prog.U?.vf?'✓':'✗'}
+I — Implementar: OKRs=${prog.I?.okrs?'✓':'✗'} | Kanban=${prog.I?.kanban?'✓':'✗'} | GROW=${prog.I?.grow?'✓':'✗'}
+A — Aferir: KRs=${prog.A?.krs?'✓':'✗'} | Entrevista=${prog.A?.entrevista?'✓':'✗'} | NPS=${prog.A?.nps?'✓':'✗'} | Competências=${prog.A?.aferimento?'✓':'✗'}
+
+OBSERVAÇÕES DO MENTOR:
+${Object.entries(obs).map(([fase,o])=>`Fase ${fase}: ${o.text||'—'}`).join('\n')}
+
+Gere uma análise do mentor com:
+1. DIAGNÓSTICO DO MOMENTO: O que os dados revelam sobre o engajamento e progresso real?
+2. PONTO CRÍTICO: Qual é o maior risco ou bloqueio desta jornada agora?
+3. ALAVANCA IMEDIATA: O que o mentor deve focar na próxima sessão?
+4. PERGUNTA PARA A PRÓXIMA SESSÃO: A pergunta mais poderosa dado o momento atual
+5. PROGNÓSTICO: Probabilidade de conclusão bem-sucedida do ciclo e o que pode mudar isso
+
+Seja direto e específico. Evite generalismos.`;
+
+  const result = await callAI(prompt);
+  showIAResult('mentee-ia-result', result, 'Análise do Mentorado — '+m.name);
+  document.getElementById('mentee-ia-result').scrollIntoView({behavior:'smooth'});
+}
+
+function exportMenteeReport(menteeId){
+  const users = DB.get('users')||[];
+  const m = users.find(u=>u.id===menteeId);
+  if(!m) return;
+  const rel = getPhaseReleases(menteeId);
+  const prog = getMenteeProgress(menteeId);
+  const obs = getMentorObservations(menteeId);
+
+  let txt = `RELATÓRIO DE ACOMPANHAMENTO — Arcala Insight\n`;
+  txt += '='.repeat(50)+'\n\n';
+  txt += `Mentorado: ${m.name}\nE-mail: ${m.email}\nPlano: ${m.plan||'—'}\n`;
+  txt += `Fase Atual: ${m.phase||'G'}\nData: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
+
+  ['G','U','I','A'].forEach(phase=>{
+    const phaseNames = {G:'Gestar Acordo',U:'Unir Diagnóstico',I:'Implementar',A:'Aferir e Ajustar'};
+    txt += `\n${phase} — ${phaseNames[phase]}\n${'-'.repeat(30)}\n`;
+    txt += `Status: ${rel[phase]?'LIBERADO':'BLOQUEADO'}\n`;
+    const p = prog[phase]||{};
+    Object.entries(p).forEach(([k,v])=>{ txt += `  ${k}: ${v?'✓':'✗'}\n`; });
+    const o = obs[phase];
+    if(o?.text) txt += `\nObservação do mentor:\n${o.text}\n`;
+  });
+
+  downloadText(txt, 'acompanhamento-'+m.name.replace(/\s/g,'-').toLowerCase()+'.txt');
+  toast('Relatório exportado!','suc');
+}
+
+// ── PATCH showPage to block mentee based on phase releases ────────────────────
+const _origShowPage_mentor = showPage;
+window.showPage = function(id){
+  if(currentUser && currentUser.role === 'mentorado' && !canMenteeAccess(id)){
+    const phaseMap = {
+      'disc':'U','comp':'U','swot':'U','vf':'U','peer360':'U',
+      'microplano':'I','fase-a':'A'
+    };
+    const needed = phaseMap[id];
+    const phaseNames = {U:'Unir Diagnóstico (U)',I:'Implementar (I)',A:'Aferir e Ajustar (A)'};
+    toast(`Esta etapa ainda não foi liberada pelo seu mentor. Aguarde a liberação da Fase ${phaseNames[needed]||needed}.`,'err');
+    return;
+  }
+  _origShowPage_mentor(id);
+};
+
+// ── PATCH markMenteeProgress into save functions ──────────────────────────────
+// We'll hook into existing save functions
+const _origSaveInicioCiclo = saveInicioCiclo;
+window.saveInicioCiclo = function(){
+  _origSaveInicioCiclo.call(this);
+  markMenteeProgress('inicio_ciclo', true);
+  const aceite = document.getElementById('ic-aceite')?.checked;
+  if(aceite) markMenteeProgress('termo', true);
+};
+
+const _origSaveVF = saveVF;
+window.saveVF = function(){
+  _origSaveVF.call(this);
+  markMenteeProgress('vf', true);
+};
+
+const _origSaveFaseA = saveFaseA;
+window.saveFaseA = function(){
+  _origSaveFaseA.call(this);
+  markMenteeProgress('fase_a_entrevista', true);
+};
+
+const _origSaveNPSFaseA = saveNPSFaseA;
+window.saveNPSFaseA = function(){
+  _origSaveNPSFaseA.call(this);
+  markMenteeProgress('fase_a_nps', true);
+};
+
+// Hook into DISC result save
+const _origSelectDisc = selectDisc;
+window.selectDisc = function(k){
+  _origSelectDisc.call(this,k);
+  markMenteeProgress('disc', true);
+};
+
+// Hook into SWOT save
+const _origAddSwotTag = addSwotTag;
+window.addSwotTag = function(q,v){
+  _origAddSwotTag.call(this,q,v);
+  markMenteeProgress('swot', true);
+};
+
+// ── SHOW PHASE STATUS BANNER for mentorado ────────────────────────────────────
+function renderMinhaJornada(){
+  if(!currentUser) return;
+  const userId = currentUser.id;
+  const rel = getPhaseReleases(userId);
+  const prog = getMenteeProgress(userId);
+  const obs = getMentorObservations(userId); // mentor's obs about this user
+
+  const phases = [
+    {phase:'G',label:'Gestar Acordo',items:prog.G||{},total:2},
+    {phase:'U',label:'Unir Diagnóstico',items:prog.U||{},total:5},
+    {phase:'I',label:'Implementar',items:prog.I||{},total:3},
+    {phase:'A',label:'Aferir e Ajustar',items:prog.A||{},total:4},
+  ];
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Minha Jornada</div>
+    <div class="page-sub">Acompanhe seu progresso nas 4 fases da metodologia GUIA</div>
+  </div>
+
+  <!-- Phase progress overview -->
+  <div class="grid-2" style="margin-bottom:20px;">
+    ${phases.map(p=>{
+      const done = Object.values(p.items).filter(Boolean).length;
+      const pct = Math.round((done/p.total)*100)||0;
+      const released = !!rel[p.phase];
+      const mentorObs = obs[p.phase];
+      const colors = {G:'var(--gold)',U:'var(--blue)',I:'var(--green)',A:'#7c4dff'};
+      const c = colors[p.phase];
+      return `
+      <div class="panel" style="border-left:3px solid ${released?c:'var(--border2)'};opacity:${released?1:0.6};">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:22px;font-weight:700;color:${released?c:'var(--text4)'};font-family:'Space Mono',monospace;">${p.phase}</div>
+          <span class="mentee-badge" style="background:${released?c+'20':'var(--bg3)'};color:${released?c:'var(--text4)'};border:1px solid ${released?c+'40':'var(--border)'};">
+            ${released?'LIBERADO':'AGUARDANDO'}
+          </span>
+        </div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px;">${p.label}</div>
+        <div class="training-progress-bar"><div class="training-progress-fill" style="width:${released?pct:0}%;background:${c};"></div></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:5px;">${released?`${done}/${p.total} atividades`:'Aguardando liberação do mentor'}</div>
+        ${mentorObs?.text?`<div style="margin-top:10px;padding:8px 10px;background:var(--bg3);border-radius:var(--radius-sm);border-left:2px solid ${c};"><div style="font-size:9px;color:${c};font-weight:700;letter-spacing:.06em;margin-bottom:3px;">OBSERVAÇÃO DO MENTOR</div><div style="font-size:11px;color:var(--text2);line-height:1.6;">${mentorObs.text}</div></div>`:''}
+      </div>`;
+    }).join('')}
+  </div>
+
+  <!-- Quick access to released instruments -->
+  <div class="section-label">Instrumentos disponíveis</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+    ${[
+      {id:'inicio-ciclo',phase:'G',icon:'◎',label:'Início do Ciclo'},
+      {id:'peer360',phase:'U',icon:'◷',label:'Feedback 360°'},
+      {id:'disc',phase:'U',icon:'◌',label:'Meu Perfil DISC'},
+      {id:'comp',phase:'U',icon:'◎',label:'Competências'},
+      {id:'swot',phase:'U',icon:'◫',label:'SWOT Pessoal'},
+      {id:'vf',phase:'U',icon:'◈',label:'Visão de Futuro'},
+      {id:'microplano',phase:'I',icon:'◱',label:'Plano de Ação'},
+      {id:'fase-a',phase:'A',icon:'◈',label:'Aferir e Ajustar'},
+    ].map(item=>{
+      const available = canMenteeAccess(item.id);
+      return `
+      <div onclick="${available?`showPage('${item.id}')`:`toast('Fase não liberada ainda','err')`}"
+        style="padding:14px;border-radius:var(--radius);border:1px solid ${available?'var(--border)':'var(--border)'};
+               background:${available?'var(--bg1)':'var(--bg)'};
+               cursor:${available?'pointer':'not-allowed'};
+               opacity:${available?1:0.4};transition:all .15s;"
+        ${available?'onmouseover="this.style.borderColor=\'var(--gold)\'" onmouseout="this.style.borderColor=\'var(--border)\'"':''}>
+        <div style="font-size:20px;margin-bottom:6px;color:${available?'var(--gold)':'var(--text4)'};">${available?item.icon:'🔒'}</div>
+        <div style="font-size:12px;font-weight:600;color:${available?'var(--text)':'var(--text4)'};">${item.label}</div>
+        <div style="font-size:10px;color:var(--text4);margin-top:3px;">Fase ${item.phase}</div>
+      </div>`;
+    }).join('')}
+  </div>
+  `;
+}
 
 // ══════════════════════════════════════════════
 // AUTH SYSTEM

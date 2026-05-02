@@ -1136,6 +1136,7 @@ function renderDash(){
 // ADMIN — USERS
 // ══════════════════════════════════════════════
 let editingUserId = null;
+let editingUser = null;
 
 async function renderAdminUsers(){
   let users = DB.get('users') || [];
@@ -1157,7 +1158,8 @@ async function renderAdminUsers(){
     return ['Ciclo único — 12 semanas','Renovável trimestral','Trial — 2 semanas','Acesso institucional'].map(p=>`<option ${sel===p?'selected':''}>${p}</option>`).join('');
   }
 
-  const editing = editingUserId ? users.find(u=>u.id===editingUserId) : null;
+  // Use cached editingUser to avoid ID mismatch issues
+  const editing = editingUser && editingUserId ? editingUser : null;
 
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
@@ -1298,21 +1300,33 @@ function filterUsers(searchId){
 }
 
 function editUser(id){
+  const users = DB.get('users')||[];
+  const found = users.find(u=>String(u.id)===String(id));
+  if(!found){ toast('Usuário não encontrado — recarregue a página','err'); return; }
   editingUserId = String(id);
+  editingUser = found;
   document.getElementById('user-form-panel')?.scrollIntoView({behavior:'smooth'});
   renderAdminUsers();
 }
 
 function cancelEdit(){
   editingUserId = null;
+  editingUser = null;
   renderAdminUsers();
 }
 
 async function updateUser(){
   if(!editingUserId) return;
   const users = DB.get('users')||[];
-  const u = users.find(x=>String(x.id)===String(editingUserId));
-  if(!u){ toast('Usuário não encontrado — recarregue a página','err'); editingUserId=null; renderAdminUsers(); return; }
+  // Find by ID with fallback to email
+  let u = users.find(x=>String(x.id)===String(editingUserId));
+  if(!u && editingUser) u = users.find(x=>x.email===editingUser.email);
+  if(!u){
+    toast('Usuário não encontrado — recarregue a página','err');
+    editingUserId=null; editingUser=null; renderAdminUsers(); return;
+  }
+  // Sync ID in case it drifted
+  editingUserId = String(u.id);
 
   const name     = document.getElementById('nu-name')?.value.trim();
   const role     = document.getElementById('nu-role')?.value;
@@ -6699,7 +6713,7 @@ function deleteUser(id){
       // Soft delete in Supabase
       sbFetch('users?id=eq.'+id,'PATCH',{active:false}).catch(()=>{});
       // Clear editing if was editing this user
-      if(editingUserId === id) editingUserId = null;
+      if(String(editingUserId) === String(id)){ editingUserId = null; editingUser = null; }
       toast(`${u.name} movido para o histórico`,'suc');
       renderAdminUsers();
     }

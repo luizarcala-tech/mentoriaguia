@@ -8069,6 +8069,113 @@ function startHealthCheck(){
   }, 3000);
 }
 
+
+async function renderAdminUsers(){
+  document.getElementById('content-area').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;"><div style="text-align:center;"><div style="width:24px;height:24px;border:2px solid var(--gold);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;margin:0 auto 12px;"></div><div style="font-size:12px;color:var(--text3);">Carregando...</div></div></div>';
+  const users = await loadAllUsers();
+  const empresas = DB.get('empresas')||[];
+  const mentors  = users.filter(u=>['mentor','admin'].includes(u.role));
+  const archive  = DB.get('users_archive')||[];
+  const editing  = editingUser || null;
+
+  const empOpts = (sel='') =>
+    '<option value="">— Sem empresa —</option>' +
+    empresas.map(e=>'<option value="'+e.id+'" '+(String(sel)===String(e.id)?'selected':'')+'>'+e.nome+'</option>').join('');
+
+  const mentorOpts = (sel='') =>
+    '<option value="">— Sem mentor —</option>' +
+    mentors.map(m=>'<option value="'+m.id+'" '+(String(sel)===String(m.id)?'selected':'')+'>'+m.name+'</option>').join('');
+
+  const planOpts = (sel='') =>
+    ['Ciclo único — 12 semanas','Renovável trimestral','Trial — 2 semanas','Acesso institucional']
+    .map(p=>'<option '+(sel===p?'selected':'')+'>'+p+'</option>').join('');
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Usuários & Acessos</div>
+    <div class="page-sub">Clique em qualquer usuário para editar. Mentor e empresa sincronizados com Supabase.</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Total</div><div class="kpi-value">${users.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Mentores</div><div class="kpi-value" style="color:var(--gold)">${mentors.length}</div></div>
+    <div class="kpi"><div class="kpi-label">Mentorados ativos</div><div class="kpi-value" style="color:var(--green)">${users.filter(u=>u.role==='mentorado'&&u.active!==false).length}</div></div>
+    <div class="kpi"><div class="kpi-label">Sem acesso</div><div class="kpi-value" style="color:var(--amber)">${users.filter(u=>u.active===false).length}</div></div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;" id="user-form-panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div class="panel-title" style="margin-bottom:0;">
+        <div class="panel-title-dot" style="${editing?'background:var(--gold);':''}"></div>
+        ${editing ? 'Editando: <strong style="color:var(--gold);">'+editing.name+'</strong>' : 'Cadastro de usuário'}
+      </div>
+      ${editing?'<button class="btn btn-outline btn-sm" onclick="cancelEdit()">✕ Cancelar</button>':''}
+    </div>
+    <div class="form-row cols-3">
+      <div class="field"><label class="field-label">Nome completo</label>
+        <input class="form-input" type="text" id="nu-name" value="${editing?.name||''}" placeholder="Nome completo">
+      </div>
+      <div class="field"><label class="field-label">E-mail</label>
+        <input class="form-input" type="email" id="nu-email" value="${editing?.email||''}" placeholder="email@dominio.com" ${editing?'readonly style="opacity:.6;"':''}>
+      </div>
+      <div class="field"><label class="field-label">Role</label>
+        <select class="form-select" id="nu-role">
+          <option value="mentorado" ${editing?.role==='mentorado'?'selected':''}>Mentorado</option>
+          <option value="mentor" ${editing?.role==='mentor'?'selected':''}>Mentor</option>
+          ${editing?.role==='admin'?'<option value="admin" selected>Admin</option>':''}
+        </select>
+      </div>
+    </div>
+    <div class="form-row cols-3">
+      <div class="field"><label class="field-label">Plano</label>
+        <select class="form-select" id="nu-plan">${planOpts(editing?.plan)}</select>
+      </div>
+      <div class="field"><label class="field-label">Empresa</label>
+        <select class="form-select" id="nu-empresa">${empOpts(editing?.empresa_id)}</select>
+      </div>
+      <div class="field">
+        <label class="field-label">Mentor responsável <span style="font-size:9px;color:var(--text4);">— espelho da associação</span></label>
+        <select class="form-select" id="nu-mentor">${mentorOpts(editing?.mentor_id||editing?.mentor)}</select>
+      </div>
+    </div>
+    <div class="form-row cols-3">
+      <div class="field"><label class="field-label">Acesso</label>
+        <select class="form-select" id="nu-active">
+          <option value="1" ${editing?.active!==false?'selected':''}>Sim — liberado</option>
+          <option value="0" ${editing?.active===false?'selected':''}>Não — aguardando</option>
+        </select>
+      </div>
+      ${!editing?'<div class="field"><label class="field-label">Senha inicial</label><input class="form-input" type="password" id="nu-pass" placeholder="Opcional"></div>':''}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+      ${editing
+        ? '<button class="btn btn-gold" onclick="updateUser()">✓ Atualizar</button><button class="btn btn-outline" onclick="cancelEdit()">Cancelar</button>'
+        : '<button class="btn btn-gold" onclick="addUser()">➕ Cadastrar usuário</button>'}
+      ${archive.length?'<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="showArchive()">◷ Histórico ('+archive.length+')</button>':''}
+    </div>
+  </div>
+
+  <div class="panel">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <div class="panel-title" style="margin-bottom:0;flex:1">
+        <div class="panel-title-dot"></div> Todos os usuários
+        <span style="font-size:11px;color:var(--text4);font-weight:400;"> — clique para editar</span>
+      </div>
+      <input class="inline-inp" id="usr-search" placeholder="🔍 Buscar..." style="width:200px;" oninput="filterUsers('usr-search')">
+    </div>
+    <div class="table-wrap">
+      <table id="users-table">
+        <thead><tr>
+          <th>Usuário</th><th>Role</th><th>Empresa</th><th>Mentor</th><th>Plano</th><th>Fase</th><th>Acesso</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </div>
+  </div>`;
+
+  renderUsersTable(users);
+}
+
 // ══════════════════════════════════════════════
 // AUTH SYSTEM
 // ══════════════════════════════════════════════

@@ -971,6 +971,31 @@ async function loadAllUsers(){
 let editingUser = null;
 let editingUserId = null;
 
+
+function updatePendingBadge(){
+  const regs = DB.get('registrations')||[];
+  const pending = regs.filter(r=>r.status==='pending').length;
+  // Find the admin-regs nav item and add/remove badge
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item=>{
+    if(item.onclick && item.onclick.toString().includes('admin-regs')){
+      const existing = item.querySelector('.nav-badge');
+      if(pending > 0){
+        if(existing) existing.textContent = pending;
+        else {
+          const badge = document.createElement('span');
+          badge.className = 'nav-badge';
+          badge.textContent = pending;
+          badge.style.cssText = 'margin-left:auto;background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;';
+          item.appendChild(badge);
+        }
+      } else {
+        if(existing) existing.remove();
+      }
+    }
+  });
+}
+
 (function ensureAdmin(){
   const users = DB.get('users') || [];
 
@@ -1143,7 +1168,7 @@ const MENUS = {
   admin:[
     {section:'Administração'},
     {id:'admin-users',icon:'◉',label:'Usuários & Acessos'},
-    {id:'admin-regs',icon:'◈',label:'Cadastros Pendentes',badge:'3'},
+    {id:'admin-regs',icon:'◈',label:'Cadastros Pendentes'},
     {id:'admin-match',icon:'◈',label:'Associar Mentor ↔ Mentorado'},
     {id:'admin-empresas',icon:'◫',label:'Empresas'},
     {section:'Inteligência'},
@@ -8980,6 +9005,7 @@ function bootApp(user){
     if(badge){ badge.textContent = 'v'+PLATFORM_VERSION; badge.style.display='block'; }
   }
   startHealthCheck();
+  setTimeout(updatePendingBadge, 500);
 }
 
 function updateTopbar(){

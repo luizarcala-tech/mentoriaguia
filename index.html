@@ -967,6 +967,10 @@ async function loadAllUsers(){
   } catch(e){ return local; }
 }
 
+// ── RESTORED GLOBAL STATE ──
+let editingUser = null;
+let editingUserId = null;
+
 (function ensureAdmin(){
   const users = DB.get('users') || [];
 
@@ -5795,6 +5799,8 @@ function runIntegratedTests(){
   check('Utils: sbPatchUser existe', ()=> typeof sbPatchUser === 'function');
   check('Utils: sbUpsertUser existe', ()=> typeof sbUpsertUser === 'function');
   check('Utils: loadAllUsers existe', ()=> typeof loadAllUsers === 'function');
+  check('State: editingUser declarado', ()=> typeof editingUser !== 'undefined');
+  check('State: editingUserId declarado', ()=> typeof editingUserId !== 'undefined');
   check('Admin: renderAdminMatch existe', ()=> typeof renderAdminMatch === 'function');
   check('Admin: deleteUser existe', ()=> typeof deleteUser === 'function');
   check('Admin: renderAdminConfig existe', ()=> typeof renderAdminConfig === 'function');

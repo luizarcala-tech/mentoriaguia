@@ -924,6 +924,49 @@ const DB = {
 DB.init();
 
 // Garante que o admin luizarcala@outlook.com sempre existe, mesmo com localStorage antigo
+
+// ══════════════════════════════════════════════
+// CORE SUPABASE HELPERS — restored
+// ══════════════════════════════════════════════
+
+async function sbPatchUser(email, fields){
+  try { await sbFetch('users?email=eq.'+encodeURIComponent(email),'PATCH',fields); } catch(e){}
+}
+
+async function sbUpsertUser(userData){
+  try {
+    await sbFetch('users','POST',userData,{'Prefer':'resolution=merge-duplicates,return=representation'});
+  } catch(e){
+    try { await sbFetch('users?email=eq.'+encodeURIComponent(userData.email),'PATCH',userData); } catch(e2){}
+  }
+}
+
+async function loadAllUsers(){
+  const local = DB.get('users') || [];
+  try {
+    const sb = await Promise.race([
+      sbFetch('users?select=*'),
+      new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),5000))
+    ]);
+    if(!sb || !sb.length) return local;
+    const result = sb.map(su=>{
+      const lu = local.find(l=>l.email===su.email);
+      if(!lu) return su;
+      return {
+        ...su,
+        mentor_id: su.mentor_id || lu.mentor_id || lu.mentor || null,
+        empresa_id: su.empresa_id || lu.empresa_id || null,
+        mentorados: su.mentorados || lu.mentorados || null,
+        password: su.password || lu.password || null,
+        phase: su.phase || lu.phase || 'G',
+      };
+    });
+    local.forEach(lu=>{ if(!result.find(r=>r.email===lu.email)) result.push(lu); });
+    DB.set('users', result);
+    return result;
+  } catch(e){ return local; }
+}
+
 (function ensureAdmin(){
   const users = DB.get('users') || [];
 
@@ -5727,6 +5770,9 @@ function runIntegratedTests(){
   check('Auth: função bootApp existe', ()=> typeof bootApp === 'function');
   check('Auth: função checkSession existe', ()=> typeof checkSession === 'function');
   check('Admin: renderAdminUsers existe', ()=> typeof renderAdminUsers === 'function');
+  check('Utils: sbPatchUser existe', ()=> typeof sbPatchUser === 'function');
+  check('Utils: sbUpsertUser existe', ()=> typeof sbUpsertUser === 'function');
+  check('Utils: loadAllUsers existe', ()=> typeof loadAllUsers === 'function');
   check('Admin: renderAdminMatch existe', ()=> typeof renderAdminMatch === 'function');
   check('Admin: deleteUser existe', ()=> typeof deleteUser === 'function');
   check('Admin: renderAdminConfig existe', ()=> typeof renderAdminConfig === 'function');

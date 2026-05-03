@@ -6501,6 +6501,10 @@ function renderMinhaJornada(){
     }).join('')}
   </div>
   `;
+  // Inject checkpoint widget after render (avoids nested template literal issue)
+  const ckSlot = document.getElementById('checkpoint-slot');
+  if(ckSlot) ckSlot.innerHTML = renderCheckpointWidget();
+
 }
 
 

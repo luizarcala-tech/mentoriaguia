@@ -917,6 +917,7 @@ const MENUS = {
     {section:'Treinamento'},
     {id:'admin-training',icon:'◈',label:'Gestão de Treinamentos'},
     {id:'admin-updates',icon:'◎',label:'Atualizações & Deploy'},
+    {id:'admin-roi',icon:'◎',label:'Dashboard ROI'},
     {section:'Sistema'},
     {id:'admin-config',icon:'◫',label:'Configurações'},
   ],
@@ -934,6 +935,7 @@ const MENUS = {
     {id:'mapa-obj',icon:'◉',label:'Mapa de Objetivos'},
     {type:'phase',letter:'I',label:'Implementar'},
     {id:'microplano',icon:'◱',label:'Plano de Ação'},
+    {id:'diario',icon:'◷',label:'Diário de Bordo'},
     {type:'phase',letter:'A',label:'Aferir e Ajustar'},
     {id:'fase-a',icon:'◈',label:'Aferir e Ajustar (A)'},
     {type:'section',label:'Inteligência'},
@@ -955,6 +957,7 @@ const MENUS = {
     {id:'mapa-obj',icon:'◉',label:'Mapa de Objetivos'},
     {type:'phase',letter:'I',label:'Implementar'},
     {id:'microplano',icon:'◱',label:'Plano de Ação'},
+    {id:'diario',icon:'◷',label:'Diário de Bordo'},
     {type:'phase',letter:'A',label:'Aferir e Ajustar'},
     {id:'fase-a',icon:'◈',label:'Aferir e Ajustar (A)'},
     {type:'section',label:'IA'},
@@ -1084,6 +1087,8 @@ function showPage(id){
     'admin-match': renderAdminMatch,
     'admin-updates': renderAdminUpdates,
     'admin-ia-insights': renderAdminIAInsights,
+    'admin-roi': renderDashboardROI,
+    'diario': renderDiario,
     'training': renderTraining,
     'lesson': renderLesson,
   };
@@ -5989,7 +5994,7 @@ function canMenteeAccess(page){
   const phaseMap = {
     'inicio-ciclo': 'G',
     'disc': 'U', 'comp': 'U', 'swot': 'U', 'vf': 'U', 'peer360': 'U', 'mapa-obj': 'U',
-    'microplano': 'I',
+    'microplano': 'I', 'diario': 'I',
     'fase-a': 'A',
     'minha-jornada': null, 'ia-main': null, 'perfil': null, 'training': null, 'lesson': null,
   };
@@ -6136,8 +6141,9 @@ function renderMenteeDetail(menteeId){
 
   <div id="mentee-ia-result" style="display:none;margin-top:14px;"></div>
   <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
-    <button class="btn btn-gold" onclick="analyzeMenteeWithIA('${menteeId}')">✦ Análise completa do mentorado com IA ↗</button>
-    <button class="btn btn-outline" onclick="exportMenteeReport('${menteeId}')">Exportar relatório</button>
+    <button class="btn btn-gold" onclick="prepararSessaoIA('${menteeId}')">🎯 Preparar próxima sessão com IA</button>
+    <button class="btn btn-outline" onclick="analyzeMenteeWithIA('${menteeId}')">✦ Análise completa</button>
+    <button class="btn btn-outline" onclick="exportMenteeReport('${menteeId}')">Exportar</button>
   </div>
   `;
 }
@@ -6439,6 +6445,7 @@ function renderMinhaJornada(){
     <div class="page-title">Minha Jornada</div>
     <div class="page-sub">Acompanhe seu progresso nas 4 fases da metodologia GUIA</div>
   </div>
+  ${renderCheckpointWidget()}
 
   <!-- Phase progress overview -->
   <div class="grid-2" style="margin-bottom:20px;">
@@ -7551,6 +7558,457 @@ async function sbLoadMapaObjetivos(menteeEmail, cycleId){
     if(!rows || !rows.length) return null;
     return {visao: rows[0].visao, data: rows[0].data};
   } catch(e){ return null; }
+}
+
+
+// ══════════════════════════════════════════════
+// CHECKPOINT SEMANAL + DIÁRIO DE BORDO
+// ══════════════════════════════════════════════
+
+// ── CHECKPOINT SEMANAL ───────────────────────────────────────────────────────
+function getCheckpoints(email){
+  return DB.get('checkpoints_'+email) || [];
+}
+
+function saveCheckpoint(email, data){
+  const all = getCheckpoints(email);
+  all.unshift(data);
+  DB.set('checkpoints_'+email, all);
+}
+
+function renderCheckpointWidget(){
+  if(!currentUser || currentUser.role==='admin') return '';
+  const today_str = today();
+  const checks = getCheckpoints(currentUser.email);
+  const alreadyToday = checks.length && checks[0].date === today_str;
+  const streak = calculateStreak(checks);
+
+  if(alreadyToday) return `
+  <div style="background:var(--bg2);border:1px solid var(--green-border);border-left:3px solid var(--green);border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div style="font-size:20px;">✓</div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;color:var(--green);">Checkpoint da semana registrado!</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">Conquista: "${checks[0].conquista?.substring(0,50)||'—'}..." · Energia: ${checks[0].energia}/5 · Sequência: ${streak} semana(s)</div>
+      </div>
+    </div>
+  </div>`;
+
+  return `
+  <div style="background:linear-gradient(135deg,rgba(240,192,64,.08) 0%,rgba(240,192,64,.02) 100%);border:1px solid var(--gold-border);border-radius:var(--radius);padding:18px;margin-bottom:16px;" id="checkpoint-widget">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--gold);">Checkpoint semanal</div>
+        <div style="font-size:11px;color:var(--text3);">60 segundos para registrar sua semana</div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);font-family:'Space Mono',monospace;">${streak>0?'🔥 '+streak+' semana(s)':''}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.06em;margin-bottom:5px;">MAIOR CONQUISTA DA SEMANA</div>
+        <input type="text" class="form-input" id="ck-conquista" placeholder="O que você mais avançou?" style="font-size:12px;">
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.06em;margin-bottom:5px;">O QUE TE TRAVOU?</div>
+        <input type="text" class="form-input" id="ck-bloqueio" placeholder="Maior obstáculo ou frustração" style="font-size:12px;">
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.06em;margin-bottom:5px;">ENERGIA PROFISSIONAL</div>
+        <div style="display:flex;gap:6px;" id="ck-energia-row">
+          ${[1,2,3,4,5].map(n=>`<div onclick="selectCKEnergia(${n})" id="ck-e-${n}" style="flex:1;padding:8px 0;text-align:center;border-radius:6px;border:1.5px solid var(--border);background:var(--bg3);cursor:pointer;transition:all .1s;"><div style="font-size:14px;font-weight:700;color:var(--text);">${n}</div><div style="font-size:8px;color:var(--text4);">${['','Baixa','Ok','Boa','Alta','Máxima'][n]}</div></div>`).join('')}
+        </div>
+      </div>
+      <button class="btn btn-gold btn-sm" onclick="submitCheckpoint()" style="margin-top:4px;">✓ Registrar checkpoint</button>
+    </div>
+  </div>`;
+}
+
+window._ckEnergia = 0;
+function selectCKEnergia(val){
+  window._ckEnergia = val;
+  [1,2,3,4,5].forEach(v=>{
+    const el=document.getElementById('ck-e-'+v);
+    if(!el) return;
+    if(v<=val){ el.style.background='var(--gold)'; el.style.borderColor='var(--gold)'; el.firstElementChild.style.color='#0a0a0a'; }
+    else { el.style.background='var(--bg3)'; el.style.borderColor='var(--border)'; el.firstElementChild.style.color='var(--text)'; }
+  });
+}
+
+function submitCheckpoint(){
+  const conquista = document.getElementById('ck-conquista')?.value.trim();
+  const bloqueio = document.getElementById('ck-bloqueio')?.value.trim();
+  const energia = window._ckEnergia;
+  if(!conquista){ toast('Registre sua conquista','err'); return; }
+  if(!energia){ toast('Selecione seu nível de energia','err'); return; }
+
+  saveCheckpoint(currentUser.email, {
+    date: today(),
+    conquista, bloqueio, energia,
+    phase: currentUser.phase || 'G',
+    timestamp: new Date().toISOString()
+  });
+
+  markMenteeProgress('checkpoint', true);
+  toast('Checkpoint registrado! 🔥','suc');
+
+  // Replace widget with confirmation
+  const w = document.getElementById('checkpoint-widget');
+  if(w) w.outerHTML = renderCheckpointWidget();
+}
+
+function calculateStreak(checks){
+  if(!checks.length) return 0;
+  let streak = 0;
+  const now = new Date();
+  for(let i=0; i<checks.length; i++){
+    const d = new Date(checks[i].date);
+    const weekDiff = Math.floor((now-d)/(7*24*60*60*1000));
+    if(weekDiff <= i+1) streak++;
+    else break;
+  }
+  return streak;
+}
+
+// ── DIÁRIO DE BORDO ─────────────────────────────────────────────────────────
+function getDiario(email){
+  return DB.get('diario_'+email) || [];
+}
+
+function saveDiarioEntry(email, entry){
+  const all = getDiario(email);
+  all.unshift(entry);
+  DB.set('diario_'+email, all);
+}
+
+function renderDiario(){
+  if(!currentUser) return;
+  const entries = getDiario(currentUser.email);
+  const checks = getCheckpoints(currentUser.email);
+
+  // Calculate sentiment trend
+  const last5 = entries.slice(0,5);
+  const sentimentWords = {
+    positive: ['avancei','conquista','consegui','ótimo','excelente','progresso','feliz','entusiasmo','confiança','realização'],
+    negative: ['travei','frustração','difícil','problema','ansiedade','medo','dúvida','bloqueio','cansaço','desânimo']
+  };
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Diário de Bordo</div>
+    <div class="page-sub">Reflexões entre sessões — a IA identifica padrões ao longo do ciclo</div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <!-- New entry -->
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Nova reflexão</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">Registre em 30 segundos o que está na sua mente profissionalmente.</div>
+        <div class="field">
+          <textarea class="form-input" id="diario-texto" rows="4" placeholder="O que aconteceu hoje que marcou? O que você percebeu sobre si mesmo? O que quer lembrar?" style="font-size:13px;line-height:1.7;"></textarea>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+          <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.06em;align-self:center;margin-right:4px;">HUMOR:</div>
+          ${['😤','😟','😐','🙂','😊','🔥'].map((e,i)=>`<div onclick="selectDiarioMood(${i})" id="mood-${i}" style="width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;transition:all .1s;">${e}</div>`).join('')}
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-gold btn-sm" onclick="submitDiario()">Salvar reflexão</button>
+          <button class="btn btn-outline btn-sm" onclick="analyzeDiarioWithIA()">✦ Análise de padrões IA</button>
+        </div>
+      </div>
+
+      <!-- Entries list -->
+      <div class="section-label">Histórico (${entries.length} reflexões)</div>
+      ${entries.slice(0,20).map((e,i)=>`
+      <div style="background:var(--bg1);border:1px solid var(--border);border-left:3px solid ${e.mood>=4?'var(--green)':e.mood>=2?'var(--gold)':'var(--red)'};border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="font-size:10px;color:var(--text4);font-family:'Space Mono',monospace;">${e.date} ${e.time||''}</div>
+          <div style="font-size:14px;">${['😤','😟','😐','🙂','😊','🔥'][e.mood]||'😐'}</div>
+        </div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.7;">${e.texto}</div>
+      </div>`).join('')}
+      ${!entries.length ? '<div style="font-size:12px;color:var(--text4);padding:20px 0;text-align:center;">Nenhuma reflexão registrada ainda. Comece agora!</div>' : ''}
+    </div>
+
+    <div>
+      <!-- Insights panel -->
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Pulso semanal</div>
+        <div style="display:flex;gap:4px;margin-bottom:14px;">
+          ${checks.slice(0,8).map(c=>`<div style="flex:1;text-align:center;">
+            <div style="height:${c.energia*12}px;background:${c.energia>=4?'var(--green)':c.energia>=3?'var(--gold)':'var(--red)'};border-radius:3px 3px 0 0;min-height:8px;"></div>
+            <div style="font-size:8px;color:var(--text4);margin-top:3px;">${c.date?.substring(5)||''}</div>
+          </div>`).join('')}
+          ${!checks.length ? '<div style="font-size:11px;color:var(--text4);">Registre checkpoints para ver o gráfico</div>' : ''}
+        </div>
+        ${checks.length>=2 ? `
+        <div style="font-size:11px;color:var(--text2);line-height:1.6;">
+          Energia média: <strong style="color:var(--gold);">${(checks.reduce((a,c)=>a+c.energia,0)/checks.length).toFixed(1)}/5</strong>
+          · Sequência: <strong>${calculateStreak(checks)}</strong> semana(s)
+        </div>` : ''}
+      </div>
+
+      <!-- Mood trend -->
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Tendência emocional</div>
+        ${entries.length >= 3 ? `
+        <div style="display:flex;gap:3px;align-items:flex-end;height:80px;">
+          ${entries.slice(0,15).reverse().map(e=>`
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">
+            <div style="width:100%;height:${(e.mood+1)*12}px;background:${e.mood>=4?'var(--green)':e.mood>=2?'var(--gold)':'var(--red)'};border-radius:3px 3px 0 0;min-height:4px;"></div>
+          </div>`).join('')}
+        </div>
+        <div style="font-size:10px;color:var(--text4);text-align:center;margin-top:6px;">← mais antigo · mais recente →</div>
+        ` : '<div style="font-size:11px;color:var(--text4);">Registre pelo menos 3 reflexões para ver tendências</div>'}
+      </div>
+
+      <div id="diario-ia-result" style="display:none;"></div>
+    </div>
+  </div>
+  `;
+}
+
+window._diarioMood = 3;
+function selectDiarioMood(idx){
+  window._diarioMood = idx;
+  [0,1,2,3,4,5].forEach(i=>{
+    const el=document.getElementById('mood-'+i);
+    if(!el) return;
+    if(i===idx){ el.style.background='var(--gold)'; el.style.borderColor='var(--gold)'; el.style.transform='scale(1.15)'; }
+    else { el.style.background='transparent'; el.style.borderColor='var(--border)'; el.style.transform='scale(1)'; }
+  });
+}
+
+function submitDiario(){
+  const texto = document.getElementById('diario-texto')?.value.trim();
+  if(!texto){ toast('Escreva algo antes de salvar','err'); return; }
+  saveDiarioEntry(currentUser.email, {
+    texto,
+    mood: window._diarioMood,
+    date: today(),
+    time: new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),
+    phase: currentUser.phase||'G'
+  });
+  toast('Reflexão registrada!','suc');
+  renderDiario();
+}
+
+async function analyzeDiarioWithIA(){
+  const entries = getDiario(currentUser.email);
+  const checks = getCheckpoints(currentUser.email);
+  if(entries.length < 2){ toast('Registre pelo menos 2 reflexões para análise','err'); return; }
+  showIALoading('diario-ia-result','Analisando padrões do Diário de Bordo');
+  const textos = entries.slice(0,10).map(e=>`[${e.date} humor:${e.mood}/5] ${e.texto}`).join('\n');
+  const energias = checks.slice(0,8).map(c=>`${c.date}: energia=${c.energia}, conquista="${c.conquista}", bloqueio="${c.bloqueio}"`).join('\n');
+  const prompt = `Analise o diário de bordo e checkpoints semanais deste profissional em mentoria:
+
+REFLEXÕES RECENTES:
+${textos}
+
+CHECKPOINTS SEMANAIS:
+${energias||'Nenhum registrado'}
+
+Produza:
+1. PADRÃO EMOCIONAL: O que os dados revelam sobre o estado emocional e engajamento ao longo das semanas?
+2. TEMA RECORRENTE: Qual assunto aparece repetidamente — mesmo que o profissional não perceba?
+3. SINAL DE ALERTA: Há algum padrão preocupante (queda de energia, aumento de frustração, estagnação)?
+4. GATILHO POSITIVO: O que correlaciona com os melhores momentos registrados?
+5. PERGUNTA PARA O MENTOR: A pergunta mais valiosa que o mentor deveria fazer na próxima sessão com base nestes dados.
+
+Seja empático mas preciso. Trate os dados como um psicólogo organizacional trataria.`;
+  const result = await callAI(prompt);
+  showIAResult('diario-ia-result', result, 'Análise do Diário de Bordo');
+}
+
+// ── PREPARAÇÃO DE SESSÃO COM IA ─────────────────────────────────────────────
+async function prepararSessaoIA(menteeId){
+  const users = DB.get('users')||[];
+  const mentee = users.find(u=>String(u.id)===String(menteeId));
+  if(!mentee){ toast('Mentorado não encontrado','err'); return; }
+
+  const diario = getDiario(mentee.email).slice(0,5);
+  const checks = getCheckpoints(mentee.email).slice(0,4);
+  const obs = getMentorObservations(menteeId);
+  const prog = getMenteeProgress(menteeId);
+  const rel = getPhaseReleases(menteeId);
+  const disc = DB.get('disc');
+  const mp = DB.get('microplano')||{};
+
+  showIALoading('mentee-ia-result', 'Preparando sessão para '+mentee.name);
+
+  const prompt = `Você é um coach executivo sênior preparando um mentor para a próxima sessão de mentoria.
+
+MENTORADO: ${mentee.name}
+FASE ATUAL: ${mentee.phase||'G'}
+PERFIL DISC: ${disc||'Não realizado'}
+
+DIÁRIO DE BORDO (últimas 5 entradas):
+${diario.map(e=>`[${e.date} humor:${e.mood}/5] ${e.texto}`).join('\n')||'Sem entradas'}
+
+CHECKPOINTS SEMANAIS:
+${checks.map(c=>`${c.date}: energia=${c.energia}, conquista="${c.conquista}", bloqueio="${c.bloqueio}"`).join('\n')||'Sem checkpoints'}
+
+OBSERVAÇÕES ANTERIORES DO MENTOR:
+${Object.entries(obs).map(([f,o])=>`Fase ${f}: ${o.text||'—'}`).join('\n')||'Nenhuma'}
+
+AÇÕES PENDENTES KANBAN:
+${(mp.kanban?.todo||[]).join(', ')||'Nenhuma registrada'}
+
+Produza um briefing de preparação em 2 minutos de leitura:
+
+1. ESTADO ATUAL DO MENTORADO: O que os dados revelam sobre o momento dele? (3 frases)
+2. TRÊS HIPÓTESES: O que pode estar acontecendo por trás dos dados?
+3. DUAS PERGUNTAS PODEROSAS: As melhores perguntas para abrir esta sessão (baseadas nos dados reais)
+4. UM RISCO A MONITORAR: O que pode dar errado se não for tratado agora?
+5. FOCO GROW SUGERIDO: Qual Goal sugerir para esta sessão específica?
+6. AÇÃO PÓS-SESSÃO: O que registrar após a sessão para manter o progresso
+
+Seja prático e específico ao contexto. O mentor deve ler em 2 minutos e chegar preparado.`;
+
+  const result = await callAI(prompt);
+  showIAResult('mentee-ia-result', result, '🎯 Preparação de Sessão — '+mentee.name);
+  document.getElementById('mentee-ia-result').scrollIntoView({behavior:'smooth'});
+}
+
+// ── DASHBOARD ROI PARA RH ────────────────────────────────────────────────────
+async function renderDashboardROI(){
+  const users = await loadAllUsers();
+  const empresas = DB.get('empresas')||[];
+  const mentorados = users.filter(u=>u.role==='mentorado');
+  const mentors = users.filter(u=>u.role==='mentor');
+  const activeMentorados = mentorados.filter(u=>u.active!==false);
+
+  // Collect metrics
+  let totalNPS = 0, npsCount = 0;
+  const nps = DB.get('nps_history')||[];
+  nps.forEach(n=>{ totalNPS += n.score; npsCount++; });
+  const avgNPS = npsCount ? (totalNPS/npsCount).toFixed(1) : '—';
+
+  // Phase distribution
+  const phases = {G:0,U:0,I:0,A:0};
+  activeMentorados.forEach(u=>{ if(phases[u.phase]!==undefined) phases[u.phase]++; });
+  const completedCycles = phases.A;
+  const completionRate = activeMentorados.length ? Math.round((completedCycles/activeMentorados.length)*100) : 0;
+
+  // Retention (proxy: mentorados that progressed beyond G)
+  const progressed = activeMentorados.filter(u=>u.phase && u.phase!=='G').length;
+  const retentionRate = activeMentorados.length ? Math.round((progressed/activeMentorados.length)*100) : 0;
+
+  // Cost per mentorado (estimate based on plan)
+  const planCosts = {'Ciclo único — 12 semanas':5000,'Renovável trimestral':4000,'Trial — 2 semanas':0,'Acesso institucional':3500};
+  let totalRevenue = 0;
+  activeMentorados.forEach(u=>{ totalRevenue += planCosts[u.plan] || 3000; });
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Dashboard ROI — People Analytics</div>
+    <div class="page-sub">Indicadores de retorno para apresentação ao board e RH das empresas-cliente</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Mentorados Ativos</div><div class="kpi-value">${activeMentorados.length}</div></div>
+    <div class="kpi"><div class="kpi-label">NPS Médio</div><div class="kpi-value" style="color:${Number(avgNPS)>=8?'var(--green)':Number(avgNPS)>=6?'var(--gold)':'var(--red)'}">${avgNPS}</div></div>
+    <div class="kpi"><div class="kpi-label">Retenção no Programa</div><div class="kpi-value" style="color:var(--green)">${retentionRate}%</div></div>
+    <div class="kpi"><div class="kpi-label">Receita Estimada</div><div class="kpi-value" style="color:var(--gold)">R$ ${(totalRevenue/1000).toFixed(0)}k</div></div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:16px;">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Funil GUIA — Progressão</div>
+      <div style="padding:10px 0;">
+        ${['G','U','I','A'].map((p,i)=>{
+          const count = phases[p];
+          const pct = activeMentorados.length ? Math.round((count/activeMentorados.length)*100) : 0;
+          const colors = {G:'var(--gold)',U:'var(--blue)',I:'var(--green)',A:'#7c4dff'};
+          return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+            <div style="width:28px;font-size:18px;font-weight:700;color:${colors[p]};font-family:'Space Mono',monospace;">${p}</div>
+            <div style="flex:1;height:24px;background:var(--bg3);border-radius:12px;overflow:hidden;position:relative;">
+              <div style="width:${pct}%;height:100%;background:${colors[p]};border-radius:12px;transition:width .4s;"></div>
+              <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10px;font-weight:700;color:#fff;">${count} (${pct}%)</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> ROI Estimado</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.8;">
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span>Custo médio por mentorado</span><strong>R$ ${activeMentorados.length ? Math.round(totalRevenue/activeMentorados.length).toLocaleString('pt-BR') : '—'}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span>Custo de turnover evitado (est.)</span><strong style="color:var(--green)">R$ ${(activeMentorados.length * 15000).toLocaleString('pt-BR')}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span>Mentores ativos</span><strong>${mentors.length}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+          <span>Ratio mentor:mentorado</span><strong>1:${mentors.length ? Math.round(activeMentorados.length/mentors.length) : '—'}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;">
+          <span>ROI estimado</span><strong style="color:var(--gold);font-size:16px;">${retentionRate>=50?'3.2x':'1.8x'}</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Company breakdown -->
+  ${empresas.length ? `
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Performance por empresa</div>
+    <table style="width:100%;font-size:12px;border-collapse:collapse;">
+      <thead><tr>
+        <th style="text-align:left;padding:8px 0;color:var(--text3);border-bottom:1px solid var(--border);">Empresa</th>
+        <th style="text-align:center;padding:8px 0;color:var(--text3);border-bottom:1px solid var(--border);">Mentorados</th>
+        <th style="text-align:center;padding:8px 0;color:var(--text3);border-bottom:1px solid var(--border);">Fase média</th>
+        <th style="text-align:center;padding:8px 0;color:var(--text3);border-bottom:1px solid var(--border);">Retenção</th>
+        <th style="text-align:center;padding:8px 0;color:var(--text3);border-bottom:1px solid var(--border);">Status</th>
+      </tr></thead>
+      <tbody>
+        ${empresas.map(e=>{
+          const empUsers = mentorados.filter(u=>String(u.empresa_id)===String(e.id));
+          const empProgressed = empUsers.filter(u=>u.phase&&u.phase!=='G').length;
+          const empRet = empUsers.length ? Math.round((empProgressed/empUsers.length)*100) : 0;
+          const phaseOrder = {G:1,U:2,I:3,A:4};
+          const avgPhase = empUsers.length ? (empUsers.reduce((a,u)=>a+(phaseOrder[u.phase]||1),0)/empUsers.length) : 0;
+          const phaseLabel = avgPhase<1.5?'G':avgPhase<2.5?'U':avgPhase<3.5?'I':'A';
+          return `<tr>
+            <td style="padding:8px 0;font-weight:600;color:var(--text);">${e.nome}</td>
+            <td style="text-align:center;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace;">${empUsers.length}</td>
+            <td style="text-align:center;font-weight:700;font-family:'Space Mono',monospace;">${phaseLabel}</td>
+            <td style="text-align:center;color:${empRet>=70?'var(--green)':empRet>=40?'var(--gold)':'var(--red)'};">${empRet}%</td>
+            <td style="text-align:center;"><span class="pill ${empRet>=60?'pill-active':'pill-pending'}">${empRet>=60?'SAUDÁVEL':'ATENÇÃO'}</span></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>` : ''}
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <button class="btn btn-gold" onclick="generateROIReport()">✦ Gerar relatório executivo com IA</button>
+    <button class="btn btn-outline" onclick="exportROIReport()">Exportar PDF</button>
+  </div>
+  <div id="roi-ia-result" style="display:none;margin-top:16px;"></div>
+  `;
+}
+
+async function generateROIReport(){
+  const users = DB.get('users')||[];
+  const empresas = DB.get('empresas')||[];
+  const mentorados = users.filter(u=>u.role==='mentorado'&&u.active!==false);
+  const nps = DB.get('nps_history')||[];
+  showIALoading('roi-ia-result','Gerando relatório de ROI');
+  const prompt = `Gere um relatório executivo de ROI de programa de mentoria para apresentação ao board.
+Dados: ${mentorados.length} mentorados ativos, ${empresas.length} empresas, NPS médio ${nps.length?(nps.reduce((a,n)=>a+n.score,0)/nps.length).toFixed(1):'N/A'}.
+Inclua: sumário executivo, ROI financeiro estimado (benchmark de mercado), impacto em retenção, desenvolvimento de lideranças, e recomendações de escala.
+Tom: C-level, orientado a números, máximo 1 página.`;
+  const result = await callAI(prompt);
+  showIAResult('roi-ia-result', result, 'Relatório Executivo de ROI');
+}
+
+function exportROIReport(){
+  toast('Funcionalidade de exportação PDF em desenvolvimento','');
 }
 
 

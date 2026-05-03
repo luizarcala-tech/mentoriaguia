@@ -1823,64 +1823,89 @@ async function renderComp(){
 }
 
 function renderCompEdit(isMentor, activeId, activeCycle){
-  // If cycle-based, get competencias from cycle data
   let radar = null;
   if(activeCycle){
-    radar = {
-      id: activeCycle.id,
-      name: activeCycle.name,
-      competencias: activeCycle.competencias || [],
-      frozen: !!activeCycle.frozen_at
-    };
+    radar = {id:activeCycle.id, name:activeCycle.name, competencias:activeCycle.competencias||[], frozen:!!activeCycle.frozen_at};
   } else {
-    const radars = DB.get('comp_radars') || [];
-    radar = radars.find(r=>r.id===activeId) || radars[0];
+    const radars = DB.get('comp_radars')||[];
+    radar = radars.find(r=>r.id===activeId)||radars[0];
   }
   if(!radar) return;
-  const data = radar.competencias || [];
-  const atLimit = data.length >= 7;
-  const selOpts = ALL_COMPETENCIAS.filter(c=>!data.find(d=>d.name===c)).map(c=>'<option value="'+c+'">'+c+'</option>').join('');
+  const data = radar.competencias||[];
+  const frozen = !!radar.frozen;
+  const atLimit = data.length>=7;
+  const selOpts = ALL_COMPETENCIAS.filter(c=>!data.find(d=>d.name===c)).map(c=>`<option value="${c}">${c}</option>`).join('');
 
-  document.getElementById('comp-tab-content').innerHTML =
-    '<div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">' +
-    '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Autoavaliação inicial</div>' +
-    '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#3266ad"></div>Avaliação do mentor</div>' +
-    '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:#7c4dff"></div>Resultado aferido (Fase A)</div>' +
-    '<div style="margin-left:auto;font-size:11px;color:'+(atLimit?'var(--amber)':'var(--text3)')+'">'+data.length+'/7 competências</div>' +
-    '</div>' +
-    '<div class="grid-2">' +
-    '<div class="panel">' +
-    '<div class="panel-title"><div class="panel-title-dot"></div> '+radar.name+' — Calibração</div>' +
-    '<div id="comp-list"></div>' +
-    '<div class="divider"></div>' +
-    (!atLimit ?
-      '<div style="margin-bottom:10px;">' +
-      '<div style="font-size:10px;color:var(--text3);margin-bottom:6px;letter-spacing:.06em">ADICIONAR COMPETÊNCIA</div>' +
-      '<div style="display:flex;gap:6px;margin-bottom:8px;">' +
-      '<select id="comp-sel" style="flex:1;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:12px;padding:8px 10px;border-radius:6px;font-family:Sora,sans-serif;">' +
-      '<option value="">Selecione do banco...</option>'+selOpts+
-      '</select>' +
-      '<button class="btn btn-outline btn-sm" onclick="addCompFromSelect()">+ Adicionar</button>' +
-      '</div>' +
-      '<div style="display:flex;gap:6px;">' +
-      '<input class="inline-inp" id="new-comp" placeholder="Ou escreva uma competência..." style="flex:1;">' +
-      '<button class="btn btn-outline btn-sm" onclick="addComp()">+ Custom</button>' +
-      '</div></div>'
-    : '<div style="font-size:11px;color:var(--amber);padding:8px 0;">Limite de 7 competências atingido.</div>') +
-    '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
-    '<button class="btn btn-gold btn-sm" onclick="analyzeCompWithIA()">✦ Analisar com IA ↗</button>' +
-    '<button class="btn btn-outline btn-sm" onclick="exportCompReport()">Exportar</button>' +
-    (isMentor?'<button class="btn btn-outline btn-sm" onclick="saveRadarSnapshot()">💾 Fechar ciclo</button>':'') +
-    '</div></div>' +
-    '<div class="panel"><div class="panel-title"><div class="panel-title-dot"></div> Visualização — '+radar.name+'</div>' +
-    '<div class="chart-wrap" style="height:280px;"><canvas id="radar-chart" role="img" aria-label="Radar de competências"></canvas></div>' +
-    '</div></div>' +
-    '<div id="comp-ia-result" style="margin-top:16px;display:none;"></div>';
+  const frozenBadge = frozen
+    ? `<span style="font-size:10px;font-weight:700;color:var(--green);background:rgba(75,200,100,.1);padding:3px 10px;border-radius:20px;border:1px solid rgba(75,200,100,.3);">✓ CONGELADO — prontas para o 360°</span>`
+    : `<span style="font-size:10px;font-weight:700;color:var(--amber);background:rgba(240,160,64,.1);padding:3px 10px;border-radius:20px;border:1px solid rgba(240,160,64,.3);">⚠ Não congelado</span>`;
+
+  const freezeBtn = frozen ? '' :
+    `<button class="btn btn-gold btn-xs" style="margin-left:auto" onclick="freezeCycleCompetencias('${radar.id}','${currentUser?.email||''}').then(()=>renderComp())">🔒 Congelar e gerar perguntas 360°</button>`;
+
+  const addForm = atLimit
+    ? `<div style="font-size:11px;color:var(--amber);margin-top:8px;">Limite de 7 competências atingido.</div>`
+    : `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:10px;">ADICIONAR COMPETÊNCIA AO CICLO</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <select id="comp-sel" class="form-select" style="flex:1;font-size:12px;">
+            <option value="">Selecione do banco de competências...</option>
+            ${selOpts}
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="addCompFromSelect()">+ Banco</button>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <input class="form-input" id="new-comp" placeholder="Ou cadastre uma competência personalizada..." style="flex:1;font-size:12px;">
+          <button class="btn btn-gold btn-sm" onclick="addComp()">+ Cadastrar</button>
+        </div>
+      </div>`;
+
+  const frozenMsg = frozen
+    ? `<div style="margin-top:12px;font-size:11px;color:var(--text3);">Competências congeladas. Encerre o ciclo e crie um novo para editar.</div>`
+    : '';
+
+  document.getElementById('comp-tab-content').innerHTML = `
+  <!-- Cycle banner -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid ${frozen?'var(--green)':'var(--gold)'};border-radius:var(--radius-sm);padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.07em;">CICLO</div>
+    <div style="font-size:13px;font-weight:600;color:var(--gold);">${radar.name}</div>
+    <div style="font-size:11px;color:var(--text3);">${data.length}/7 competências</div>
+    ${frozenBadge}
+    ${freezeBtn}
+  </div>
+
+  <!-- Legend -->
+  <div style="display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap;font-size:11px;color:var(--text3);">
+    <div style="display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Autoavaliação</div>
+    <div style="display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:50%;background:#3266ad"></div>Mentor</div>
+    <div style="display:flex;align-items:center;gap:5px;"><div style="width:10px;height:10px;border-radius:50%;background:#7c4dff"></div>Aferido (Fase A)</div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Competências — ${radar.name}</div>
+        <div id="comp-list"></div>
+        ${frozen ? frozenMsg : addForm}
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-gold btn-sm" onclick="analyzeCompWithIA()">✦ Analisar com IA ↗</button>
+          <button class="btn btn-outline btn-sm" onclick="exportCompReport()">Exportar</button>
+          <button class="btn btn-sm" style="background:#7c4dff20;border:1px solid #7c4dff55;color:#7c4dff;" onclick="toggleAferimento()">◈ Fase A</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Radar — ${radar.name}</div>
+      <div class="chart-wrap" style="height:280px;">
+        <canvas id="radar-chart" role="img" aria-label="Radar de competências"></canvas>
+      </div>
+    </div>
+  </div>
+  <div id="comp-ia-result" style="margin-top:16px;display:none;"></div>`;
 
   renderCompList();
   setTimeout(initRadarChart, 150);
 }
-
 function renderCompHistory(radars){
   if(!radars.length){ document.getElementById('comp-tab-content').innerHTML='<div class="panel" style="color:var(--text3)">Nenhum ciclo salvo.</div>'; return; }
   document.getElementById('comp-tab-content').innerHTML = radars.slice().reverse().map(function(r,i){
@@ -6082,7 +6107,21 @@ function registerDeploy(){
 // Get liberation state for a mentee
 function getPhaseReleases(menteeId){
   const all = DB.get('phase_releases') || {};
-  if(!all[menteeId]) all[menteeId] = {G: true, U: false, I: false, A: false};
+  if(!all[menteeId]){
+    all[menteeId] = {G: true, U: false, I: false, A: false};
+    // Try to load from Supabase asynchronously
+    const users = DB.get('users')||[];
+    const mentee = users.find(u=>String(u.id)===String(menteeId));
+    if(mentee){
+      sbLoadPhaseReleases(mentee.email).then(releases=>{
+        if(releases){
+          const current = DB.get('phase_releases')||{};
+          current[menteeId] = releases;
+          DB.set('phase_releases', current);
+        }
+      }).catch(()=>{});
+    }
+  }
   return all[menteeId];
 }
 
@@ -6090,8 +6129,13 @@ function savePhaseReleases(menteeId, releases){
   const all = DB.get('phase_releases') || {};
   all[menteeId] = releases;
   DB.set('phase_releases', all);
-  // Sync to Supabase
-  sbFetch('users?id=eq.'+menteeId,'PATCH',{phase_releases: releases}).catch(()=>{});
+  // Sync to Supabase phase_releases table
+  const users = DB.get('users')||[];
+  const mentee = users.find(u=>String(u.id)===String(menteeId));
+  const mentor = currentUser;
+  if(mentee){
+    sbSavePhaseReleases(mentee.email, mentor?.email||'', releases).catch(()=>{});
+  }
 }
 
 // Check if mentee has a phase released
@@ -6160,6 +6204,8 @@ function markMenteeProgress(instrument, done){
     const [phase, key] = map[instrument];
     allProgress[userId][phase][key] = done;
     DB.set('mentee_progress', allProgress);
+    // Sync to Supabase
+    sbSaveMenteeProgress(me.email, allProgress[userId]).catch(()=>{});
   }
 }
 
@@ -6194,6 +6240,12 @@ function saveMentorObservation(menteeId, instrument, text){
   if(!all[menteeId]) all[menteeId] = {};
   all[menteeId][instrument] = {text, updatedAt: new Date().toLocaleString('pt-BR')};
   DB.set('mentor_observations', all);
+  // Sync to Supabase
+  const users = DB.get('users')||[];
+  const mentee = users.find(u=>String(u.id)===String(menteeId));
+  if(mentee && currentUser){
+    sbSaveObservation(currentUser.email, mentee.email, instrument, text).catch(()=>{});
+  }
   toast('Observação salva','suc');
 }
 
@@ -7466,6 +7518,15 @@ function saveMapaCell(perspId, rowIdx, colId, value){
   if(!data[perspId] || !data[perspId][rowIdx]) return;
   data[perspId][rowIdx][colId] = value;
   DB.set(key, data);
+  // Debounced Supabase sync
+  clearTimeout(window._mapaTimer);
+  window._mapaTimer = setTimeout(()=>{
+    if(!currentUser) return;
+    const cycleId = getCurrentCycleId();
+    const visaoKey = cycleId ? 'mapa_visao_'+cycleId : 'mapa_visao';
+    const visao = DB.get(visaoKey)||'';
+    sbSaveMapaObjetivos(currentUser.email, cycleId, visao, data).catch(()=>{});
+  }, 1500);
 }
 
 function addMapaRow(perspId){
@@ -7487,6 +7548,16 @@ function removeMapaRow(perspId, rowIdx){
 async function renderMapaObjetivos(){
   if(!currentUser) return;
   const menteeEmail = currentUser.email;
+  // Try to load from Supabase first
+  const _initialCycleId = getCurrentCycleId();
+  const sbMapa = await sbLoadMapaObjetivos(menteeEmail, _initialCycleId);
+  if(sbMapa && sbMapa.data && Object.keys(sbMapa.data).length){
+    const _key = _initialCycleId ? 'mapa_obj_'+_initialCycleId : 'mapa_obj';
+    DB.set(_key, sbMapa.data);
+    if(sbMapa.visao){
+      DB.set(_initialCycleId ? 'mapa_visao_'+_initialCycleId : 'mapa_visao', sbMapa.visao);
+    }
+  }
   const cycles = await loadCycles(menteeEmail);
   const cycleId = getCurrentCycleId() || cycles.find(c=>c.status==='active')?.id;
   const cycle = cycles.find(c=>c.id===cycleId);
@@ -7633,6 +7704,93 @@ function exportMapa(){
   toast('Mapa exportado!','suc');
 }
 
+
+
+// ══════════════════════════════════════════════
+// SUPABASE SYNC HELPERS — 4 tabelas complementares
+// ══════════════════════════════════════════════
+
+async function sbSaveObservation(mentorEmail, menteeEmail, phase, text){
+  const key = `${menteeEmail}_${phase}`;
+  try {
+    await sbFetch('mentor_observations?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&phase=eq.'+phase, 'DELETE');
+    await sbFetch('mentor_observations', 'POST', {
+      mentor_email: mentorEmail, mentee_email: menteeEmail,
+      phase, text, updated_at: new Date().toISOString()
+    });
+  } catch(e){ console.warn('sbSaveObservation:', e); }
+}
+
+async function sbLoadObservations(menteeEmail){
+  try {
+    const rows = await sbFetch('mentor_observations?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&select=*');
+    if(!rows || !rows.length) return null;
+    const result = {};
+    rows.forEach(r=>{ result[r.phase] = {text: r.text, updatedAt: r.updated_at}; });
+    return result;
+  } catch(e){ return null; }
+}
+
+async function sbSavePhaseReleases(menteeEmail, mentorEmail, releases){
+  try {
+    await sbFetch('phase_releases?mentee_email=eq.'+encodeURIComponent(menteeEmail), 'DELETE');
+    await sbFetch('phase_releases', 'POST', {
+      mentee_email: menteeEmail, mentor_email: mentorEmail,
+      g_released: !!releases.G, u_released: !!releases.U,
+      i_released: !!releases.I, a_released: !!releases.A,
+      updated_at: new Date().toISOString()
+    });
+  } catch(e){ console.warn('sbSavePhaseReleases:', e); }
+}
+
+async function sbLoadPhaseReleases(menteeEmail){
+  try {
+    const rows = await sbFetch('phase_releases?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&select=*');
+    if(!rows || !rows.length) return null;
+    const r = rows[0];
+    return {G: r.g_released, U: r.u_released, I: r.i_released, A: r.a_released};
+  } catch(e){ return null; }
+}
+
+async function sbSaveMenteeProgress(menteeEmail, progress){
+  try {
+    await sbFetch('mentee_progress?mentee_email=eq.'+encodeURIComponent(menteeEmail), 'DELETE');
+    await sbFetch('mentee_progress', 'POST', {
+      mentee_email: menteeEmail, progress,
+      updated_at: new Date().toISOString()
+    });
+  } catch(e){ console.warn('sbSaveMenteeProgress:', e); }
+}
+
+async function sbLoadMenteeProgress(menteeEmail){
+  try {
+    const rows = await sbFetch('mentee_progress?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&select=*');
+    if(!rows || !rows.length) return null;
+    return rows[0].progress;
+  } catch(e){ return null; }
+}
+
+async function sbSaveMapaObjetivos(menteeEmail, cycleId, visao, data){
+  try {
+    await sbFetch('mapa_objetivos?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&cycle_id=eq.'+(cycleId||'null'), 'DELETE');
+    await sbFetch('mapa_objetivos', 'POST', {
+      mentee_email: menteeEmail, cycle_id: cycleId||null,
+      visao: visao||'', data,
+      updated_at: new Date().toISOString()
+    });
+  } catch(e){ console.warn('sbSaveMapaObjetivos:', e); }
+}
+
+async function sbLoadMapaObjetivos(menteeEmail, cycleId){
+  try {
+    let url = 'mapa_objetivos?mentee_email=eq.'+encodeURIComponent(menteeEmail);
+    if(cycleId) url += '&cycle_id=eq.'+cycleId;
+    url += '&select=*';
+    const rows = await sbFetch(url);
+    if(!rows || !rows.length) return null;
+    return {visao: rows[0].visao, data: rows[0].data};
+  } catch(e){ return null; }
+}
 
 // ══════════════════════════════════════════════
 // AUTH SYSTEM

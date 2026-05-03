@@ -996,6 +996,183 @@ function updatePendingBadge(){
   });
 }
 
+
+// ══════════════════════════════════════════════
+// AUTH SYSTEM — DEFINITIVO
+// ══════════════════════════════════════════════
+
+function showAuthPane(pane){
+  ['login','register','recover'].forEach(p=>{
+    const el=document.getElementById('pane-'+p);
+    if(el) el.style.display = p===pane?'block':'none';
+  });
+}
+
+async function doLogin(){
+  const email  = document.getElementById('login-email')?.value.trim();
+  const pass   = document.getElementById('login-pass')?.value;
+  const errEl  = document.getElementById('login-err');
+  const btn    = document.querySelector('#pane-login .auth-btn');
+  if(errEl) errEl.classList.remove('show');
+
+  if(!email||!pass){
+    if(errEl){errEl.textContent='Preencha e-mail e senha.';errEl.classList.add('show');}
+    return;
+  }
+  if(btn){btn.textContent='Verificando...';btn.disabled=true;}
+
+  try {
+    // 1. Try localStorage first (fast, works offline)
+    const localUsers = DB.get('users')||[];
+    let user = localUsers.find(u=>u.email===email)||null;
+
+    // 2. If not found locally, try Supabase
+    if(!user){
+      try {
+        const rows = await Promise.race([
+          sbFetch('users?email=eq.'+encodeURIComponent(email)+'&select=*'),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),6000))
+        ]);
+        if(rows&&rows.length){
+          user=rows[0];
+          localUsers.push(user);
+          DB.set('users',localUsers);
+        }
+      } catch(e){ /* continue without Supabase */ }
+    }
+
+    if(btn){btn.textContent='Entrar na plataforma';btn.disabled=false;}
+
+    if(!user){
+      if(errEl){errEl.textContent='E-mail não encontrado. Solicite acesso ao administrador.';errEl.classList.add('show');}
+      return;
+    }
+
+    // Password check: SHA-256 (new) + base64 (legacy)
+    if(user.password){
+      const passHash = await hashPassword(pass);
+      const passB64  = btoa(pass);
+      if(user.password!==passHash && user.password!==passB64){
+        if(errEl){errEl.textContent='Senha incorreta.';errEl.classList.add('show');}
+        return;
+      }
+      // Auto-migrate base64 → SHA-256
+      if(user.password===passB64 && passHash!==passB64){
+        user.password=passHash;
+        const ul=DB.get('users')||[];
+        const uu=ul.find(x=>x.email===email);
+        if(uu){uu.password=passHash;DB.set('users',ul);}
+        sbPatchUser(email,{password:passHash}).catch(()=>{});
+      }
+    }
+
+    if(user.active===false||user.active===0){
+      if(errEl){errEl.textContent='Seu acesso ainda não foi liberado pelo administrador.';errEl.classList.add('show');}
+      return;
+    }
+
+    DB.set('session',{userId:user.id,role:user.role,name:user.name,email:user.email});
+    bootApp(user);
+
+  } catch(e){
+    if(btn){btn.textContent='Entrar na plataforma';btn.disabled=false;}
+    if(errEl){errEl.textContent='Erro inesperado. Tente novamente.';errEl.classList.add('show');}
+    console.error('doLogin error:',e);
+  }
+}
+
+function bootApp(user){
+  currentUser = user;
+  currentRole = user.role;
+
+  // Hide auth screen
+  const authEl = document.getElementById('auth-screen');
+  if(authEl) authEl.style.display='none';
+
+  // Show main
+  const mainEl = document.getElementById('main-wrap');
+  if(mainEl) mainEl.style.display='flex';
+
+  // Update topbar
+  updateTopbar();
+
+  // Set role button
+  document.querySelectorAll('.role-btn').forEach(b=>b.classList.remove('active'));
+  const rb = document.getElementById('rb-'+user.role);
+  if(rb) rb.classList.add('active');
+
+  // Admin bar
+  const bar = document.getElementById('admin-bar');
+  if(bar) bar.classList.toggle('show', user.role==='admin');
+
+  // Render sidebar + navigate
+  renderSidebar();
+  const defaults = {admin:'admin-users',mentor:'dash',mentorado:'minha-jornada'};
+  const lastPage = DB.get('last_page_'+user.role)||defaults[user.role];
+  showPage(lastPage);
+
+  // Badge and health check
+  setTimeout(updatePendingBadge, 600);
+  startHealthCheck();
+}
+
+function checkSession(){
+  const session = DB.get('session');
+  if(!session) return;
+  const users = DB.get('users')||[];
+  const user = users.find(u=>u.email===session.email);
+  if(user && user.active!==false){
+    bootApp(user);
+  } else {
+    DB.set('session',null);
+  }
+}
+
+function doLogout(){
+  DB.set('session',null);
+  currentUser=null; currentRole=null;
+  const authEl=document.getElementById('auth-screen');
+  if(authEl) authEl.style.display='flex';
+  const mainEl=document.getElementById('main-wrap');
+  if(mainEl) mainEl.style.display='none';
+}
+
+function updateTopbar(){
+  if(!currentUser) return;
+  const av = document.getElementById('top-av');
+  const nm = document.getElementById('top-name');
+  if(av) av.textContent = initials(currentUser.name);
+  if(nm) nm.textContent = currentUser.name;
+}
+
+async function doRegister(){
+  const name   = document.getElementById('reg-name')?.value.trim();
+  const email  = document.getElementById('reg-email')?.value.trim();
+  const obj    = document.getElementById('reg-objetivo')?.value.trim();
+  const errEl  = document.getElementById('reg-err');
+  if(!name||!email){
+    if(errEl){errEl.textContent='Preencha nome e e-mail.';errEl.classList.add('show');}
+    return;
+  }
+  const regs = DB.get('registrations')||[];
+  if(regs.find(r=>r.email===email)){
+    if(errEl){errEl.textContent='Este e-mail já solicitou acesso.';errEl.classList.add('show');}
+    return;
+  }
+  const reg = {id:'reg'+Date.now(),name,email,objetivo:obj||'',status:'pending',createdAt:new Date().toISOString()};
+  regs.push(reg);
+  DB.set('registrations',regs);
+  try { await sbFetch('registrations','POST',reg); } catch(e){}
+  if(errEl){errEl.textContent='';errEl.classList.remove('show');}
+  const pane = document.getElementById('pane-register');
+  if(pane) pane.innerHTML='<div style="text-align:center;padding:20px;"><div style="font-size:32px;margin-bottom:12px;">✓</div><div style="font-size:14px;font-weight:600;color:var(--green);">Solicitação enviada!</div><div style="font-size:12px;color:var(--text3);margin-top:8px;">O administrador irá revisar e liberar seu acesso em breve.</div></div>';
+}
+
+// Init on page load
+window.addEventListener('DOMContentLoaded', ()=>{
+  checkSession();
+});
+
 (function ensureAdmin(){
   const users = DB.get('users') || [];
 

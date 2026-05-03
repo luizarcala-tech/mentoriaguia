@@ -1156,7 +1156,7 @@ const MENUS = {
     {type:'top',id:'training',icon:'◉',label:'Treinamento Mentor',badge:''},
     {type:'top',id:'dash',icon:'◈',label:'Dashboard'},
     {type:'phase',letter:'G',label:'Gestar Acordo'},
-    {id:'inicio-ciclo',icon:'◎',label:'Início do Ciclo'},
+    {id:'inicio-ciclo',icon:'◎',label:'Gestar Acordo'},
     {type:'phase',letter:'U',label:'Unir Diagnóstico'},
     {id:'disc',icon:'◌',label:'Perfil DISC'},
     {id:'comp',icon:'◎',label:'Competências'},
@@ -1170,7 +1170,7 @@ const MENUS = {
     {type:'phase',letter:'A',label:'Aferir e Ajustar'},
     {id:'fase-a',icon:'◈',label:'Aferir e Ajustar (A)'},
     {type:'section',label:'Inteligência'},
-    {id:'ia-main',icon:'✦',label:'Análise Integrada IA'},
+    {id:'ia-main',icon:'✦',label:'IA GUIA ✦ Análise Integrada'},
     {id:'nps-dash',icon:'◊',label:'NPS & Progresso'},
     {type:'section',label:'Conta'},
     {id:'perfil',icon:'◉',label:'Meu Perfil'},
@@ -1178,7 +1178,7 @@ const MENUS = {
   mentorado:[
     {type:'top',id:'minha-jornada',icon:'◈',label:'Início'},
     {type:'phase',letter:'G',label:'Gestar Acordo'},
-    {id:'inicio-ciclo',icon:'◎',label:'Início do Ciclo'},
+    {id:'inicio-ciclo',icon:'◎',label:'Gestar Acordo'},
     {type:'phase',letter:'U',label:'Unir Diagnóstico'},
     {id:'disc',icon:'◌',label:'Perfil DISC'},
     {id:'comp',icon:'◎',label:'Competências'},
@@ -1787,7 +1787,7 @@ async function renderComp(){
     <div class="panel" style="text-align:center;padding:40px;">
       <div style="font-size:32px;margin-bottom:16px;">◎</div>
       <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;">Nenhum ciclo ativo</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:20px;">Crie um ciclo em <strong>Início do Ciclo</strong> para gerenciar as competências vinculadas a ele.</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:20px;">Crie um ciclo em <strong>Gestar Acordo</strong> para gerenciar as competências vinculadas a ele.</div>
       <button class="btn btn-gold" onclick="showPage('inicio-ciclo')">Ir para Início do Ciclo</button>
     </div>`;
     return;
@@ -1870,7 +1870,7 @@ function renderCompEdit(isMentor, activeId, activeCycle){
         <div id="comp-list"></div>
         ${frozen ? frozenMsg : addForm}
         <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-gold btn-sm" onclick="analyzeCompWithIA()">✦ Analisar com IA ↗</button>
+          <button class="btn btn-gold btn-sm" onclick="analyzeCompWithIA()">✦ IA GUIA ✦</button>
           <button class="btn btn-outline btn-sm" onclick="exportCompReport()">Exportar</button>
           <button class="btn btn-sm" style="background:#7c4dff20;border:1px solid #7c4dff55;color:#7c4dff;" onclick="toggleAferimento()">◈ Fase A</button>
         </div>
@@ -2453,7 +2453,7 @@ async function renderSWOT(){
   ${cycleBanner(_swotCycleId, _swotCycle, currentUser?.email||'')}
   <div class="swot-grid" id="swot-grid"></div>
   <div style="margin-top:16px;display:flex;gap:10px;">
-    <button class="btn btn-gold" onclick="analyzeSWOTWithIA()">✦ Análise estratégica com IA ↗</button>
+    <button class="btn btn-gold" onclick="analyzeSWOTWithIA()">✦ IA GUIA ✦ Estratégia ↗</button>
     <button class="btn btn-outline" onclick="clearSWOT()">Limpar tudo</button>
   </div>
   <div id="swot-ia-result" style="margin-top:16px;display:none;"></div>`;
@@ -2714,7 +2714,7 @@ function renderDISCResult(winner, scores){
         <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;margin-bottom:8px">DESENVOLVIMENTO PRIORITÁRIO</div>
         ${d.devs.map(dev=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);line-height:1.5"><span style="color:var(--gold);flex-shrink:0">→</span>${dev}</div>`).join('')}
         <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-gold btn-sm" onclick="analyzeDISCWithIA()">✦ Análise de carreira com IA ↗</button>
+          <button class="btn btn-gold btn-sm" onclick="analyzeDISCWithIA()">✦ IA GUIA ✦ Carreira ↗</button>
           <button class="btn btn-outline btn-sm" onclick="discRestart()">Refazer assessment</button>
         </div>
       </div>
@@ -2842,7 +2842,7 @@ async function renderPeer360(){
       id="cycle-selector" onchange="DB.set('current_cycle_id',this.value);renderPeer360()">
       ${cycles.map(c=>`<option value="${c.id}" ${c.id===cycleId?'selected':''}>${c.name}${c.status==='closed'?' (encerrado)':''}</option>`).join('')}
     </select>` : '<span style="font-size:12px;color:var(--amber);">Nenhum ciclo criado</span>'}
-    <button class="btn btn-outline btn-xs" onclick="showCycleManager('${menteeEmail}').then(()=>{})">⚙ Gerenciar ciclos</button>
+    
     ${cycle ? (frozen ?
       `<span style="font-size:10px;color:var(--green);font-weight:600;">✓ ${comps.length} competências congeladas · ${hasQuestions?cycle.questions_360.length+' perguntas':'sem perguntas'}</span>` :
       `<span style="font-size:10px;color:var(--red);font-weight:600;">⚠ Congele as competências antes de enviar avaliações</span>`) : ''}
@@ -2880,7 +2880,7 @@ async function renderPeer360(){
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn btn-gold btn-sm" onclick="sendPeer360()" ${!frozen?'disabled':''}>Enviar formulário ↗</button>
           <button class="btn btn-outline btn-sm" onclick="renderPeer360()">↺ Sincronizar</button>
-          <button class="btn btn-outline btn-sm" onclick="simulatePeerResponse()">Simular resposta</button>
+          
         </div>
       </div>
 
@@ -2919,7 +2919,7 @@ async function renderPeer360(){
           </div>`;
         }).join('')}
         <div style="margin-top:12px;">
-          <button class="btn btn-gold btn-sm" onclick="analyze360WithIA()">✦ Análise integrada com IA ↗</button>
+          <button class="btn btn-gold btn-sm" onclick="analyze360WithIA()">✦ IA GUIA ✦ Análise Integrada ↗</button>
         </div>
       </div>` : `
       <div class="panel" style="margin-bottom:14px;text-align:center;padding:30px;">
@@ -2932,7 +2932,10 @@ async function renderPeer360(){
       ${hasQuestions ? `
       <div class="panel" style="margin-bottom:14px;">
         <div class="panel-title"><div class="panel-title-dot"></div> Perguntas do formulário (${cycle.questions_360.length} blocos)</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Perguntas geradas pela IA para este ciclo. Todos os avaliadores recebem o mesmo formulário.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:11px;color:var(--text3);">Perguntas geradas pela IA GUIA. Todos os avaliadores recebem o mesmo formulário.</div>
+          ${cycle.frozen_at ? '<button class="btn btn-outline btn-xs" onclick="editCycle360Questions(cycleId)">✎ Editar perguntas</button>' : ''}
+        </div>
         ${cycle.questions_360.map((qblock,bi)=>`
         <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg2);border-radius:var(--radius-sm);">
           <div style="font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.07em;margin-bottom:6px;">BLOCO ${bi+1} — ${comps[bi]?.name||qblock.competencia}</div>
@@ -3150,7 +3153,7 @@ function renderVFEdit(vf){
   </div>
   <div style="display:flex;gap:10px;margin-top:16px;">
     <button class="btn btn-gold" onclick="saveVF()">Salvar visão</button>
-    <button class="btn btn-outline" onclick="analyzeVFWithIA()">✦ Analisar e criar plano com IA ↗</button>
+    <button class="btn btn-outline" onclick="analyzeVFWithIA()">✦ IA GUIA ✦ Plano ↗</button>
   </div>
   <div id="vf-ia-result" style="margin-top:16px;display:none;"></div>`;
 }
@@ -3356,7 +3359,7 @@ Seja honesto, provocativo quando necessário, e sempre orientado à ação.`;
 function renderIAMain(){
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
-    <div class="page-title">Análise Integrada com IA</div>
+    <div class="page-title">IA GUIA ✦ Análise Integrada</div>
     <div class="page-sub">Diagnóstico completo baseado em todos os instrumentos — DISC + SWOT + Competências + 360° + Visão de Futuro</div>
   </div>
   <div class="panel" style="margin-bottom:20px;">
@@ -3844,7 +3847,7 @@ async function renderInicioCiclo(){
         <div class="panel-title" style="margin-bottom:2px;"><div class="panel-title-dot"></div> Ciclo de Mentoria</div>
         <div style="font-size:11px;color:var(--text3);">O ciclo define o contexto de todos os instrumentos da Fase U</div>
       </div>
-      <button class="btn btn-outline btn-sm" onclick="showCycleManager('${menteeEmail}').then(()=>{})">⚙ Gerenciar ciclos</button>
+      
     </div>
     ${cycles.length ? `
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
@@ -3988,8 +3991,27 @@ async function renderInicioCiclo(){
 
   <div style="display:flex;gap:10px;">
     <button class="btn btn-gold" onclick="saveInicioCiclo()">Salvar e assinar termo</button>
+    ${activeCycle ? (() => {
+      const sigs = getAcordoSignatures(activeCycle.id);
+      const menteeRole = currentUser?.role;
+      return '<div style="margin-top:16px;padding:16px;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-sm);">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.07em;margin-bottom:12px;">ASSINATURA DO TERMO</div>' +
+        '<div style="display:flex;gap:12px;margin-bottom:12px;">' +
+        '<div style="flex:1;padding:10px;border-radius:8px;border:1px solid '+(sigs.mentee?'var(--green-border)':'var(--gold-border)')+';">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--text4);margin-bottom:4px;">MENTORADO</div>' +
+        (sigs.mentee ? '<div style="font-size:11px;color:var(--green);">✓ '+sigs.mentee.name+'<br><span style="color:var(--text4);">'+sigs.mentee.date+'</span></div>' :
+        (menteeRole==='mentorado'?'<button class=\"btn btn-gold btn-xs\" onclick=\"signAcordo(\''+activeCycle.id+'\',\'mentee\')\">✍ Assinar</button>':'<div style=\"font-size:11px;color:var(--text4)\">Aguardando mentorado</div>')) +
+        '</div>' +
+        '<div style="flex:1;padding:10px;border-radius:8px;border:1px solid '+(sigs.mentor?'var(--green-border)':'var(--border)')+';">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--text4);margin-bottom:4px;">MENTOR</div>' +
+        (sigs.mentor ? '<div style="font-size:11px;color:var(--green);">✓ '+sigs.mentor.name+'<br><span style="color:var(--text4);">'+sigs.mentor.date+'</span></div>' :
+        '<div style="font-size:11px;color:var(--text4);">Aguardando mentor</div>') +
+        '</div></div>' +
+        (sigs.mentee&&sigs.mentor ? '<div style="font-size:12px;color:var(--green);font-weight:600;">✓ Termo assinado por ambas as partes</div>' : '') +
+        '</div>';
+    })() : ''}
     <button class="btn btn-outline" onclick="exportInicioCiclo()">Exportar PDF</button>
-    <button class="btn btn-outline" onclick="analyzeInicioCicloWithIA()">✦ Gerar plano de ciclo com IA ↗</button>
+    <button class="btn btn-outline" onclick="analyzeInicioCicloWithIA()">✦ IA GUIA ✦ Plano de Ciclo ↗</button>
   </div>
   <div id="ic-ia-result" style="margin-top:16px;display:none;"></div>
   `;
@@ -4332,7 +4354,7 @@ async function renderAdminIAInsights(){
   </div>
 
   <div class="panel" style="margin-bottom:16px;">
-    <div class="panel-title"><div class="panel-title-dot"></div> Análise com IA GUIA Insights</div>
+    <div class="panel-title"><div class="panel-title-dot"></div> IA GUIA ✦ GUIA Insights</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
       <button class="btn btn-gold" onclick="runGuiaInsightsGeral()">✦ Análise geral da plataforma</button>
       <button class="btn btn-outline" onclick="runGuiaInsightsRetencao()">⚠ Riscos de retenção</button>
@@ -4852,7 +4874,7 @@ function renderLesson2(){
     </ul>
 
     <h3>Recurso de IA: Plano do Ciclo</h3>
-    <p>Após preencher o "Início do Ciclo", clique em <strong>"✦ Gerar plano de ciclo com IA"</strong>. A IA cruza os dados informados e gera:</p>
+    <p>Após preencher o "Início do Ciclo", clique em <strong>"✦ IA GUIA ✦ Plano de Ciclo"</strong>. A IA cruza os dados informados e gera:</p>
     <ul>
       <li>Leitura do cenário do mentorado</li>
       <li>Riscos potenciais para o ciclo</li>
@@ -4891,7 +4913,7 @@ function renderLesson3(){
       <li>O mentorado convida pares, líderes e subordinados para avaliação anônima</li>
       <li>A plataforma consolida as respostas em barras visuais</li>
       <li>Use o resultado para confrontar a autoavaliação com a percepção externa</li>
-      <li>O ✦ Análise IA cruza os dados e identifica os 3 maiores gaps de percepção</li>
+      <li>O ✦ IA GUIA ✦ cruza os dados e identifica os 3 maiores gaps de percepção</li>
     </ul>
 
     <p><strong>2. Meu Perfil DISC (◌)</strong></p>
@@ -4997,7 +5019,7 @@ function renderLesson4(){
     </ul>
 
     <h3>Recurso de IA: Análise Integrada</h3>
-    <p>A cada 2-3 sessões, use o botão <strong>"✦ Análise Integrada IA"</strong> para gerar um relatório executivo cruzando todos os dados — DISC, competências, SWOT, visão e progresso dos OKRs. Isso revela padrões que escapam à observação direta.</p>
+    <p>A cada 2-3 sessões, use o botão <strong>"✦ IA GUIA ✦ Análise Integrada"</strong> para gerar um relatório executivo cruzando todos os dados — DISC, competências, SWOT, visão e progresso dos OKRs. Isso revela padrões que escapam à observação direta.</p>
   </div>
   `;
 }
@@ -5089,7 +5111,7 @@ function renderLesson6(){
     <blockquote>A IA não substitui você como mentor. Ela amplia sua capacidade de processar dados e identificar padrões que escapam à observação direta.</blockquote>
 
     <h3>Onde a IA está disponível</h3>
-    <p>Cada instrumento da plataforma tem um botão <strong>"✦ Analisar com IA"</strong>:</p>
+    <p>Cada instrumento da plataforma tem um botão <strong>"✦ IA GUIA ✦"</strong>:</p>
     <ul>
       <li><strong>DISC:</strong> análise de carreira específica para o perfil identificado</li>
       <li><strong>Radar de Competências:</strong> diagnóstico, alavanca principal e plano 30-60-90</li>
@@ -5203,7 +5225,7 @@ function getQuizContext(lessonId){
     3: 'Fase U "Unir Diagnóstico e Visão" - semanas 2-3 - profundidade analítica. 5 instrumentos: (1) Feedback 360° - convidar pares, líderes, subordinados; (2) DISC - 7 situações, perfil predominante D/I/S/C, calibra abordagem do mentor; (3) Radar de Competências - até 7 competências, mentor avalia + autoavaliação, ciclos versionados; (4) SWOT Pessoal - cruzamento FO gera OKRs, FA revela riscos; (5) Visão de Futuro - 5 dimensões: Carreira, Impacto, Vida, Legado, Primeiros Passos. Conduzir em 2 sessões. Sinais de qualidade: mentorado se surpreende, padrão coerente entre instrumentos, tese de carreira ao final.',
     4: 'Fase I "Implementar Microplanos" - semanas 4-9 - coração da execução. 3 componentes: (1) OKRs com Key Results mensuráveis e %, quebrados em microplanos de 4 semanas; (2) Kanban To Do/Doing/Done - mentorado move cards; (3) Sessões GROW de 50 min - Goal (5min)/Reality (15min)/Options (20min)/Will (10min). Erros: OKRs aspiracionais demais, sessões viram bate-papo, ignorar Kanban. Use IA "Análise Integrada" a cada 2-3 sessões.',
     5: 'Fase A "Aferir e Ajustar" - semanas 10-12. 4 componentes: (1) KRs com slider 0-100% atingimento real; (2) Aferição de Competências - 3ª dimensão roxa do radar, delta vs autoavaliação inicial; (3) NPS 0-10 da mentoria com comentário; (4) Entrevista de Aprendizado - 6 perguntas: aprendizado, mudança, desafio, pendências, protagonismo, próximos 90 dias. Conduzir em 3 sessões: 10 (radar+KRs), 11 (entrevista), 12 (síntese IA + decisão renovação). IA gera síntese do ciclo cruzando todos os dados.',
-    6: 'IA GUIA é assistente estratégico que recebe contexto completo do mentorado: DISC, competências, SWOT, visão, OKRs, 360°. Botão "✦ Analisar com IA" em cada instrumento. Quando usar: antes (preparação), durante (revelar padrões), após (síntese). Tratar respostas como hipóteses qualificadas, não verdades. Painel "IA GUIA Insights" admin tem: análise geral, riscos retenção, tendências, relatório RH. E-mail semanal automatizado. Limitação: IA não substitui presença, escuta e julgamento do mentor.'
+    6: 'IA GUIA é assistente estratégico que recebe contexto completo do mentorado: DISC, competências, SWOT, visão, OKRs, 360°. Botão "✦ IA GUIA ✦" em cada instrumento. Quando usar: antes (preparação), durante (revelar padrões), após (síntese). Tratar respostas como hipóteses qualificadas, não verdades. Painel "IA GUIA Insights" admin tem: análise geral, riscos retenção, tendências, relatório RH. E-mail semanal automatizado. Limitação: IA não substitui presença, escuta e julgamento do mentor.'
   };
   return contexts[lessonId] || '';
 }
@@ -6379,7 +6401,7 @@ function renderMenteeDetail(menteeId){
 
   <div id="mentee-ia-result" style="display:none;margin-top:14px;"></div>
   <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
-    <button class="btn btn-gold" onclick="prepararSessaoIA('${menteeId}')">🎯 Preparar próxima sessão com IA</button>
+    <button class="btn btn-gold" onclick="prepararSessaoIA('${menteeId}')">🎯 IA GUIA ✦ Preparar Sessão</button>
     <button class="btn btn-outline" onclick="analyzeMenteeWithIA('${menteeId}')">✦ Análise completa</button>
     <button class="btn btn-outline" onclick="exportMenteeReport('${menteeId}')">Exportar</button>
   </div>
@@ -6714,7 +6736,7 @@ function renderMinhaJornada(){
   <div class="section-label">Instrumentos disponíveis</div>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
     ${[
-      {id:'inicio-ciclo',phase:'G',icon:'◎',label:'Início do Ciclo'},
+      {id:'inicio-ciclo',phase:'G',icon:'◎',label:'Gestar Acordo'},
       {id:'disc',phase:'U',icon:'◌',label:'Perfil DISC'},
       {id:'comp',phase:'U',icon:'◎',label:'Competências'},
       {id:'peer360',phase:'U',icon:'◷',label:'Feedback 360°'},
@@ -7229,7 +7251,7 @@ async function renderCycleSelector(menteeEmail, onSelectCallback){
       id="cycle-selector" onchange="onCycleSelect(this.value)">
       ${cycles.map(c=>`<option value="${c.id}" ${c.id===active?.id?'selected':''}>${c.name} ${c.status==='closed'?'(encerrado)':''}</option>`).join('')}
     </select>` : '<span style="font-size:12px;color:var(--amber);">Nenhum ciclo criado ainda</span>'}
-    <button class="btn btn-outline btn-xs" onclick="showCycleManager('${menteeEmail}')">⚙ Gerenciar ciclos</button>
+    
     ${active?.frozen_at ? 
       `<span style="font-size:10px;color:var(--green);font-weight:600;">✓ Competências congeladas</span>` :
       `<span style="font-size:10px;color:var(--amber);">⚠ Competências não congeladas</span>`}
@@ -7592,14 +7614,14 @@ async function renderMapaObjetivos(){
     <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.08em;">CICLO</div>
     <div style="font-size:12px;font-weight:600;color:var(--gold);">${cycle.name}</div>
     <div style="font-size:11px;color:var(--text3);">${cycle.started_at||''} → ${cycle.ends_at||''}</div>
-    <button class="btn btn-outline btn-xs" onclick="showCycleManager('${menteeEmail}').then(()=>{})">⚙</button>
+    
     <div style="margin-left:auto;display:flex;gap:8px;">
-      <button class="btn btn-outline btn-sm" onclick="analyzeMapaWithIA()">✦ Análise com IA ↗</button>
+      <button class="btn btn-outline btn-sm" onclick="analyzeMapaWithIA()">✦ IA GUIA ✦</button>
       <button class="btn btn-outline btn-sm" onclick="exportMapa()">Exportar</button>
     </div>
   </div>` : `
   <div style="background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:12px;color:var(--text2);">
-    ⚠ Crie um ciclo em <strong>Início do Ciclo</strong> para vincular este mapa ao ciclo ativo.
+    ⚠ Crie um ciclo em <strong>Gestar Acordo</strong> para vincular este mapa ao ciclo ativo.
   </div>`}
 
   <!-- Visao field -->
@@ -7934,7 +7956,7 @@ function renderDiario(){
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn btn-gold btn-sm" onclick="submitDiario()">Salvar reflexão</button>
-          <button class="btn btn-outline btn-sm" onclick="analyzeDiarioWithIA()">✦ Análise de padrões IA</button>
+          <button class="btn btn-outline btn-sm" onclick="analyzeDiarioWithIA()">✦ IA GUIA ✦ Padrões</button>
         </div>
       </div>
 
@@ -8207,7 +8229,7 @@ async function renderDashboardROI(){
   </div>` : ''}
 
   <div style="display:flex;gap:10px;flex-wrap:wrap;">
-    <button class="btn btn-gold" onclick="generateROIReport()">✦ Gerar relatório executivo com IA</button>
+    <button class="btn btn-gold" onclick="generateROIReport()">✦ IA GUIA ✦ Relatório</button>
     <button class="btn btn-outline" onclick="exportROIReport()">Exportar PDF</button>
   </div>
   <div id="roi-ia-result" style="display:none;margin-top:16px;"></div>
@@ -8400,6 +8422,358 @@ async function renderAdminUsers(){
   renderUsersTable(users);
 }
 
+
+// ══════════════════════════════════════════════
+// DISC NATURAL vs ADAPTADO
+// ══════════════════════════════════════════════
+
+async function saveDISCProfile(email, profileData, tipo){
+  // tipo: 'natural' | 'adaptado'
+  const key = tipo === 'natural' ? 'disc_natural_'+email : 'disc_adaptado_'+email;
+  DB.set(key, profileData);
+  try {
+    // Save to Supabase users table as JSONB fields
+    const patch = {};
+    if(tipo === 'natural') patch.disc_natural = profileData;
+    else patch.disc_adaptado = profileData;
+    await sbPatchUser(email, patch);
+  } catch(e){}
+}
+
+function getDISCNatural(email){
+  return DB.get('disc_natural_'+email) || null;
+}
+
+function getDISCAdaptado(email, cycleId){
+  const key = cycleId ? 'disc_adaptado_'+email+'_'+cycleId : 'disc_adaptado_'+email;
+  return DB.get(key) || DB.get('disc_adaptado_'+email) || null;
+}
+
+async function renderDISCComparison(email){
+  const natural = getDISCNatural(email);
+  const cycles = await loadCycles(email);
+  const adaptados = cycles
+    .filter(c=>DB.get('disc_adaptado_'+email+'_'+c.id))
+    .map(c=>({cycle: c, data: DB.get('disc_adaptado_'+email+'_'+c.id)}));
+
+  if(!natural && !adaptados.length){
+    return '<div style="font-size:12px;color:var(--text4);padding:12px 0;">Nenhum histórico DISC disponível para comparação.</div>';
+  }
+
+  const profileColor = {D:'var(--red)',I:'var(--amber)',S:'var(--green)',C:'var(--blue)'};
+  const renderBar = (profile, label, color) => {
+    if(!profile) return '';
+    const max = Math.max(profile.D||0, profile.I||0, profile.S||0, profile.C||0);
+    return ['D','I','S','C'].map(k=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <div style="width:14px;font-size:11px;font-weight:700;color:${profileColor[k]};">${k}</div>
+      <div style="flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;">
+        <div style="width:${Math.round((profile[k]||0)/max*100)}%;height:100%;background:${profileColor[k]};border-radius:4px;transition:width .4s;"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);width:24px;text-align:right;">${profile[k]||0}</div>
+    </div>`).join('');
+  };
+
+  return `
+  <div class="panel" style="margin-top:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Comparação de Perfis DISC</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px;">O perfil Natural é estável ao longo do tempo. O perfil Adaptado reflete o comportamento em cada ciclo.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+      ${natural ? `
+      <div style="background:var(--glass-bg);border:2px solid var(--gold-border);border-radius:var(--radius-sm);padding:14px;">
+        <div style="font-size:10px;font-weight:700;color:var(--gold);letter-spacing:.07em;margin-bottom:10px;">🔒 NATURAL (congelado)</div>
+        ${renderBar(natural.scores,'Natural','var(--gold)')}
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:8px;">Perfil: ${natural.dominant||'—'}</div>
+      </div>` : ''}
+      ${adaptados.map(a=>`
+      <div style="background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:14px;">
+        <div style="font-size:10px;font-weight:700;color:var(--blue);letter-spacing:.07em;margin-bottom:10px;">ADAPTADO — ${a.cycle.name}</div>
+        ${renderBar(a.data.scores,'Adaptado','var(--blue)')}
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-top:8px;">Perfil: ${a.data.dominant||'—'}</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+
+async function editCycle360Questions(cycleId){
+  const menteeEmail = currentUser?.email;
+  if(!menteeEmail) return;
+  const cycles = DB.get('cycles_'+menteeEmail)||[];
+  const cycle = cycles.find(c=>c.id===cycleId);
+  if(!cycle || !cycle.questions_360?.length){ toast('Nenhuma pergunta para editar','err'); return; }
+
+  const qs = cycle.questions_360;
+  const modal = document.createElement('div');
+  modal.id = 'edit-q-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:700;overflow-y:auto;padding:20px;display:flex;justify-content:center;';
+
+  let formHTML = qs.map((qblock,bi)=>
+    qblock.situacoes.map((s,si)=>`
+    <div style="margin-bottom:12px;">
+      <div style="font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.07em;margin-bottom:4px;">${qblock.competencia} · Situação ${si+1}</div>
+      <textarea id="q-${bi}-${si}" style="width:100%;background:rgba(255,255,255,.04);border:1px solid var(--glass-border);color:var(--text);font-family:'Sora',sans-serif;font-size:12px;padding:8px;border-radius:8px;resize:vertical;min-height:60px;box-sizing:border-box;">${s.texto}</textarea>
+    </div>`).join('')
+  ).join('');
+
+  modal.innerHTML = `<div style="background:var(--bg1);border:1px solid var(--glass-border);border-radius:var(--radius);width:640px;max-width:95vw;padding:28px;margin:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div class="panel-title" style="margin-bottom:0;"><div class="panel-title-dot"></div> Editar perguntas do 360°</div>
+      <button onclick="document.getElementById('edit-q-modal').remove()" style="background:none;border:1px solid var(--glass-border);color:var(--text3);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px;">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px;">Edite as perguntas abaixo. As alterações se aplicam a novos convites enviados.</div>
+    ${formHTML}
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="btn btn-gold btn-sm" onclick="saveCycle360Questions('${cycleId}')">Salvar perguntas</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('edit-q-modal').remove()">Cancelar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function saveCycle360Questions(cycleId){
+  const menteeEmail = currentUser?.email;
+  const cycles = DB.get('cycles_'+menteeEmail)||[];
+  const cycle = cycles.find(c=>c.id===cycleId);
+  if(!cycle) return;
+
+  cycle.questions_360.forEach((qblock,bi)=>{
+    qblock.situacoes.forEach((s,si)=>{
+      const el = document.getElementById('q-'+bi+'-'+si);
+      if(el) s.texto = el.value.trim();
+    });
+  });
+
+  DB.set('cycles_'+menteeEmail, cycles);
+  await sbFetch('cycles?id=eq.'+cycleId,'PATCH',{questions_360: cycle.questions_360}).catch(()=>{});
+  document.getElementById('edit-q-modal')?.remove();
+  toast('Perguntas atualizadas!','suc');
+  renderPeer360();
+}
+
+function getAcordoSignatures(cycleId){
+  return DB.get('acordo_sigs_'+cycleId) || {mentee: null, mentor: null};
+}
+
+function signAcordo(cycleId, role){
+  const sigs = getAcordoSignatures(cycleId);
+  sigs[role] = {name: currentUser?.name, date: new Date().toLocaleString('pt-BR'), email: currentUser?.email};
+  DB.set('acordo_sigs_'+cycleId, sigs);
+  sbFetch('cycles?id=eq.'+cycleId,'PATCH',{signatures: sigs}).catch(()=>{});
+  toast('Acordo assinado por '+currentUser?.name+'!','suc');
+  renderInicioCiclo();
+}
+
+function isAcordoFullySigned(cycleId){
+  const sigs = getAcordoSignatures(cycleId);
+  return !!(sigs.mentee && sigs.mentor);
+}
+
+async function createAditivo(cycleId){
+  const title = prompt('Título do aditivo:','Aditivo 1 — Revisão de escopo');
+  if(!title) return;
+  const reason = prompt('Motivo do aditivo:','');
+  const menteeEmail = currentUser?.email;
+  const cycles = DB.get('cycles_'+menteeEmail)||[];
+  const cycle = cycles.find(c=>c.id===cycleId);
+  if(!cycle){ toast('Ciclo não encontrado','err'); return; }
+  if(!cycle.aditivos) cycle.aditivos = [];
+  cycle.aditivos.push({
+    id: 'adit'+Date.now(), title, reason,
+    date: new Date().toLocaleString('pt-BR'),
+    by: currentUser?.name,
+    signatures: {mentee: null, mentor: null}
+  });
+  DB.set('cycles_'+menteeEmail, cycles);
+  sbFetch('cycles?id=eq.'+cycleId,'PATCH',{aditivos: cycle.aditivos}).catch(()=>{});
+  toast('Aditivo criado — aguarda assinaturas','suc');
+  renderInicioCiclo();
+}
+
+// ══════════════════════════════════════════════
+// MENTOR DASHBOARD — Mentee selector + powerful dash
+// ══════════════════════════════════════════════
+
+let currentMenteeView = null; // email of mentee being viewed by mentor
+
+function setMenteeView(email){
+  currentMenteeView = email;
+  DB.set('mentor_viewing', email);
+  renderMentorMenteeDash(email);
+}
+
+async function renderMentorMenteeDash(menteeEmail){
+  const users = DB.get('users')||[];
+  const mentee = users.find(u=>u.email===menteeEmail);
+  if(!mentee){ toast('Mentorado não encontrado','err'); return; }
+
+  const cycles = await loadCycles(menteeEmail);
+  const activeCycle = cycles.find(c=>c.status==='active');
+  const rel = getPhaseReleases(mentee.id);
+  const prog = getMenteeProgress(mentee.id);
+  const checks = getCheckpoints(menteeEmail);
+  const diario = getDiario(menteeEmail);
+  const obs = getMentorObservations(mentee.id);
+  const disc = DB.get('disc_adaptado_'+menteeEmail+(activeCycle?'_'+activeCycle.id:''))||DB.get('disc_natural_'+menteeEmail);
+  const sigs = activeCycle ? getAcordoSignatures(activeCycle.id) : {};
+
+  // Energy trend
+  const avgEnergy = checks.length ? (checks.reduce((a,c)=>a+(c.energia||0),0)/checks.length).toFixed(1) : null;
+  const lastCheck = checks[0];
+  const phaseOrder = {G:1,U:2,I:3,A:4};
+  const phaseProgress = phaseOrder[mentee.phase||'G'] || 1;
+
+  // Competencias from active cycle
+  const comps = activeCycle?.competencias || [];
+  const frozenComps = activeCycle?.frozen_at ? comps : [];
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title" style="display:flex;align-items:center;gap:12px;">
+      <button onclick="renderMentorDash()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:4px;">←</button>
+      <div class="avatar-xs">${initials(mentee.name)}</div>
+      ${mentee.name}
+      <span class="pill pill-${mentee.role}" style="font-size:10px;">${mentee.phase||'G'}</span>
+    </div>
+    <div class="page-sub" style="margin-left:52px;">${mentee.email} · ${activeCycle?.name||'Sem ciclo ativo'}</div>
+  </div>
+
+  <!-- Status cards -->
+  <div class="kpi-grid" style="margin-bottom:16px;">
+    <div class="kpi" style="border-left:3px solid ${rel.U?'var(--green)':'var(--border)'};">
+      <div class="kpi-label">Fase GUIA</div>
+      <div class="kpi-value" style="color:var(--gold);font-size:36px;">${mentee.phase||'G'}</div>
+      <div class="kpi-sub">${{G:'Gestar Acordo',U:'Unir Diagnóstico',I:'Implementar',A:'Aferir'}[mentee.phase||'G']}</div>
+    </div>
+    <div class="kpi" style="border-left:3px solid ${avgEnergy>=4?'var(--green)':avgEnergy>=2?'var(--amber)':'var(--border)'};">
+      <div class="kpi-label">Energia média</div>
+      <div class="kpi-value" style="color:${avgEnergy>=4?'var(--green)':avgEnergy>=2?'var(--amber)':'var(--text4)'};">${avgEnergy||'—'}</div>
+      <div class="kpi-sub">${checks.length} checkpoints</div>
+    </div>
+    <div class="kpi" style="border-left:3px solid ${diario.length>=5?'var(--green)':'var(--border)'};">
+      <div class="kpi-label">Diário de bordo</div>
+      <div class="kpi-value">${diario.length}</div>
+      <div class="kpi-sub">reflexões registradas</div>
+    </div>
+    <div class="kpi" style="border-left:3px solid ${sigs.mentor?'var(--green)':sigs.mentee?'var(--amber)':'var(--border)'};">
+      <div class="kpi-label">Acordo</div>
+      <div class="kpi-value" style="font-size:14px;color:${sigs.mentor&&sigs.mentee?'var(--green)':sigs.mentee?'var(--amber)':'var(--text4)'};">${sigs.mentor&&sigs.mentee?'✓ Assinado':sigs.mentee?'Aguarda mentor':'Não assinado'}</div>
+      <div class="kpi-sub">${activeCycle?.name||'—'}</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <!-- Pulse chart -->
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Pulso de energia — últimas semanas</div>
+        ${checks.length ? `
+        <div style="display:flex;gap:3px;align-items:flex-end;height:70px;margin-bottom:8px;">
+          ${checks.slice(0,12).reverse().map(c=>`
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;" title="${c.date}: energia ${c.energia}">
+            <div style="width:100%;height:${c.energia*12}px;background:${c.energia>=4?'var(--green)':c.energia>=3?'var(--gold)':c.energia>=2?'var(--amber)':'var(--red)'};border-radius:3px 3px 0 0;min-height:4px;"></div>
+          </div>`).join('')}
+        </div>
+        ${lastCheck ? `<div style="font-size:11px;color:var(--text3);">Última conquista: "${lastCheck.conquista||'—'}"</div>` : ''}
+        ${lastCheck?.bloqueio ? `<div style="font-size:11px;color:var(--amber);margin-top:4px;">⚠ Bloqueio: "${lastCheck.bloqueio}"</div>` : ''}
+        ` : '<div style="font-size:12px;color:var(--text4);">Nenhum checkpoint registrado ainda.</div>'}
+      </div>
+
+      <!-- Recent diary -->
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Últimas reflexões do diário</div>
+        ${diario.slice(0,3).map(e=>`
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);last-child:border-none;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:14px;">${['😤','😟','😐','🙂','😊','🔥'][e.mood]||'😐'}</span>
+            <span style="font-size:10px;color:var(--text4);">${e.date}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;">${(e.texto||'').substring(0,120)}${e.texto?.length>120?'...':''}</div>
+        </div>`).join('')}
+        ${!diario.length?'<div style="font-size:12px;color:var(--text4);">Nenhuma reflexão registrada.</div>':''}
+      </div>
+
+      <!-- Acordo signing for mentor -->
+      ${activeCycle ? `
+      <div class="panel" style="margin-bottom:14px;${!sigs.mentee?'opacity:.6;':''}">
+        <div class="panel-title"><div class="panel-title-dot"></div> Termo de Mentoria</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Ciclo: <strong>${activeCycle.name}</strong></div>
+        <div style="display:flex;gap:12px;margin-bottom:12px;">
+          <div style="flex:1;padding:10px;border-radius:8px;border:1px solid ${sigs.mentee?'var(--green-border)':'var(--border)'};">
+            <div style="font-size:10px;font-weight:700;color:var(--text4);margin-bottom:4px;">MENTORADO</div>
+            ${sigs.mentee ? `<div style="font-size:11px;color:var(--green);">✓ ${sigs.mentee.name}<br><span style="color:var(--text4);font-weight:400;">${sigs.mentee.date}</span></div>` : '<div style="font-size:11px;color:var(--text4);">Aguardando assinatura...</div>'}
+          </div>
+          <div style="flex:1;padding:10px;border-radius:8px;border:1px solid ${sigs.mentor?'var(--green-border)':'var(--gold-border)'};">
+            <div style="font-size:10px;font-weight:700;color:var(--text4);margin-bottom:4px;">MENTOR</div>
+            ${sigs.mentor ? `<div style="font-size:11px;color:var(--green);">✓ ${sigs.mentor.name}<br><span style="color:var(--text4);font-weight:400;">${sigs.mentor.date}</span></div>` : '<div style="font-size:11px;color:var(--amber);">Sua assinatura pendente</div>'}
+          </div>
+        </div>
+        ${sigs.mentee && !sigs.mentor ? `
+        <button class="btn btn-gold btn-sm" onclick="signAcordo('${activeCycle.id}','mentor')">✍ Assinar o acordo agora</button>
+        ` : sigs.mentee && sigs.mentor ? `
+        <div style="font-size:11px;color:var(--green);">✓ Acordo assinado por ambas as partes</div>
+        ` : `
+        <div style="font-size:11px;color:var(--text4);">Aguardando o mentorado assinar primeiro.</div>`}
+        ${sigs.mentee && sigs.mentor ? `
+        <button class="btn btn-outline btn-xs" style="margin-top:10px;" onclick="createAditivo('${activeCycle.id}')">+ Criar aditivo</button>` : ''}
+      </div>` : ''}
+    </div>
+
+    <div>
+      <!-- Competencias snapshot -->
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Competências do ciclo</div>
+        ${frozenComps.length ? frozenComps.map(c=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+          <div style="font-size:12px;color:var(--text);">${c.name}</div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <span style="font-size:10px;color:var(--text4);">Auto: <strong style="color:var(--gold);">${c.me||'—'}</strong></span>
+            <span style="font-size:10px;color:var(--text4);">Mentor: <strong style="color:#3266ad;">${c.mentor||'—'}</strong></span>
+          </div>
+        </div>`).join('') : comps.length ? `
+        <div style="font-size:11px;color:var(--amber);">Competências não congeladas ainda.</div>
+        ${comps.map(c=>`<div style="padding:4px 0;font-size:12px;color:var(--text2);">· ${c.name}</div>`).join('')}
+        ` : '<div style="font-size:12px;color:var(--text4);">Nenhuma competência definida.</div>'}
+      </div>
+
+      <!-- 360 status -->
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Feedback 360°</div>
+        ${(() => {
+          const peers = DB.get('peer360')||[];
+          const menteePeers = peers.filter(p=>p.done!==undefined);
+          const done = menteePeers.filter(p=>p.done).length;
+          return menteePeers.length ?
+            `<div style="font-size:12px;color:var(--text2);">${done}/${menteePeers.length} respostas recebidas</div>
+             <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:8px;">
+               <div style="width:${Math.round(done/menteePeers.length*100)}%;height:100%;background:var(--green);border-radius:3px;"></div>
+             </div>` :
+            '<div style="font-size:12px;color:var(--text4);">Nenhum avaliador convidado ainda.</div>';
+        })()}
+      </div>
+
+      <!-- Mentor observation -->
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Minha observação do ciclo</div>
+        <textarea id="mentor-obs-input" class="form-input" rows="4"
+          placeholder="Registre suas observações sobre este mentorado neste ciclo..."
+          style="resize:vertical;">${obs[mentee.phase||'G']?.text||''}</textarea>
+        <button class="btn btn-gold btn-sm" style="margin-top:8px;" onclick="saveMentorObs('${mentee.id}','${mentee.phase||'G'}')">Salvar observação</button>
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-gold btn-sm" onclick="prepararSessaoIA('${mentee.id}')">IA GUIA ✦ Preparar Sessão</button>
+        <button class="btn btn-outline btn-sm" onclick="renderPhaseGate('${mentee.id}')">⚙ Liberar fases</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveMentorObs(menteeId, phase){
+  const text = document.getElementById('mentor-obs-input')?.value||'';
+  saveMentorObservation(menteeId, phase, text);
+}
 // ══════════════════════════════════════════════
 // AUTH SYSTEM
 // ══════════════════════════════════════════════

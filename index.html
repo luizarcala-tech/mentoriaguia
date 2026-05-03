@@ -5726,6 +5726,10 @@ function runIntegratedTests(){
   check('Auth: função doLogin existe', ()=> typeof doLogin === 'function');
   check('Auth: função bootApp existe', ()=> typeof bootApp === 'function');
   check('Auth: função checkSession existe', ()=> typeof checkSession === 'function');
+  check('Admin: renderAdminUsers existe', ()=> typeof renderAdminUsers === 'function');
+  check('Admin: renderAdminMatch existe', ()=> typeof renderAdminMatch === 'function');
+  check('Admin: deleteUser existe', ()=> typeof deleteUser === 'function');
+  check('Admin: renderAdminConfig existe', ()=> typeof renderAdminConfig === 'function');
 
   // TRAINING TESTS
   check('Training: LESSONS definido com 6 aulas', ()=> Array.isArray(LESSONS) && LESSONS.length === 6);
@@ -6981,36 +6985,27 @@ function removeMatch(menteeId, menteeName){
 }
 
 
-function deleteUser(id){
+function deleteUser(email){
   const users = DB.get('users')||[];
-  const u = users.find(x=>x.id===id);
+  const u = users.find(x=>x.email===email);
   if(!u){ toast('Usuário não encontrado','err'); return; }
   if(u.role==='admin'){ toast('Não é possível remover um administrador','err'); return; }
   showConfirm(
     'Mover para histórico',
-    `Remover "${u.name}"? Todos os dados serão preservados no histórico e podem ser restaurados.`,
+    'Remover "'+u.name+'"? Todos os dados serão preservados no histórico.',
     'Mover para histórico',
-    ()=>{
-      // Archive with full data
+    async ()=>{
       const archive = DB.get('users_archive')||[];
-      archive.push({
-        ...u,
-        deletedAt: new Date().toLocaleString('pt-BR'),
-        deletedBy: currentUser?.name||'Admin',
-      });
+      archive.push({...u, deletedAt:new Date().toLocaleString('pt-BR'), deletedBy:currentUser?.name||'Admin'});
       DB.set('users_archive', archive);
-      // Remove from active
-      DB.set('users', (DB.get('users')||[]).filter(x=>x.id!==id));
-      // Soft delete in Supabase
-      sbFetch('users?id=eq.'+id,'PATCH',{active:false}).catch(()=>{});
-      // Clear editing if was editing this user
-      if(String(editingUserId) === String(id)){ editingUserId = null; editingUser = null; }
-      toast(`${u.name} movido para o histórico`,'suc');
+      DB.set('users', users.filter(x=>x.email!==email));
+      await sbPatchUser(email, {active:false}).catch(()=>{});
+      if(editingUser?.email===email){ editingUser=null; editingUserId=null; }
+      toast(u.name+' movido para o histórico','suc');
       renderAdminUsers();
     }
   );
 }
-
 
 function showArchive(){
   const archive = DB.get('users_archive')||[];

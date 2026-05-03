@@ -6948,11 +6948,27 @@ OKRs: ${(mp.okrs||[]).map(o=>o.desc).join('; ')||'—'}`;
 
 // ── DB helpers for cycles ─────────────────────────────────────────────────────
 async function loadCycles(menteeEmail){
+  const local = DB.get('cycles_'+menteeEmail) || [];
   try {
     const sb = await sbFetch('cycles?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&order=created_at.desc');
-    if(sb && sb.length) { DB.set('cycles_'+menteeEmail, sb); return sb; }
+    if(sb && sb.length){
+      // Smart merge: local competencias win if SB has null/empty
+      const merged = sb.map(sc=>{
+        const lc = local.find(l=>l.id===sc.id);
+        if(!lc) return sc;
+        return {
+          ...sc,
+          competencias: (sc.competencias && sc.competencias.length) ? sc.competencias : (lc.competencias||[]),
+          questions_360: (sc.questions_360 && sc.questions_360.length) ? sc.questions_360 : (lc.questions_360||[]),
+        };
+      });
+      // Add local-only cycles not yet in SB
+      local.forEach(lc=>{ if(!merged.find(m=>m.id===lc.id)) merged.push(lc); });
+      DB.set('cycles_'+menteeEmail, merged);
+      return merged;
+    }
   } catch(e){}
-  return DB.get('cycles_'+menteeEmail) || [];
+  return local;
 }
 
 async function saveCycle(cycle){

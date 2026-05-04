@@ -920,7 +920,6 @@ function updatePendingBadge(){
   });
 }
 
-
 // ══════════════════════════════════════════════
 // AUTH SYSTEM — DEFINITIVO
 // ══════════════════════════════════════════════
@@ -1035,10 +1034,9 @@ function bootApp(user){
   const lastPage = DB.get('last_page_'+user.role)||defaults[user.role];
   showPage(lastPage);
 
-  // Badge, health check, onboarding
+  // Badge and health check
   setTimeout(updatePendingBadge, 600);
   startHealthCheck();
-  if(user.role==='mentorado') setTimeout(checkAndShowOnboarding, 1200);
 }
 
 function checkSession(){
@@ -1097,7 +1095,6 @@ async function doRegister(){
 window.addEventListener('DOMContentLoaded', ()=>{
   checkSession();
 });
-
 
 // ══════════════════════════════════════════════
 // MARKETING FEATURES
@@ -1451,6 +1448,168 @@ function checkMentorCertification(mentorId){
     window.addEventListener('DOMContentLoaded', ()=>setTimeout(renderPublicDISC, 300));
   }
 })();
+
+async function hashPassword(pwd){
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pwd);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+function showPageError(fn_name, error){
+  console.error('Page render error in', fn_name, error);
+  const el = document.getElementById('content-area');
+  if(el) el.innerHTML = `
+  <div class="error-boundary">
+    <div>
+      <div class="error-boundary-icon">⚠</div>
+      <div class="error-boundary-title">Erro ao carregar esta tela</div>
+      <div class="error-boundary-msg">${error?.message || 'Erro desconhecido'}. Recarregue a página ou tente novamente.</div>
+      <div style="display:flex;gap:8px;justify-content:center;">
+        <button class="btn btn-gold btn-sm" onclick="location.reload()">Recarregar página</button>
+        <button class="btn btn-outline btn-sm" onclick="showPage('${currentPage||'dash'}')">Tentar novamente</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════
+// PERMANENT ERROR PROTECTION SYSTEM
+// ══════════════════════════════════════════════
+
+// Global error boundary — catches ALL uncaught errors
+window.addEventListener('error', function(e){
+  console.error('Global JS error:', e.error, 'at', e.filename, e.lineno);
+  // Only show if content-area is empty/black
+  const ca = document.getElementById('content-area');
+  if(ca && (ca.innerHTML === '' || ca.innerHTML === '<div></div>')){
+    ca.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;text-align:center;"><div><div style="font-size:36px;margin-bottom:16px;">⚠</div><div style="font-size:16px;font-weight:600;color:var(--red);margin-bottom:8px;">Erro inesperado</div><div style="font-size:12px;color:var(--text3);margin-bottom:16px;">' + (e.message||'Erro desconhecido') + '</div><button class="btn btn-gold btn-sm" onclick="location.reload()">Recarregar</button></div></div>';
+  }
+});
+
+// Protect showPage with full error boundary
+const _safeShowPage = showPage;
+window.showPage = function(id){
+  try {
+    _safeShowPage(id);
+  } catch(e) {
+    console.error('showPage error for', id, e);
+    showPageError(id, e);
+  }
+};
+
+// Health check: if content-area is empty after 3s, show error
+function startHealthCheck(){
+  setTimeout(()=>{
+    const ca = document.getElementById('content-area');
+    if(ca && ca.innerHTML.trim() === ''){
+      ca.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;text-align:center;"><div><div style="font-size:36px;margin-bottom:16px;">◈</div><div style="font-size:14px;color:var(--text2);margin-bottom:16px;">Carregando dados da plataforma...</div><button class="btn btn-outline btn-sm" onclick="location.reload()">Recarregar</button></div></div>';
+    }
+  }, 3000);
+}
+
+
+async function callAI(prompt, includeUserContext=true){
+  if(!checkAIRateLimit()) return null;
+  try{
+    let systemContext = 'Você é um estrategista sênior de desenvolvimento executivo e career coach da plataforma Arcala Insight. Seja direto, específico e orientado à ação. Evite clichês e textos genéricos.';
+
+    if(includeUserContext && currentUser){
+      const disc = DB.get('disc');
+      const comps = DB.get('competencias') || [];
+      const swot = DB.get('swot') || {};
+      const vf = DB.get('vf') || {};
+      const peers = (DB.get('peer360') || []).filter(p=>p.done);
+      const mp = DB.get('microplano') || {};
+      const discScores = DB.get('disc_scores') || {};
+      const gaps = comps.filter(c=>c.me<c.mentor).map(c=>c.name).join(', ');
+      const strengths = comps.filter(c=>c.me>=4).map(c=>c.name).join(', ');
+      systemContext += `
+
+PERFIL DO MENTORADO:
+Nome: ${currentUser.name}
+Plano: ${currentUser.plan || 'Não informado'}
+Fase atual: ${currentUser.phase || 'G'}
+
+PERFIL DISC: ${disc ? disc + ' — ' + (DISC_DATA[disc]?.name || '') : 'Não realizado'}
+SWOT — Forças: ${(swot.f||[]).join(', ')||'—'} | Fraquezas: ${(swot.fr||[]).join(', ')||'—'}
+Visão: ${vf.profissional||'—'}
+OKRs: ${(mp.okrs||[]).map(o=>o.desc).join('; ')||'—'}`;
+    }
+
+    // Route through Supabase Edge Function proxy — API key stays server-side
+    const PROXY_URL = 'https://pzpbtbbbwbjzlghducxs.supabase.co/functions/v1/ai-proxy';
+    const response = await fetch(PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-platform-token': 'arcala-guia-2026',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1024,
+        system: systemContext,
+        messages: [{role:'user', content: prompt}]
+      })
+    });
+    const data = await response.json();
+    if(data.content && data.content[0]) return data.content[0].text;
+    if(data.error) return 'Erro da API: ' + data.error.message;
+    return 'Erro ao processar resposta.';
+  } catch(e){
+    return 'Erro de conexão: ' + e.message;
+  }
+}
+
+
+// ══════════════════════════════════════════════
+// CYCLE MANAGEMENT — Ciclo Formal por Mentorado
+// ══════════════════════════════════════════════
+
+// ── DB helpers for cycles ─────────────────────────────────────────────────────
+async function loadCycles(menteeEmail){
+  const local = DB.get('cycles_'+menteeEmail) || [];
+  try {
+    const sb = await sbFetch('cycles?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&order=created_at.desc');
+    if(sb && sb.length){
+      // Smart merge: local competencias win if SB has null/empty
+      const merged = sb.map(sc=>{
+        const lc = local.find(l=>l.id===sc.id);
+        if(!lc) return sc;
+        return {
+          ...sc,
+          competencias: (sc.competencias && sc.competencias.length) ? sc.competencias : (lc.competencias||[]),
+          questions_360: (sc.questions_360 && sc.questions_360.length) ? sc.questions_360 : (lc.questions_360||[]),
+        };
+      });
+      // Add local-only cycles not yet in SB
+      local.forEach(lc=>{ if(!merged.find(m=>m.id===lc.id)) merged.push(lc); });
+      DB.set('cycles_'+menteeEmail, merged);
+      return merged;
+    }
+  } catch(e){}
+  return local;
+}
+
+function getCurrentCycleId(){
+  return DB.get('current_cycle_id') || null;
+}
+
+function checkAIRateLimit(){
+  const now = Date.now();
+  // Remove calls older than window
+  while(_aiCallLog.length && now - _aiCallLog[0] > AI_RATE_WINDOW){
+    _aiCallLog.shift();
+  }
+  if(_aiCallLog.length >= AI_RATE_LIMIT){
+    const waitSec = Math.ceil((AI_RATE_WINDOW - (now - _aiCallLog[0]))/1000);
+    toast('Muitas chamadas à IA. Aguarde '+waitSec+'s.','err');
+    return false;
+  }
+  _aiCallLog.push(now);
+  return true;
+}
 
 (function ensureAdmin(){
   const users = DB.get('users') || [];
@@ -1812,7 +1971,7 @@ function showPage(id){
   destroyCharts();
   const fn = pages[id];
   if(fn) Promise.resolve(fn()).catch(e=>showPageError(id,e));
-  else document.getElementById('content-area').innerHTML = `<div class="page-header"><div class="page-title" style="font-family:var(--font-display);font-style:italic;">${id}</div><div class="page-sub">Em construção</div></div>`;
+  else document.getElementById('content-area').innerHTML = `<div class="page-header"><div class="page-title">${id}</div><div class="page-sub">Em construção</div></div>`;
 }
 
 function destroyCharts(){
@@ -2004,7 +2163,7 @@ async function renderAdminRegs(){
   }
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
-    <div class="page-title" style="font-family:var(--font-display);font-style:italic;">Cadastros Pendentes</div>
+    <div class="page-title">Cadastros Pendentes</div>
     <div class="page-sub">Solicitações de acesso aguardando aprovação manual</div>
   </div>
   <div class="kpi-grid">
@@ -2091,7 +2250,7 @@ async function renderAdminNPS(){
   const nps = DB.get('nps_history');
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
-    <div class="page-title" style="font-family:var(--font-display);font-style:italic;">NPS & Métricas da Plataforma</div>
+    <div class="page-title">NPS & Métricas da Plataforma</div>
     <div class="page-sub">Evolução histórica do Net Promoter Score por ciclo</div>
   </div>
   <div class="kpi-grid">
@@ -2155,7 +2314,7 @@ async function addNPS(){
 // ══════════════════════════════════════════════
 function renderAdminConfig(){
   document.getElementById('content-area').innerHTML = `
-  <div class="page-header"><div class="page-title" style="font-family:var(--font-display);font-style:italic;">Configurações</div><div class="page-sub">Parâmetros da plataforma</div></div>
+  <div class="page-header"><div class="page-title">Configurações</div><div class="page-sub">Parâmetros da plataforma</div></div>
   <div class="grid-2">
     <div class="panel">
       <div class="panel-title"><div class="panel-title-dot"></div> Planos disponíveis</div>
@@ -2204,7 +2363,7 @@ function buildCompHeader(compTab, radars, activeId, activeCycle){
   const selOpts = radars.map(r=>`<option value="${r.id}"${r.id===activeId?' selected':''}>${r.name}</option>`).join('');
   return `
     <div class="page-header">
-      <div class="page-title" style="font-family:var(--font-display);font-style:italic;">Radar de Competências</div>
+      <div class="page-title">Radar de Competências</div>
       <div class="page-sub">Avaliação cruzada Mentor × Mentorado — máximo 7 competências por radar</div>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap;align-items:center;">
@@ -2241,7 +2400,7 @@ async function renderComp(){
   if(!cycle){
     document.getElementById('content-area').innerHTML = `
     <div class="page-header">
-      <div class="page-title" style="font-family:var(--font-display);font-style:italic;">Competências</div>
+      <div class="page-title">Competências</div>
       <div class="page-sub">Instrumento 2 da Fase U — Selecione as competências do seu ciclo ativo</div>
     </div>
     <div class="panel" style="text-align:center;padding:48px 32px;">
@@ -2277,7 +2436,7 @@ async function renderComp(){
 
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
-    <div class="page-title" style="font-family:var(--font-display);font-style:italic;">Competências</div>
+    <div class="page-title">Competências</div>
     <div class="page-sub">Instrumento 2 da Fase U — ${cycle.name}</div>
   </div>
 
@@ -2795,7 +2954,7 @@ async function renderInstrumentoA(){
 
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
-    <div class="page-title" style="font-family:var(--font-display);font-style:italic;">Fase A — Aferição do Ciclo</div>
+    <div class="page-title">Fase A — Aferição do Ciclo</div>
     <div class="page-sub">Instrumento de avaliação de resultados e avanços — metodologia GUIA</div>
   </div>
 
@@ -3009,7 +3168,7 @@ async function renderSWOT(){
 
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
-    <div class="page-title" style="font-family:var(--font-display);font-style:italic;">SWOT Pessoal</div>
+    <div class="page-title">SWOT Pessoal</div>
     <div class="page-sub">Instrumento 4 da Fase U — Análise estratégica pessoal</div>
   </div>
   ${cycleBanner(_swotCycleId, _swotCycle, currentUser?.email||'')}
@@ -3188,7 +3347,6 @@ async function renderDISC(){
   discSel = DB.get('disc');
   discPage = 0;
   discAnswers = Array(DISC_BLOCKS.length).fill(null).map(()=>({most:null,least:null}));
-  // Shuffle only within each block's options (not across blocks)
   discShuffled = DISC_BLOCKS.map(b=>({...b,opts:[...b.opts].sort(()=>Math.random()-.5)}));
   discScores = null;
 
@@ -3200,7 +3358,7 @@ async function renderDISC(){
   const _discCycle = _discCycles3.find(c=>c.id===_discCycleId);
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
-    <div class="page-title" style="font-family:var(--font-display);font-style:italic;">Perfil DISC</div>
+    <div class="page-title">Perfil DISC</div>
     <div class="page-sub">Instrumento 1 da Fase U — Mapeamento de perfil comportamental (Marston, 1928)</div>
   </div>
   ${cycleBanner(_discCycleId, _discCycle, currentUser?.email||'')}
@@ -3222,16 +3380,8 @@ function renderDISCAssessment(){
   const pct = Math.round((discPage/DISC_BLOCKS.length)*100);
 
   wrap.innerHTML = `
-    <!-- Block tipo label -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-      <span style="font-size:9px;font-weight:700;letter-spacing:.1em;padding:3px 10px;border-radius:20px;background:${block.tipo==='natural'?'rgba(240,192,64,.12)':'rgba(91,156,240,.12)'};color:${block.tipo==='natural'?'var(--gold)':'var(--blue)'};">
-        ${block.tipo==='natural'?'🔒 PERFIL NATURAL':'⚙ PERFIL ADAPTADO'}
-      </span>
-      <span style="font-size:10px;color:var(--text4);">${block.tipo==='natural'?'Como você age naturalmente e instintivamente':'Como você age no seu trabalho atual'}</span>
-    </div>
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 18px;margin-bottom:16px;font-size:11px;color:var(--text3);line-height:1.6">
-      Selecione a opção que <strong style="color:var(--gold)">mais</strong> se parece com você e a que <strong style="color:var(--blue)">menos</strong> se parece.
-      ${block.tipo==='natural'?'<strong>Pense em como você age naturalmente, fora do trabalho.</strong>':'<strong>Pense em como você age no seu trabalho atual.</strong>'}
+      Para cada situação, selecione a opção que <strong style="color:var(--gold)">mais</strong> se parece com você e a que <strong style="color:var(--blue)">menos</strong> se parece. Responda pelo comportamento habitual no trabalho.
     </div>
     <div style="display:flex;gap:14px;margin-bottom:12px;">
       <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text3)"><div style="width:10px;height:10px;border-radius:50%;background:var(--gold)"></div>Mais se parece comigo</div>
@@ -3264,7 +3414,7 @@ function renderDISCAssessment(){
     <div style="display:flex;gap:10px;align-items:center;">
       <button class="btn btn-outline btn-sm" onclick="discNavigate(-1)" ${discPage===0?'disabled':''}>← Anterior</button>
       <button class="btn btn-gold btn-sm" onclick="discNavigate(1)">${discPage===DISC_BLOCKS.length-1?'Ver meu resultado →':'Próximo →'}</button>
-      ${discSel?`<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="renderDISCResult(DB.get('disc_result_full')||discSel)">Ver resultado salvo</button>`:''}
+      ${discSel?`<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="renderDISCResult('${discSel}',DB.get('disc_scores'))">Ver resultado salvo</button>`:''}
     </div>`;
 }
 
@@ -3287,46 +3437,14 @@ function discNavigate(dir){
       return;
     }
     if(discPage===DISC_BLOCKS.length-1){
-      const {natural, adaptado} = calcDISCScores();
-      const naturalPct  = normalizeToPercent(natural);
-      const adaptadoPct = normalizeToPercent(adaptado);
-      const effort      = calcEffort(naturalPct, adaptadoPct);
-      const winNatural  = getDominant(natural);
-      const winAdaptado = getDominant(adaptado);
-
-      const result = {
-        natural: winNatural, adaptado: winAdaptado,
-        naturalScores: natural, adaptadoScores: adaptado,
-        naturalPct, adaptadoPct, effort,
-        date: new Date().toISOString()
-      };
-
-      discSel    = winNatural;
-      discScores = natural;
-      DB.set('disc', winNatural);
-      DB.set('disc_scores', natural);
-      DB.set('disc_result_full', result);
-
-      // Save Natural (locked forever on first run)
-      const existingNat = getDISCNatural(currentUser?.email);
-      if(!existingNat && currentUser){
-        saveDISCProfile(currentUser.email, {
-          dominant: winNatural, scores: natural, pct: naturalPct,
-          date: result.date, locked: true
-        }, 'natural');
-      }
-      // Save Adaptado for current cycle
-      if(currentUser){
-        const cycleId = getCurrentCycleId();
-        const key = cycleId ? 'adaptado_'+cycleId : 'adaptado';
-        saveDISCProfile(currentUser.email, {
-          dominant: winAdaptado, scores: adaptado, pct: adaptadoPct,
-          effort, date: result.date, cycleId: cycleId||null
-        }, key);
-      }
-
-      toast('Perfil '+winNatural+' (Natural) · '+winAdaptado+' (Adaptado) identificados!','suc');
-      renderDISCResult(result);
+      const scores = calcDISCScores();
+      const winner = Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
+      discSel = winner;
+      discScores = scores;
+      DB.set('disc', winner);
+      DB.set('disc_scores', scores);
+      toast(`Perfil ${winner} — ${DISC_DATA[winner].name} identificado!`,'suc');
+      renderDISCResult(winner, scores);
       return;
     }
   }
@@ -3351,212 +3469,1365 @@ function calcDISCScores(){
   return { natural, adaptado };
 }
 
-function getDominant(scores){
-  return Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
-}
-
-function normalizeToPercent(scores){
-  const total = Object.values(scores).reduce((a,b)=>a+b,0) || 1;
-  const pct = {};
-  Object.keys(scores).forEach(k => pct[k] = Math.round((scores[k]/total)*100));
-  // Ensure sums to 100
-  const diff = 100 - Object.values(pct).reduce((a,b)=>a+b,0);
-  const maxKey = Object.entries(pct).sort((a,b)=>b[1]-a[1])[0][0];
-  pct[maxKey] += diff;
-  return pct;
-}
-
-function calcEffort(naturalPct, adaptadoPct){
-  // Effort = how much each dimension changed from Natural to Adapted
-  // Positive = amplifying (using more), Negative = suppressing (using less)
-  const effort = {};
-  ['D','I','S','C'].forEach(k => effort[k] = adaptadoPct[k] - naturalPct[k]);
-  return effort;
-}
-
-function renderDISCResult(result){
+function renderDISCResult(winner, scores){
   document.getElementById('disc-assessment-wrap').style.display='none';
   const wrap = document.getElementById('disc-result-wrap');
   wrap.style.display='block';
-
-  // Support legacy calls (result could be just a winner string + scores obj)
-  if(typeof result === 'string'){
-    const saved = DB.get('disc_result_full');
-    result = saved || {
-      natural: result, adaptado: result,
-      naturalPct: {D:25,I:25,S:25,C:25}, adaptadoPct: {D:25,I:25,S:25,C:25},
-      effort: {D:0,I:0,S:0,C:0}
-    };
-  }
-
-  const {natural, adaptado, naturalPct, adaptadoPct, effort} = result;
-  const colorMap   = {D:'var(--red)',I:'var(--amber)',S:'var(--green)',C:'var(--blue)'};
-  const bgMap      = {D:'var(--red-bg)',I:'var(--amber-bg)',S:'var(--green-bg)',C:'var(--blue-bg)'};
-  const borderMap  = {D:'var(--red-border)',I:'var(--amber-border)',S:'var(--green-border)',C:'var(--blue-border)'};
-  const labelMap   = {D:'Dominância',I:'Influência',S:'Estabilidade',C:'Conformidade'};
-  const order      = ['D','I','S','C'];
-
-  // Effort label helper
-  const effortLabel = (val) => {
-    if(val > 12) return {label:'Amplificando muito', color:'var(--red)'};
-    if(val > 5)  return {label:'Amplificando', color:'var(--amber)'};
-    if(val < -12)return {label:'Suprimindo muito', color:'var(--blue)'};
-    if(val < -5) return {label:'Suprimindo', color:'var(--blue)'};
-    return {label:'Equilibrado', color:'var(--green)'};
-  };
-
-  // Pattern descriptions
-  const patterns = {
-    DD:'Realizador — foco máximo em resultados e controle',
-    DI:'Inspirador — liderança com carisma e urgência',
-    DS:'Investigador — orientado a resultado com consistência',
-    DC:'Criador — perfeccionista voltado para conquistas',
-    ID:'Persuasivo — entusiasta com orientação para ação',
-    II:'Promotor — comunicação e influência como força máxima',
-    IS:'Conselheiro — suporte às pessoas com diplomacia',
-    IC:'Avaliador — analítico com habilidade social',
-    SD:'Agente — paciente, mas orientado a resultados',
-    SI:'Apoiador — colaborativo e empático',
-    SS:'Especialista — consistente e profundo no que faz',
-    SC:'Objetivo — equilibrado entre processo e pessoas',
-    CD:'Calculista — analítico com orientação para resultados',
-    CI:'Perfeccionista Social — qualidade com habilidade relacional',
-    CS:'Analítico — preciso, sistemático e cuidadoso',
-    CC:'Precisionista — excelência técnica como identidade',
-  };
-  const patternKey = natural + (adaptado !== natural ? adaptado : '');
-  const patternDesc = patterns[patternKey] || patterns[natural+natural] || DISC_DATA[natural].name;
+  const d = DISC_DATA[winner];
+  const total = scores ? Object.values(scores).reduce((a,b)=>a+b,0)||1 : 4;
+  const order = ['D','I','S','C'];
+  const colorMap = {D:'var(--red)',I:'var(--amber)',S:'var(--green)',C:'var(--blue)'};
+  const bgMap = {D:'var(--red-bg)',I:'var(--amber-bg)',S:'var(--green-bg)',C:'var(--blue-bg)'};
+  const borderMap = {D:'var(--red-border)',I:'var(--amber-border)',S:'var(--green-border)',C:'var(--blue-border)'};
 
   wrap.innerHTML = `
-  <!-- Header -->
-  <div style="margin-bottom:20px;">
-    <div style="font-size:11px;font-weight:700;color:var(--text4);letter-spacing:.09em;margin-bottom:6px;">PERFIL DISC IDENTIFICADO</div>
-    <div style="font-size:24px;font-weight:700;color:var(--text);margin-bottom:4px;">
-      <span style="color:${colorMap[natural]};">${natural}</span>${natural!==adaptado?`<span style="color:var(--text3);font-size:18px;"> → </span><span style="color:${colorMap[adaptado]};">${adaptado}</span>`:''}
-      <span style="font-size:14px;font-weight:400;color:var(--text3);margin-left:8px;">${patternDesc}</span>
-    </div>
-    <div style="font-size:12px;color:var(--text3);">
-      Natural: <strong style="color:${colorMap[natural]};">${labelMap[natural]}</strong>
-      ${natural!==adaptado ? ` · Adaptado: <strong style="color:${colorMap[adaptado]};">${labelMap[adaptado]}</strong>` : ' · Natural e Adaptado coincidem'}
-    </div>
-  </div>
-
-  <div class="grid-2" style="margin-bottom:20px;">
-    <!-- LEFT: DISC bar chart (vertical, DISC real style) -->
-    <div class="panel">
-      <div class="panel-title"><div class="panel-title-dot"></div> Gráfico de Perfil</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;">
-        <span style="display:flex;align-items:center;gap:6px;">
-          <span style="width:14px;height:3px;background:var(--gold);display:inline-block;border-radius:2px;"></span>Natural
-        </span>
-        <span style="display:flex;align-items:center;gap:6px;">
-          <span style="width:14px;height:3px;background:var(--blue);display:inline-block;border-radius:2px;border:1px dashed var(--blue);"></span>Adaptado
-        </span>
-      </div>
-
-      <!-- Vertical bar chart -->
-      <div style="display:flex;gap:16px;align-items:flex-end;height:200px;padding:0 8px;">
+    <div style="margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
         ${order.map(k=>{
-          const natH = Math.round((naturalPct[k]/100)*180);
-          const adpH = Math.round((adaptadoPct[k]/100)*180);
-          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
-            <!-- Labels top -->
-            <div style="display:flex;gap:4px;margin-bottom:4px;">
-              <span style="font-size:10px;font-weight:700;color:${colorMap[k]};">${naturalPct[k]}%</span>
-              ${naturalPct[k]!==adaptadoPct[k]?`<span style="font-size:10px;color:var(--blue);">${adaptadoPct[k]}%</span>`:''}
+          const pct = scores ? Math.round((scores[k]/total)*100) : 0;
+          const isW = k===winner;
+          return `<div style="border-radius:var(--radius);padding:14px;text-align:center;background:${bgMap[k]};border:${isW?'2px':'1px'} solid ${isW?colorMap[k]:borderMap[k]};">
+            <div style="font-size:22px;font-weight:700;color:${colorMap[k]};font-family:var(--font-mono)">${k}</div>
+            <div style="font-size:10px;color:${colorMap[k]};margin-bottom:6px">${DISC_DATA[k].name}</div>
+            <div style="font-size:16px;font-weight:700;color:${colorMap[k]};font-family:var(--font-mono)">${pct}%</div>
+            <div style="height:4px;background:var(--border2);border-radius:2px;margin-top:6px;overflow:hidden">
+              <div style="width:${pct}%;height:100%;background:${colorMap[k]};border-radius:2px"></div>
             </div>
-            <!-- Bars side by side -->
-            <div style="display:flex;gap:3px;align-items:flex-end;height:180px;width:100%;">
-              <!-- Natural bar -->
-              <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:180px;">
-                <div style="width:100%;height:${natH}px;background:${colorMap[k]};border-radius:4px 4px 0 0;opacity:.9;min-height:4px;transition:height .4s;"></div>
-              </div>
-              <!-- Adaptado bar (dashed border style) -->
-              <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:180px;">
-                <div style="width:100%;height:${adpH}px;background:transparent;border:2px dashed ${colorMap[k]};border-bottom:none;border-radius:4px 4px 0 0;min-height:4px;box-sizing:border-box;"></div>
-              </div>
-            </div>
-            <!-- D I S C label -->
-            <div style="font-size:18px;font-weight:700;color:${colorMap[k]};font-family:var(--font-mono);">${k}</div>
-            <div style="font-size:9px;color:var(--text4);text-align:center;">${labelMap[k]}</div>
           </div>`;
         }).join('')}
       </div>
 
-      <!-- 50% reference line description -->
-      <div style="font-size:10px;color:var(--text4);margin-top:12px;text-align:center;">
-        Barra sólida = Natural · Barra tracejada = Adaptado
-      </div>
-    </div>
-
-    <!-- RIGHT: Effort analysis -->
-    <div>
-      <div class="panel" style="margin-bottom:14px;">
-        <div class="panel-title"><div class="panel-title-dot"></div> Esforço por dimensão</div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6;">
-          Mostra o quanto você está <strong>amplificando ou suprimindo</strong> cada dimensão no trabalho atual em relação ao seu perfil natural.
+      <div class="ai-panel" style="margin-bottom:14px;">
+        <div class="ai-header">
+          <div class="ai-badge">PERFIL IDENTIFICADO</div>
+          <span style="font-size:12px;color:var(--text3)">${winner} — ${d.name}</span>
         </div>
-        ${order.map(k=>{
-          const val = effort[k] || 0;
-          const info = effortLabel(val);
-          const barW = Math.min(Math.abs(val)*3, 100);
-          return `<div style="margin-bottom:12px;">
+        <div class="ai-rec" style="margin-bottom:10px">${d.desc}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">
+          ${d.traits.map(t=>`<span style="font-size:10px;padding:3px 9px;border-radius:20px;background:rgba(0,0,0,.25);color:${colorMap[winner]}">${t}</span>`).join('')}
+        </div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;margin-bottom:8px">DESENVOLVIMENTO PRIORITÁRIO</div>
+        ${d.devs.map(dev=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);line-height:1.5"><span style="color:var(--gold);flex-shrink:0">→</span>${dev}</div>`).join('')}
+        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-gold btn-sm" onclick="analyzeDISCWithIA()">✦ IA GUIA ✦ Carreira ↗</button>
+          <button class="btn btn-outline btn-sm" onclick="discRestart()">Refazer assessment</button>
+        </div>
+      </div>
+      <div id="disc-ia-result" style="display:none;"></div>
+    </div>`;
+}
+
+function discRestart(){
+  discPage=0;
+  discAnswers=Array(DISC_BLOCKS.length).fill(null).map(()=>({most:null,least:null}));
+  discShuffled=DISC_BLOCKS.map(b=>({...b,opts:[...b.opts].sort(()=>Math.random()-.5)}));
+  document.getElementById('disc-result-wrap').style.display='none';
+  document.getElementById('disc-assessment-wrap').style.display='block';
+  renderDISCAssessment();
+}
+
+function selectDisc(k){
+  discSel = k;
+  DB.set('disc',k);
+}
+
+function showDiscResult(k){}
+
+async function analyzeDISCWithIA(){
+  if(!discSel){ toast('Realize o assessment primeiro','err'); return; }
+  const d = DISC_DATA[discSel];
+  showIALoading('disc-ia-result','Analisando implicações do perfil');
+  const prompt = `Você é um executive coach especializado em desenvolvimento de líderes para o C-level.
+
+O profissional em mentoria tem PERFIL DISC predominante: ${discSel} — ${d.name}
+Características: ${d.traits.join(', ')}
+
+Produza uma análise executiva com:
+1. COMO ESTE PERFIL ACELERA A CARREIRA: Três vantagens competitivas específicas no contexto corporativo atual
+2. COMO ESTE PERFIL PODE TRAVAR A ASCENSÃO: As duas armadilhas mais comuns para este perfil no caminho ao C-level
+3. DESENVOLVIMENTO PRIORITÁRIO: As duas competências que este perfil precisa desenvolver conscientemente (com exemplos práticos)
+4. COMO O MENTOR DEVE TRABALHAR COM ESTE PERFIL: Abordagem recomendada para maximizar resultados nas sessões
+5. AÇÃO DESTA SEMANA: Uma ação específica para este perfil agir fora de sua zona de conforto
+
+Seja preciso e direto. Sem texto genérico.`;
+  const result = await callAI(prompt);
+  showIAResult('disc-ia-result', result, `Análise DISC — Perfil ${discSel}`);
+}
+
+// ══════════════════════════════════════════════
+// PEER 360
+// ══════════════════════════════════════════════
+const PEER_QUESTIONS = [
+  'Como você avalia a qualidade da comunicação executiva deste profissional?',
+  'Como você avalia a capacidade de liderança e mobilização de equipes?',
+  'Como você avalia a colaboração e influência nos projetos conjuntos?',
+  'Como você avalia a entrega de resultados e cumprimento de compromissos?',
+  'Como você avalia o pensamento estratégico e visão de negócio?',
+];
+
+
+// ══════════════════════════════════════════════
+// PEER 360° V2 — Cycle-aware with AI questions
+// ══════════════════════════════════════════════
+
+async function renderPeer360(){
+  document.getElementById('content-area').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;"><div style="text-align:center;"><div style="width:24px;height:24px;border:2px solid var(--gold);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;margin:0 auto 12px;"></div><div style="font-size:12px;color:var(--text3);">Carregando...</div></div></div>';
+  
+  if(!currentUser){ return; }
+  const menteeEmail = currentUser.email;
+
+  // Sync responses from Supabase
+  try {
+    const sbResponses = await sbFetch('peer360_responses?mentee_email=eq.'+encodeURIComponent(menteeEmail)+'&select=*');
+    if(sbResponses && sbResponses.length){
+      const local = DB.get('peer360')||[];
+      sbResponses.forEach(sr=>{
+        const lp = local.find(p=>p.token===sr.token);
+        if(!lp){
+          local.push({avaliador:sr.avaliador,email:sr.avaliador_email,relacao:sr.relacao,
+            token:sr.token,respostas:sr.scores||(sr.done?[]:null),obs:sr.obs||'',done:sr.done||false});
+        } else if(sr.done && !lp.done){
+          lp.done=true; lp.respostas=sr.scores; lp.obs=sr.obs||'';
+        }
+      });
+      DB.set('peer360', local);
+    }
+  } catch(e){}
+
+  const peers = DB.get('peer360')||[];
+  
+  // Load cycles
+  const cycles = await loadCycles(menteeEmail);
+  const cycleId = getCurrentCycleId() || cycles.find(c=>c.status==='active')?.id;
+  const cycle = cycleId ? cycles.find(c=>c.id===cycleId) : null;
+  const frozen = cycle && !!cycle.frozen_at;
+  const hasQuestions = cycle && cycle.questions_360 && cycle.questions_360.length > 0;
+  const comps = cycle?.competencias || [];
+
+  // Compute scores mapped back to competencias
+  const donePeers = peers.filter(p=>p.done);
+  const compScores = {};
+  if(hasQuestions && donePeers.length){
+    cycle.questions_360.forEach((qblock, bi)=>{
+      const scores = [];
+      donePeers.forEach(p=>{
+        const raw = p.respostas;
+        if(!raw) return;
+        // respostas is either array of all answers or object
+        const q1score = Array.isArray(raw) ? raw[bi*2] : raw['q'+(bi*2+1)];
+        const q2score = Array.isArray(raw) ? raw[bi*2+1] : raw['q'+(bi*2+2)];
+        if(q1score) scores.push(Number(q1score));
+        if(q2score) scores.push(Number(q2score));
+      });
+      if(scores.length) compScores[bi] = (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1);
+    });
+  }
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Feedback 360°</div>
+    <div class="page-sub">Avaliação por pares, líderes e subordinados — mapeada às competências do ciclo</div>
+  </div>
+
+  <!-- Cycle selector -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.08em;">CICLO</div>
+    ${cycles.length ? `
+    <select style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-size:12px;padding:6px 10px;border-radius:6px;font-family:var(--font-body);" 
+      id="cycle-selector" onchange="DB.set('current_cycle_id',this.value);renderPeer360()">
+      ${cycles.map(c=>`<option value="${c.id}" ${c.id===cycleId?'selected':''}>${c.name}${c.status==='closed'?' (encerrado)':''}</option>`).join('')}
+    </select>` : '<span style="font-size:12px;color:var(--amber);">Nenhum ciclo criado</span>'}
+    
+    ${cycle ? (frozen ?
+      `<span style="font-size:10px;color:var(--green);font-weight:600;">✓ ${comps.length} competências congeladas · ${hasQuestions?cycle.questions_360.length+' perguntas':'sem perguntas'}</span>` :
+      `<span style="font-size:10px;color:var(--red);font-weight:600;">⚠ Congele as competências antes de enviar avaliações</span>`) : ''}
+  </div>
+
+  ${!cycle ? `
+  <div class="panel" style="text-align:center;padding:40px;">
+    <div style="font-size:32px;margin-bottom:14px;">◈</div>
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;">Crie um ciclo para começar</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">O ciclo define as competências que serão avaliadas e gera as perguntas do 360°.</div>
+    <button class="btn btn-gold" onclick="showCycleManager('${menteeEmail}').then(()=>{})">Criar primeiro ciclo</button>
+  </div>` : `
+
+  <div class="grid-2">
+    <div>
+      <!-- Send invite -->
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Convidar avaliador</div>
+        ${!frozen ? `
+        <div style="background:var(--red-bg);border:1px solid var(--red-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--red);">
+          ⚠ Congele as competências do ciclo antes de enviar convites. <button class="btn btn-outline btn-xs" style="margin-left:8px;" onclick="showCycleManager('${menteeEmail}').then(()=>{})">Congelar agora</button>
+        </div>` : ''}
+        <div class="field"><label class="field-label">Nome do avaliador</label>
+          <input type="text" class="form-input" id="peer-name" placeholder="Nome completo" ${!frozen?'disabled':''}>
+        </div>
+        <div class="field"><label class="field-label">E-mail</label>
+          <input type="email" class="form-input" id="peer-email" placeholder="email@empresa.com" ${!frozen?'disabled':''}>
+        </div>
+        <div class="field"><label class="field-label">Relação</label>
+          <select class="form-select" id="peer-rel" ${!frozen?'disabled':''}>
+            <option>Líder direto</option><option>Par / mesmo nível</option>
+            <option>Subordinado direto</option><option>Cliente interno</option><option>Parceiro externo</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-gold btn-sm" onclick="sendPeer360()" ${!frozen?'disabled':''}>Enviar formulário ↗</button>
+          <button class="btn btn-outline btn-sm" onclick="renderPeer360()">↺ Sincronizar</button>
+          
+        </div>
+      </div>
+
+      <!-- Responses list -->
+      <div class="panel">
+        <div class="panel-title"><div class="panel-title-dot"></div> Respostas (${donePeers.length}/${peers.length})</div>
+        ${peers.length ? peers.map((p,pi)=>`
+        <div class="peer-q-card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="font-size:11px;font-weight:600;color:var(--text)">${p.avaliador} <span style="font-weight:400;color:var(--text3)">— ${p.relacao}</span></div>
+            <span class="pill ${p.done?'pill-active':'pill-pending'}">${p.done?'RECEBIDO':'PENDENTE'}</span>
+          </div>
+          ${p.done && p.obs ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:6px;">"${p.obs}"</div>` : ''}
+          ${!p.done ? `<div style="font-size:11px;color:var(--text4);">Aguardando resposta...</div>` : ''}
+        </div>`).join('') : `<div style="font-size:12px;color:var(--text4);padding:10px 0;">Nenhum avaliador convidado ainda.</div>`}
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div>
+      ${hasQuestions && donePeers.length ? `
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Resultado por competência</div>
+        ${cycle.questions_360.map((qblock,bi)=>{
+          const score = compScores[bi] || '—';
+          const pct = score !== '—' ? ((Number(score)/4)*100).toFixed(0) : 0;
+          const color = score==='—'?'var(--text4)':Number(score)>=3?'var(--green)':Number(score)>=2?'var(--amber)':'var(--red)';
+          return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-              <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-size:14px;font-weight:700;color:${colorMap[k]};font-family:var(--font-mono);">${k}</span>
-                <span style="font-size:11px;color:var(--text2);">${labelMap[k]}</span>
-              </div>
-              <div style="font-size:10px;font-weight:700;color:${info.color};padding:2px 8px;border-radius:20px;background:${info.color}18;">
-                ${val>0?'+':''}${val}pp · ${info.label}
-              </div>
+              <div style="font-size:12px;font-weight:600;color:var(--text);">${comps[bi]?.name||qblock.competencia}</div>
+              <div style="font-size:14px;font-weight:700;color:${color};font-family:var(--font-mono);">${score}<span style="font-size:10px;color:var(--text4)">/4</span></div>
             </div>
-            <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;position:relative;">
-              <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:var(--border2);"></div>
-              ${val>=0
-                ? `<div style="position:absolute;left:50%;width:${barW/2}%;height:100%;background:${colorMap[k]};border-radius:0 3px 3px 0;"></div>`
-                : `<div style="position:absolute;right:${50}%;width:${barW/2}%;height:100%;background:var(--blue);border-radius:3px 0 0 3px;"></div>`
-              }
-            </div>
-            <div style="display:flex;justify-content:space-between;margin-top:2px;">
-              <span style="font-size:9px;color:var(--text4);">← Suprimindo</span>
-              <span style="font-size:9px;color:var(--text4);">Amplificando →</span>
+            <div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;">
+              <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;transition:width .4s;"></div>
             </div>
           </div>`;
         }).join('')}
+        <div style="margin-top:12px;">
+          <button class="btn btn-gold btn-sm" onclick="analyze360WithIA()">✦ IA GUIA ✦ Análise Integrada ↗</button>
+        </div>
+      </div>` : `
+      <div class="panel" style="margin-bottom:14px;text-align:center;padding:30px;">
+        <div style="font-size:24px;margin-bottom:12px;">◷</div>
+        <div style="font-size:13px;color:var(--text3);">
+          ${!hasQuestions ? 'Congele as competências para gerar as perguntas' : 'Aguardando respostas dos avaliadores'}
+        </div>
+      </div>`}
+
+      ${hasQuestions ? `
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Perguntas do formulário (${cycle.questions_360.length} blocos)</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:11px;color:var(--text3);">Perguntas geradas pela IA GUIA. Todos os avaliadores recebem o mesmo formulário.</div>
+          ${cycle.frozen_at ? '<button class="btn btn-outline btn-xs" onclick="editCycle360Questions(cycleId)">✎ Editar perguntas</button>' : ''}
+        </div>
+        ${cycle.questions_360.map((qblock,bi)=>`
+        <div style="margin-bottom:12px;padding:10px 12px;background:var(--bg2);border-radius:var(--radius-sm);">
+          <div style="font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.07em;margin-bottom:6px;">BLOCO ${bi+1} — ${comps[bi]?.name||qblock.competencia}</div>
+          ${qblock.situacoes.map((s,si)=>`
+          <div style="font-size:11px;color:var(--text2);padding:4px 0;border-bottom:${si<qblock.situacoes.length-1?'1px solid var(--border)':'none'};">
+            ${bi*2+si+1}. ${s.texto}
+          </div>`).join('')}
+        </div>`).join('')}
+      </div>` : ''}
+
+      <div id="peer360-ia" style="display:none;"></div>
+    </div>
+  </div>`}
+  `;
+}
+
+
+
+// ══════════════════════════════════════════════
+// MICROPLANO
+// ══════════════════════════════════════════════
+function renderMicroplano(){
+  const mp = DB.get('microplano');
+  const weeks = [
+    {num:'S1',ph:'G',desc:'Kick-off · Termo de mentoria · Alinhamento de objetivos',st:'done'},
+    {num:'S2',ph:'U',desc:'Autodiagnóstico 360° · Radar de competências',st:'done'},
+    {num:'S3',ph:'U',desc:'SWOT pessoal · Sessão de Visão de Futuro',st:'done'},
+    {num:'S4',ph:'I',desc:'OKRs definidos · Quebra em microplanos',st:'done'},
+    {num:'S5',ph:'I',desc:'Sessão GROW #1 · Kanban ativado',st:'done'},
+    {num:'S6',ph:'I',desc:'Sessão GROW #2 · Revisão de progresso',st:'cur'},
+    {num:'S7',ph:'I',desc:'Sessão GROW #3 · 360° ativado',st:'pend'},
+    {num:'S8',ph:'I',desc:'Sessão GROW #4 · Ajustes de microplano',st:'pend'},
+    {num:'S9',ph:'I',desc:'Consolidação fase I · Mapeamento de gaps',st:'pend'},
+    {num:'S10',ph:'A',desc:'Revisão KRs · NPS mentoria',st:'pend'},
+    {num:'S11',ph:'A',desc:'Entrevista de aprendizado gravada',st:'pend'},
+    {num:'S12',ph:'A',desc:'Encerramento ou renovação · Plano próximos 90 dias',st:'pend'},
+  ];
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Microplanos — Fase I</div>
+    <div class="page-sub">Quebra do OKR em planos de 4 semanas com modelo GROW</div>
+  </div>
+  <div class="grid-2" style="margin-bottom:16px;">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Objetivo do ciclo</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:12px">${mp.objetivo}</div>
+      <div class="section-label" style="margin-bottom:10px">OKRs mapeados</div>
+      ${mp.okrs.map((o,i)=>`
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+        <div class="toggle ${o.done?'on':''}" style="margin-top:2px" onclick="toggleOKR(${i},this)"></div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:${o.done?'var(--green)':'var(--text)'};">${o.desc}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">KR: ${o.kr}</div>
+        </div>
+      </div>`).join('')}
+      <div style="margin-top:12px;">
+        <button class="btn btn-outline btn-xs" onclick="addOKR()">+ Novo OKR</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Cronograma 12 semanas</div>
+      <div id="week-list">${weeks.map(w=>`
+        <div class="week-row">
+          <div class="wk-num">${w.num}</div>
+          <div class="wk-phase ph-${w.ph}">${w.ph}</div>
+          <div class="wk-desc">${w.desc}</div>
+          ${w.st==='done'?'<div class="wk-done-check">✓</div>':w.st==='cur'?'<div class="wk-cur">ATUAL</div>':'<div class="wk-pend">—</div>'}
+        </div>`).join('')}</div>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Kanban de Atividades</div>
+    <div class="kanban">
+      <div class="kanban-col k-todo">
+        <div class="kanban-title">A Fazer</div>
+        ${mp.kanban.todo.map(t=>`<div class="k-item">${t}</div>`).join('')}
+        <button class="btn btn-outline btn-xs" style="width:100%;margin-top:6px" onclick="addKanban('todo')">+ Adicionar</button>
+      </div>
+      <div class="kanban-col k-doing">
+        <div class="kanban-title">Em Progresso</div>
+        ${mp.kanban.doing.map(t=>`<div class="k-item">${t}</div>`).join('')}
+        <button class="btn btn-outline btn-xs" style="width:100%;margin-top:6px" onclick="addKanban('doing')">+ Adicionar</button>
+      </div>
+      <div class="kanban-col k-done">
+        <div class="kanban-title">Concluído</div>
+        ${mp.kanban.done.map(t=>`<div class="k-item">${t}</div>`).join('')}
       </div>
     </div>
   </div>
-
-  <!-- Profile description -->
-  <div class="panel" style="margin-bottom:16px;">
-    <div class="panel-title"><div class="panel-title-dot"></div> Perfil Natural — ${labelMap[natural]}</div>
-    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px;">${DISC_DATA[natural].desc}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
-      ${DISC_DATA[natural].traits.map(t=>`<span style="font-size:11px;padding:4px 12px;border-radius:20px;background:${bgMap[natural]};color:${colorMap[natural]};border:1px solid ${borderMap[natural]};">${t}</span>`).join('')}
+  <div class="panel">
+    <div class="panel-title"><div class="panel-title-dot"></div> Sessão GROW — Semana atual</div>
+    <div class="grid-2">
+      <div>
+        <div class="field"><label class="field-label" style="color:var(--gold)">G — Goal: Qual o objetivo desta sessão?</label><textarea id="grow-g" placeholder="Ex: Finalizar o memo estratégico para apresentar ao comitê..."></textarea></div>
+        <div class="field"><label class="field-label" style="color:var(--blue)">R — Reality: Situação atual?</label><textarea id="grow-r" placeholder="Ex: Ainda não formalizei a proposta, tenho os dados mas falta estrutura..."></textarea></div>
+      </div>
+      <div>
+        <div class="field"><label class="field-label" style="color:var(--green)">O — Options: Quais caminhos possíveis?</label><textarea id="grow-o" placeholder="Ex: 1. Adaptar template existente, 2. Consultoria com mentor, 3. Draft rápido e iteração..."></textarea></div>
+        <div class="field"><label class="field-label" style="color:var(--amber)">W — Will: O que você vai fazer?</label><textarea id="grow-w" placeholder="Ex: Até sexta, primeiro draft do memo para revisão do mentor..."></textarea></div>
+      </div>
     </div>
-    ${natural !== adaptado ? `
-    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;">
-      <div style="font-size:12px;font-weight:600;color:${colorMap[adaptado]};margin-bottom:8px;">Perfil Adaptado — ${labelMap[adaptado]}</div>
-      <div style="font-size:12px;color:var(--text3);line-height:1.6;">${DISC_DATA[adaptado].desc}</div>
-    </div>` : ''}
-  </div>
+    <button class="btn btn-gold btn-sm" onclick="saveGROW()">Salvar sessão GROW</button>
+  </div>`;
+}
 
-  <!-- Development priorities -->
-  <div class="panel" style="margin-bottom:16px;">
-    <div class="panel-title"><div class="panel-title-dot"></div> Desenvolvimento prioritário</div>
-    ${DISC_DATA[natural].devs.map(dev=>`
-    <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);line-height:1.6;">
-      <span style="color:var(--gold);flex-shrink:0;">→</span>${dev}
+function toggleOKR(i, el){
+  const mp = DB.get('microplano');
+  mp.okrs[i].done = !mp.okrs[i].done;
+  DB.set('microplano',mp);
+  el.classList.toggle('on');
+  toast(mp.okrs[i].done?'OKR marcado como concluído!':'OKR reaberto','suc');
+  renderMicroplano();
+}
+
+function addOKR(){
+  const desc = prompt('Descreva o OKR:');
+  if(!desc) return;
+  const kr = prompt('Qual o Key Result mensurável?');
+  if(!kr) return;
+  const mp = DB.get('microplano');
+  mp.okrs.push({desc,kr,done:false});
+  DB.set('microplano',mp);
+  toast('OKR adicionado!','suc');
+  renderMicroplano();
+}
+
+function addKanban(col){
+  const item = prompt('Nova atividade:');
+  if(!item) return;
+  const mp = DB.get('microplano');
+  mp.kanban[col].unshift(item);
+  DB.set('microplano',mp);
+  toast('Atividade adicionada!','suc');
+  renderMicroplano();
+}
+
+function saveGROW(){
+  const sessions = DB.get('grow_sessions')||[];
+  sessions.push({
+    date:today(),
+    goal:document.getElementById('grow-g').value,
+    reality:document.getElementById('grow-r').value,
+    options:document.getElementById('grow-o').value,
+    will:document.getElementById('grow-w').value,
+  });
+  DB.set('grow_sessions',sessions);
+  toast('Sessão GROW salva com sucesso!','suc');
+}
+
+// ══════════════════════════════════════════════
+// VISÃO DE FUTURO
+// ══════════════════════════════════════════════
+async function renderVF(){
+  const vf = DB.get('vf') || {};
+  const history = DB.get('vf_history') || [];
+  const tab = DB.get('vf_tab') || 'edit';
+
+  const historyBtns = history.length ? `
+    <button class="btn ${tab==='history'?'btn-gold':'btn-outline'} btn-sm" onclick="DB.set('vf_tab','history');renderVF()">
+      ◷ Histórico (${history.length})
+    </button>
+    ${history.length>=2?`<button class="btn ${tab==='compare'?'btn-gold':'btn-outline'} btn-sm" onclick="DB.set('vf_tab','compare');renderVF()">⇄ Comparar versões</button>`:''}
+  ` : '';
+
+  const _vfCycles2 = currentUser ? await loadCycles(currentUser.email) : [];
+  const _vfCycleId2 = getCurrentCycleId() || _vfCycles2.find(c=>c.status==='active')?.id;
+  const _vfCycle2 = _vfCycles2.find(c=>c.id===_vfCycleId2);
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Visão de Futuro</div>
+    <div class="page-sub">Instrumento 5 da Fase U — Storytelling estratégico: Um dia na vida daqui a 12 meses</div>
+  </div>
+  ${cycleBanner(_vfCycleId2, _vfCycle2, currentUser?.email||'')}
+  <div style="display:flex;gap:8px;margin-bottom:20px;">
+    <button class="btn ${tab==='edit'?'btn-gold':'btn-outline'} btn-sm" onclick="DB.set('vf_tab','edit');renderVF()">✎ Nova visão</button>
+    ${historyBtns}
+  </div>
+  <div id="vf-tab-content"></div>`;
+
+  if(tab==='edit') renderVFEdit(vf);
+  else if(tab==='history') renderVFHistory(history);
+  else if(tab==='compare') renderVFCompare(history);
+}
+
+function renderVFEdit(vf){
+  document.getElementById('vf-tab-content').innerHTML = `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--gold);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;font-size:12px;color:var(--text2);line-height:1.7">
+    <strong style="color:var(--gold)">Instrução:</strong> Imagine que são 12 meses a partir de hoje. Descreva com detalhes o futuro profissional que deseja. Cada vez que salvar, uma nova versão é registrada com data.
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 01 — CARREIRA & POSIÇÃO</div>
+    <div class="vf-step-title">Como é seu trabalho? Qual posição você ocupa? O que você lidera?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-profissional" rows="4" placeholder="Descreva sua vida profissional ideal...">${vf.profissional||''}</textarea></div>
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 02 — IMPACTO & CONTRIBUIÇÃO</div>
+    <div class="vf-step-title">Qual problema você resolveu? Que impacto gerou?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-contribuicao" rows="4" placeholder="Descreva o impacto que você gerou...">${vf.contribuicao||''}</textarea></div>
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 03 — VIDA & ENERGIA</div>
+    <div class="vf-step-title">Como você se sente? Como é o equilíbrio entre trabalho, família e propósito?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-vida" rows="4" placeholder="Descreva como você se sente...">${vf.vida||''}</textarea></div>
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 04 — LEGADO & RECONHECIMENTO</div>
+    <div class="vf-step-title">Como você é reconhecido? O que as pessoas dizem sobre você?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-legado" rows="4" placeholder="Descreva o reconhecimento que você construiu...">${vf.legado||''}</textarea></div>
+  </div>
+  <div class="vf-step">
+    <div class="vf-step-num">DIMENSÃO 05 — PRIMEIROS PASSOS</div>
+    <div class="vf-step-title">O que você fez nas primeiras 4 semanas para começar?</div>
+    <div class="field" style="margin-bottom:0"><textarea id="vf-acoes" rows="4" placeholder="Descreva as 3-5 ações imediatas...">${vf.acoes||''}</textarea></div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:16px;">
+    <button class="btn btn-gold" onclick="saveVF()">Salvar visão</button>
+    <button class="btn btn-outline" onclick="analyzeVFWithIA()">✦ IA GUIA ✦ Plano ↗</button>
+  </div>
+  <div id="vf-ia-result" style="margin-top:16px;display:none;"></div>`;
+}
+
+function renderVFHistory(history){
+  if(!history.length){
+    document.getElementById('vf-tab-content').innerHTML = '<div class="panel" style="color:var(--text3);font-size:13px;">Nenhuma visão salva ainda.</div>';
+    return;
+  }
+  const dims = [
+    {key:'profissional',label:'Carreira & Posição'},
+    {key:'contribuicao',label:'Impacto & Contribuição'},
+    {key:'vida',label:'Vida & Energia'},
+    {key:'legado',label:'Legado & Reconhecimento'},
+    {key:'acoes',label:'Primeiros Passos'},
+  ];
+  document.getElementById('vf-tab-content').innerHTML = history.slice().reverse().map((v,i)=>`
+    <div class="panel" style="margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)">Versão ${history.length-i}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Salva em ${v.savedAt||'—'}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-xs" onclick="loadVFVersion(${history.length-1-i})">Carregar esta versão</button>
+          <button class="btn btn-red btn-xs" onclick="deleteVFVersion(${history.length-1-i})">Excluir</button>
+        </div>
+      </div>
+      ${dims.map(d=>v[d.key]?`
+        <div style="margin-bottom:10px;">
+          <div style="font-size:9px;font-weight:700;color:var(--gold);letter-spacing:.08em;margin-bottom:4px;">${d.label.toUpperCase()}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--bg3);border-radius:6px;padding:10px 12px;">${v[d.key]}</div>
+        </div>`:'').join('')}
+    </div>`).join('');
+}
+
+function renderVFCompare(history){
+  if(history.length < 2){
+    document.getElementById('vf-tab-content').innerHTML = '<div class="panel" style="color:var(--text3);font-size:13px;">Salve pelo menos 2 versões para comparar.</div>';
+    return;
+  }
+  const dims = [
+    {key:'profissional',label:'Carreira & Posição'},
+    {key:'contribuicao',label:'Impacto & Contribuição'},
+    {key:'vida',label:'Vida & Energia'},
+    {key:'legado',label:'Legado & Reconhecimento'},
+    {key:'acoes',label:'Primeiros Passos'},
+  ];
+
+  // Default: compare last two
+  const v1 = history[history.length-1];
+  const v2 = history[history.length-2];
+
+  const selOpts = history.map((v,i)=>`<option value="${i}">Versão ${i+1} — ${v.savedAt||'sem data'}</option>`).join('');
+
+  document.getElementById('vf-tab-content').innerHTML = `
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+    <div class="field" style="margin-bottom:0;flex:1;">
+      <label class="field-label">Versão A</label>
+      <select class="form-select" id="cmp-a" onchange="renderVFCompare(DB.get('vf_history')||[])">
+        ${selOpts.replace(`value="${history.length-1}"`,`value="${history.length-1}" selected`)}
+      </select>
+    </div>
+    <div style="font-size:20px;color:var(--text4);padding-top:18px;">⇄</div>
+    <div class="field" style="margin-bottom:0;flex:1;">
+      <label class="field-label">Versão B</label>
+      <select class="form-select" id="cmp-b" onchange="renderVFCompare(DB.get('vf_history')||[])">
+        ${selOpts.replace(`value="${history.length-2}"`,`value="${history.length-2}" selected`)}
+      </select>
+    </div>
+    <button class="btn btn-gold btn-sm" style="margin-top:18px" onclick="compareVFWithIA()">✦ IA compara evoluções ↗</button>
+  </div>
+  <div id="cmp-content">
+    ${dims.map(d=>`
+    <div style="margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;color:var(--gold);letter-spacing:.08em;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);">${d.label.toUpperCase()}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <div style="font-size:9px;color:var(--text4);margin-bottom:4px;">VERSÃO ${history.length} — ${v1.savedAt||'—'}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--bg3);border-radius:6px;padding:10px 12px;min-height:60px;">${v1[d.key]||'<span style="color:var(--text4);font-style:italic">Não preenchido</span>'}</div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--text4);margin-bottom:4px;">VERSÃO ${history.length-1} — ${v2.savedAt||'—'}</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--bg3);border-radius:6px;padding:10px 12px;min-height:60px;">${v2[d.key]||'<span style="color:var(--text4);font-style:italic">Não preenchido</span>'}</div>
+        </div>
+      </div>
     </div>`).join('')}
   </div>
+  <div id="vf-compare-ia" style="margin-top:14px;display:none;"></div>`;
+}
 
-  <!-- Actions -->
-  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
-    <button class="btn btn-gold btn-sm" onclick="analyzeDISCWithIA()">IA GUIA ✦ Análise de Carreira</button>
-    <button class="btn btn-outline btn-sm" onclick="renderDISCComparison(currentUser?.email)">📊 Comparar ciclos</button>
-    <button class="btn btn-outline btn-sm" onclick="discRestart()">↺ Refazer assessment</button>
+function loadVFVersion(idx){
+  const history = DB.get('vf_history')||[];
+  if(!history[idx]) return;
+  DB.set('vf', history[idx]);
+  DB.set('vf_tab','edit');
+  toast('Versão carregada — edite e salve para criar nova versão','suc');
+  renderVF();
+}
+
+function deleteVFVersion(idx){
+  showConfirm('Excluir versão','Remover esta versão do histórico?','Excluir',()=>{
+    const history = DB.get('vf_history')||[];
+    history.splice(idx,1);
+    DB.set('vf_history',history);
+    toast('Versão removida','suc');
+    renderVF();
+  });
+}
+
+async function compareVFWithIA(){
+  const history = DB.get('vf_history')||[];
+  const selA = document.getElementById('cmp-a');
+  const selB = document.getElementById('cmp-b');
+  const idxA = selA ? parseInt(selA.value) : history.length-1;
+  const idxB = selB ? parseInt(selB.value) : history.length-2;
+  const vA = history[idxA];
+  const vB = history[idxB];
+  if(!vA||!vB){ toast('Selecione duas versões válidas','err'); return; }
+  showIALoading('vf-compare-ia','Analisando evolução da visão');
+  const prompt = `Compare duas versões da Visão de Futuro do mesmo profissional e identifique a evolução.
+
+VERSÃO MAIS RECENTE (${vA.savedAt||''}):
+Carreira: ${vA.profissional||'—'}
+Impacto: ${vA.contribuicao||'—'}
+Vida: ${vA.vida||'—'}
+Legado: ${vA.legado||'—'}
+Ações: ${vA.acoes||'—'}
+
+VERSÃO ANTERIOR (${vB.savedAt||''}):
+Carreira: ${vB.profissional||'—'}
+Impacto: ${vB.contribuicao||'—'}
+Vida: ${vB.vida||'—'}
+Legado: ${vB.legado||'—'}
+Ações: ${vB.acoes||'—'}
+
+Analise:
+1. O QUE EVOLUIU: Onde a visão ficou mais clara, ambiciosa ou concreta?
+2. O QUE REGREDIU OU SUMIU: O que estava presente antes e desapareceu? Por quê isso importa?
+3. PADRÃO CENTRAL: O que permanece constante nas duas versões? Isso revela o propósito real.
+4. PRÓXIMO NÍVEL: O que a versão mais recente ainda não está captando que deveria?`;
+  const result = await callAI(prompt);
+  showIAResult('vf-compare-ia', result, 'Análise de Evolução da Visão');
+}
+
+function saveVF(){
+  const nova = {
+    profissional: document.getElementById('vf-profissional').value,
+    contribuicao: document.getElementById('vf-contribuicao').value,
+    vida:         document.getElementById('vf-vida').value,
+    legado:       document.getElementById('vf-legado').value,
+    acoes:        document.getElementById('vf-acoes').value,
+    savedAt:      new Date().toLocaleString('pt-BR'),
+  };
+
+  // Save as current
+  DB.set('vf', nova);
+
+  // Append to history
+  const history = DB.get('vf_history') || [];
+  history.push(nova);
+  DB.set('vf_history', history);
+
+  toast('Visão salva! Versão ' + history.length + ' registrada com data.','suc');
+
+  // Refresh tab buttons
+  renderVF();
+}
+
+async function analyzeVFWithIA(){
+  saveVF();
+  const vf = DB.get('vf');
+  if(!vf.profissional&&!vf.contribuicao){ toast('Preencha pelo menos as duas primeiras dimensões','err'); return; }
+  showIALoading('vf-ia-result','Analisando sua visão de futuro');
+  const prompt = `Você é um coach executivo de alto desempenho especializado em transformação de carreiras.
+
+O profissional em mentoria descreveu sua Visão de Futuro para 12 meses:
+
+CARREIRA & POSIÇÃO: ${vf.profissional||'Não preenchido'}
+IMPACTO & CONTRIBUIÇÃO: ${vf.contribuicao||'Não preenchido'}
+VIDA & ENERGIA: ${vf.vida||'Não preenchido'}
+LEGADO & RECONHECIMENTO: ${vf.legado||'Não preenchido'}
+PRIMEIROS PASSOS: ${vf.acoes||'Não preenchido'}
+
+Produza:
+1. LEITURA DA VISÃO: O que essa visão revela sobre as ambições reais e os valores profundos deste profissional (sem julgamento, com curiosidade estratégica)
+2. COERÊNCIA INTERNA: Há contradições ou alinhamentos relevantes entre as dimensões?
+3. O QUE ESTÁ FALTANDO: O que a visão não menciona que provavelmente precisa ser construído?
+4. PLANO DE EXECUÇÃO — 3 HORIZONTES:
+   - 30 dias: 3 ações concretas e imediatas
+   - 90 dias: 2 movimentos estratégicos de médio prazo
+   - 12 meses: 1 marco definitivo de validação da visão
+5. RISCO PRINCIPAL: Qual é o maior obstáculo entre o ponto atual e essa visão?
+
+Seja honesto, provocativo quando necessário, e sempre orientado à ação.`;
+  const result = await callAI(prompt);
+  showIAResult('vf-ia-result', result, 'Análise da Visão de Futuro');
+}
+
+// ══════════════════════════════════════════════
+// IA MAIN
+// ══════════════════════════════════════════════
+function renderIAMain(){
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">IA GUIA ✦ Análise Integrada</div>
+    <div class="page-sub">Diagnóstico completo baseado em todos os instrumentos — DISC + SWOT + Competências + 360° + Visão de Futuro</div>
   </div>
-  <div id="disc-ia-wrap" style="display:none;margin-top:8px;"></div>
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Dados coletados neste ciclo</div>
+    <div class="grid-3" style="margin-bottom:14px;">
+      ${[
+        {label:'DISC',val:discSel||DB.get('disc')?`Perfil ${DB.get('disc')||discSel}`:'Pendente',ok:!!(DB.get('disc'))},
+        {label:'Radar',val:`${DB.get('competencias').length} competências`,ok:true},
+        {label:'SWOT',val:`${Object.values(DB.get('swot')||{}).flat().length} itens`,ok:Object.values(DB.get('swot')||{}).flat().length>0},
+        {label:'360°',val:`${DB.get('peer360').filter(p=>p.done).length} respostas`,ok:DB.get('peer360').filter(p=>p.done).length>0},
+        {label:'Visão',val:DB.get('vf')?.profissional?'Preenchida':'Pendente',ok:!!DB.get('vf')?.profissional},
+        {label:'GROW',val:`${(DB.get('grow_sessions')||[]).length} sessões`,ok:(DB.get('grow_sessions')||[]).length>0},
+      ].map(d=>`<div style="background:var(--bg3);border:1px solid ${d.ok?'var(--green-border)':'var(--border)'};border-radius:var(--radius-sm);padding:10px 14px;">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${d.label}</div>
+        <div style="font-size:12px;font-weight:600;color:${d.ok?'var(--green)':'var(--text3)'}">${d.val}</div>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-gold" onclick="runFullAnalysis()">✦ Gerar análise completa ↗</button>
+      <button class="btn btn-outline" onclick="runQuickInsight()">→ Insight rápido</button>
+    </div>
+  </div>
+  <div id="ia-main-result" style="display:none;"></div>
+  <div class="grid-3" style="margin-top:16px;">
+    <div class="panel">
+      <div class="ai-tag">30 DIAS</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:6px">Mapear 3 stakeholders críticos e agendar conversas estratégicas. Revisar presença LinkedIn com foco em posicionamento de autoridade.</div>
+    </div>
+    <div class="panel">
+      <div class="ai-tag">60 DIAS</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:6px">Liderar um projeto transversal de alta visibilidade. Construir narrativa de carreira para apresentação a board ou comitê executivo.</div>
+    </div>
+    <div class="panel">
+      <div class="ai-tag">90 DIAS</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-top:6px">Solicitar feedback estruturado da liderança sênior. Definir movimentos de carreira para os próximos 18 meses com o mentor.</div>
+    </div>
+  </div>`;
+}
+
+async function runFullAnalysis(){
+  const disc = DB.get('disc');
+  const comps = DB.get('competencias');
+  const swot = DB.get('swot');
+  const peers = DB.get('peer360').filter(p=>p.done);
+  const vf = DB.get('vf');
+  const gaps = comps.filter(c=>c.me<c.mentor).map(c=>c.name).join(', ');
+  const strengths = comps.filter(c=>c.me>=4).map(c=>c.name).join(', ');
+
+  showIALoading('ia-main-result','Processando todos os instrumentos');
+
+  const prompt = `Você é um estrategista sênior de desenvolvimento executivo. Produza um relatório diagnóstico completo baseado em todos os instrumentos de mentoria.
+
+PERFIL DISC: ${disc?`${disc} — ${DISC_DATA[disc]?.name}`:'Não realizado'}
+COMPETÊNCIAS — FORÇAS (≥4): ${strengths||'Não mapeado'}
+COMPETÊNCIAS — GAPS: ${gaps||'Nenhum gap crítico'}
+SWOT — Forças: ${(swot?.f||[]).join(', ')||'Não preenchido'}
+SWOT — Fraquezas: ${(swot?.fr||[]).join(', ')||'Não preenchido'}
+SWOT — Oportunidades: ${(swot?.o||[]).join(', ')||'Não preenchido'}
+SWOT — Ameaças: ${(swot?.a||[]).join(', ')||'Não preenchido'}
+360° — Avaliações: ${peers.length} respondentes
+VISÃO DE FUTURO: ${vf?.profissional||'Não preenchida'}
+
+Produza um relatório executivo estruturado com:
+
+# DIAGNÓSTICO INTEGRADO
+Síntese cruzada de todos os instrumentos — o que o conjunto de dados revela sobre este profissional?
+
+# POSICIONAMENTO ATUAL vs. ASPIRADO
+Onde o profissional está e onde quer chegar. Qual é o delta real?
+
+# ALAVANCAS PRIORITÁRIAS
+As 2-3 intervenções com maior retorno no desenvolvimento deste profissional nas próximas 12 semanas.
+
+# RISCOS E PONTOS CEGOS
+O que os dados sugerem que o profissional não vê sobre si mesmo?
+
+# PLANO DE DESENVOLVIMENTO — 12 SEMANAS
+Semanas 1-4: Ações específicas de fundação
+Semanas 5-8: Ações de aceleração e visibilidade
+Semanas 9-12: Consolidação e preparação para o próximo nível
+
+# MÉTRICA DE SUCESSO
+Como mensurar o progresso ao final do ciclo?
+
+Escreva com precisão clínica e orientação executiva. Evite jargões vazios.`;
+
+  const result = await callAI(prompt);
+  showIAResult('ia-main-result', result, 'Análise Integrada — Relatório Executivo');
+}
+
+async function runQuickInsight(){
+  showIALoading('ia-main-result','Gerando insight rápido');
+  const disc = DB.get('disc');
+  const gaps = DB.get('competencias').filter(c=>c.me<c.mentor).map(c=>c.name).join(', ');
+  const prompt = `Profissional em mentoria. DISC: ${disc||'não definido'}. Gaps de competência: ${gaps||'nenhum'}. Em 5 frases diretas, qual é a ação mais importante que este profissional deve tomar esta semana para avançar sua carreira? Seja específico, sem enrolação.`;
+  const result = await callAI(prompt);
+  showIAResult('ia-main-result', result, 'Insight Rápido');
+}
+
+// ══════════════════════════════════════════════
+// NPS DASHBOARD
+// ══════════════════════════════════════════════
+function renderNPSDash(){
+  const nps = DB.get('nps_history');
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header"><div class="page-title">NPS & Progresso</div><div class="page-sub">Avaliação de sentimento e evolução do ciclo</div></div>
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Como você avalia esta mentoria até agora? (0-10)</div>
+    <div class="nps-row" id="nps-row"></div>
+    <div class="field" style="margin-top:12px;"><label class="field-label">Comentário (opcional)</label><textarea id="nps-comment" rows="2" placeholder="O que está funcionando bem? O que poderia melhorar?"></textarea></div>
+    <button class="btn btn-gold btn-sm" onclick="submitNPS()">Enviar avaliação</button>
+  </div>
+  <div class="panel">
+    <div class="panel-title"><div class="panel-title-dot"></div> Histórico de NPS</div>
+    <div class="chart-wrap" style="height:200px;"><canvas id="nps-line" role="img" aria-label="Evolução do NPS"></canvas></div>
+  </div>`;
+
+  const row = document.getElementById('nps-row');
+  row.innerHTML = [0,1,2,3,4,5,6,7,8,9,10].map(n=>`<div class="nps-num nps-${n}" onclick="selectNPS(${n},this)">${n}</div>`).join('');
+  row.innerHTML += `<span style="font-size:10px;color:var(--text4);margin-left:8px">0 = Não recomendaria · 10 = Recomendaria com certeza</span>`;
+
+  setTimeout(()=>{
+    const ctx = document.getElementById('nps-line');
+    if(ctx) charts.npsLine = new Chart(ctx,{
+      type:'line',
+      data:{labels:nps.map(n=>n.cycle),datasets:[{label:'NPS',data:nps.map(n=>n.score),borderColor:'#f0c040',backgroundColor:'rgba(240,192,64,.08)',pointBackgroundColor:'#f0c040',borderWidth:2,tension:.4,fill:true}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{min:0,max:10,ticks:{color:'#666'},grid:{color:'#1a1a1a'}},x:{ticks:{color:'#888'},grid:{display:false}}}}
+    });
+  },100);
+}
+
+let selectedNPS = null;
+function selectNPS(n, el){
+  selectedNPS = n;
+  document.querySelectorAll('.nps-num').forEach(d=>d.classList.remove('nps-sel'));
+  el.classList.add('nps-sel');
+}
+
+function submitNPS(){
+  if(selectedNPS===null){ toast('Selecione uma nota','err'); return; }
+  toast(`Avaliação ${selectedNPS}/10 registrada. Obrigado!`,'suc');
+  selectedNPS = null;
+  document.querySelectorAll('.nps-num').forEach(d=>d.classList.remove('nps-sel'));
+}
+
+// ══════════════════════════════════════════════
+// MINHA JORNADA (mentorado)
+// ══════════════════════════════════════════════
+// renderMinhaJornada moved to mentor panel
+
+function showIALoading(targetId, msg){
+  const el = document.getElementById(targetId);
+  if(!el) return;
+  el.style.display='block';
+  el.innerHTML = `<div class="ai-panel"><div class="ai-loading"><div class="spinner"></div> ${msg||'Processando com IA'}...</div></div>`;
+}
+
+function showIAResult(targetId, text, title){
+  const el = document.getElementById(targetId);
+  if(!el) return;
+  const paragraphs = text.split(/\n\n+/).filter(p=>p.trim());
+  el.innerHTML = `<div class="ai-panel">
+    <div class="ai-header"><div class="ai-badge">IA ARCALA</div><span style="font-size:11px;color:var(--text3)">${title||''}</span></div>
+    ${paragraphs.map(p=>`<div class="ai-rec">${formatAIText(p)}</div>`).join('')}
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="btn btn-outline btn-xs" onclick="copyAIResult('${targetId}')">Copiar</button>
+      <button class="btn btn-outline btn-xs" onclick="downloadAIResult('${targetId}','${title}')">Exportar .txt</button>
+    </div>
+  </div>`;
+}
+
+function formatAIText(text){
+  return text
+    .replace(/\*\*(.*?)\*\*/g,'<strong style="color:var(--gold)">$1</strong>')
+    .replace(/^#+ (.+)$/gm,'<div style="color:var(--gold);font-weight:700;font-size:13px;margin-bottom:6px">$1</div>')
+    .replace(/\n/g,'<br>');
+}
+
+function copyAIResult(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const text = el.innerText;
+  navigator.clipboard.writeText(text).then(()=>toast('Copiado!','suc')).catch(()=>toast('Erro ao copiar','err'));
+}
+
+function downloadAIResult(id, title){
+  const el = document.getElementById(id);
+  if(!el) return;
+  downloadText(el.innerText, (title||'analise-ia').replace(/\s/g,'-').toLowerCase()+'.txt');
+  toast('Exportado!','suc');
+}
+
+// ══════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════
+function initials(name){
+  return (name||'??').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+}
+
+function today(){
+  return new Date().toISOString().split('T')[0];
+}
+
+function toast(msg, type=''){
+  const t = document.createElement('div');
+  t.className = 'toast'+(type?' '+type:'');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3000);
+}
+
+function downloadText(content, filename){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content],{type:'text/plain'}));
+  a.download = filename;
+  a.click();
+}
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+
+
+// ─── CONFIRM MODAL ───
+let _modalCallback = null;
+function showConfirm(title, msg, confirmLabel, cb, danger=true){
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-msg').textContent = msg;
+  const btn = document.getElementById('modal-confirm-btn');
+  btn.textContent = confirmLabel;
+  btn.className = 'btn btn-sm ' + (danger ? 'btn-red' : 'btn-gold');
+  _modalCallback = cb;
+  document.getElementById('confirm-modal').classList.add('show');
+}
+function modalConfirm(){
+  document.getElementById('confirm-modal').classList.remove('show');
+  if(_modalCallback) _modalCallback();
+  _modalCallback = null;
+}
+function modalCancel(){
+  document.getElementById('confirm-modal').classList.remove('show');
+  _modalCallback = null;
+}
+
+
+// ══════════════════════════════════════════════
+// PROFILE MENU
+// ══════════════════════════════════════════════
+function toggleProfileMenu(){
+  const menu = document.getElementById('profile-menu');
+  const isOpen = menu.classList.contains('open');
+  if(isOpen){ menu.classList.remove('open'); return; }
+  if(currentUser){
+    const av = document.getElementById('pmenu-avatar');
+    if(currentUser.photo) av.innerHTML = '<img src="'+currentUser.photo+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+    else av.textContent = initials(currentUser.name);
+    document.getElementById('pmenu-name').textContent = currentUser.name;
+    document.getElementById('pmenu-email').textContent = currentUser.email;
+    document.getElementById('pmenu-role').textContent = (currentUser.role||'').toUpperCase();
+  }
+  menu.classList.add('open');
+}
+document.addEventListener('click', e=>{
+  const menu = document.getElementById('profile-menu');
+  if(menu && !menu.contains(e.target) && !e.target.closest('[onclick="toggleProfileMenu()"]')){
+    menu.classList.remove('open');
+  }
+});
+
+function openProfilePage(section){
+  document.getElementById('profile-menu').classList.remove('open');
+  showPage('perfil');
+  setTimeout(()=>{ const el = document.getElementById('perfil-'+section); if(el) el.scrollIntoView({behavior:'smooth'}); }, 200);
+}
+
+function renderPerfil(){
+  if(!currentUser){ return; }
+  const u = currentUser;
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Meu Perfil</div>
+    <div class="page-sub">Gerencie suas informações, senha e preferências de conta</div>
+  </div>
+
+  <div class="grid-2">
+    <!-- COLUNA ESQUERDA -->
+    <div>
+      <!-- FOTO -->
+      <div class="panel" id="perfil-photo" style="margin-bottom:16px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Foto de perfil</div>
+        <div style="display:flex;align-items:center;gap:16px;">
+          <div id="perfil-avatar-preview" style="width:72px;height:72px;border-radius:50%;background:var(--gold-bg);border:2px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;font-family:var(--font-mono);overflow:hidden;flex-shrink:0;">
+            ${u.photo ? '<img src="'+u.photo+'" style="width:100%;height:100%;object-fit:cover;">' : initials(u.name)}
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">Cole a URL de uma imagem ou faça upload via link externo (ex: Google Drive, Imgur).</div>
+            <div class="field" style="margin-bottom:8px;"><label class="field-label">URL da foto</label><input type="url" class="form-input" id="photo-url" placeholder="https://..." value="${u.photo||''}"></div>
+            <button class="btn btn-gold btn-sm" onclick="savePhoto()">Salvar foto</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOME -->
+      <div class="panel" id="perfil-name" style="margin-bottom:16px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Nome</div>
+        <div class="field"><label class="field-label">Nome completo</label><input type="text" class="form-input" id="edit-name" value="${u.name||''}"></div>
+        <button class="btn btn-gold btn-sm" onclick="saveName()">Salvar nome</button>
+      </div>
+
+      <!-- EMAIL -->
+      <div class="panel" id="perfil-email" style="margin-bottom:16px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> E-mail</div>
+        <div class="field"><label class="field-label">Novo e-mail</label><input type="email" class="form-input" id="edit-email" value="${u.email||''}"></div>
+        <div class="field"><label class="field-label">Confirme sua senha atual</label><input type="password" class="form-input" id="email-pass" placeholder="••••••••"></div>
+        <button class="btn btn-gold btn-sm" onclick="saveEmail()">Salvar e-mail</button>
+      </div>
+    </div>
+
+    <!-- COLUNA DIREITA -->
+    <div>
+      <!-- SENHA -->
+      <div class="panel" id="perfil-password" style="margin-bottom:16px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Alterar senha</div>
+        <div class="field"><label class="field-label">Senha atual</label><input type="password" class="form-input" id="pass-current" placeholder="••••••••"></div>
+        <div class="field"><label class="field-label">Nova senha</label><input type="password" class="form-input" id="pass-new" placeholder="Mínimo 6 caracteres"></div>
+        <div class="field"><label class="field-label">Confirmar nova senha</label><input type="password" class="form-input" id="pass-confirm" placeholder="Repita a nova senha"></div>
+        <button class="btn btn-gold btn-sm" onclick="savePassword()">Alterar senha</button>
+        <div id="pass-msg" style="font-size:11px;margin-top:8px;display:none;"></div>
+      </div>
+
+      <!-- PLANO -->
+      <div class="panel" id="perfil-plan">
+        <div class="panel-title"><div class="panel-title-dot"></div> Plano atual & solicitação de mudança</div>
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">PLANO ATUAL</div>
+          <div style="font-size:13px;font-weight:600;color:var(--gold)">${u.plan||'Não informado'}</div>
+        </div>
+        <div class="field"><label class="field-label">Solicitar mudança para</label>
+          <select class="form-select" id="plan-new">
+            <option>Ciclo único — 12 semanas</option>
+            <option>Renovável trimestral</option>
+            <option>Acesso institucional</option>
+          </select>
+        </div>
+        <div class="field"><label class="field-label">Motivo / observação</label>
+          <textarea class="form-input" id="plan-obs" rows="2" placeholder="Explique brevemente o motivo da solicitação..."></textarea>
+        </div>
+        <button class="btn btn-gold btn-sm" onclick="requestPlan()">Enviar solicitação ao admin</button>
+        <div id="plan-msg" style="font-size:11px;margin-top:8px;display:none;"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function savePhoto(){
+  const url = document.getElementById('photo-url').value.trim();
+  currentUser.photo = url;
+  updateCurrentUser({photo: url});
+  updateTopbar();
+  const av = document.getElementById('perfil-avatar-preview');
+  if(av) av.innerHTML = url ? '<img src="'+url+'" style="width:100%;height:100%;object-fit:cover;">' : initials(currentUser.name);
+  toast('Foto atualizada!','suc');
+}
+
+async function saveName(){
+  const name = document.getElementById('edit-name').value.trim();
+  if(!name){ toast('Informe um nome','err'); return; }
+  currentUser.name = name;
+  updateCurrentUser({name});
+  updateTopbar();
+  toast('Nome atualizado!','suc');
+}
+
+async function saveEmail(){
+  const email = document.getElementById('edit-email').value.trim();
+  const pass  = document.getElementById('email-pass').value;
+  if(!email){ toast('Informe um e-mail','err'); return; }
+  if(currentUser.password && btoa(pass) !== currentUser.password){ toast('Senha incorreta','err'); return; }
+  currentUser.email = email;
+  updateCurrentUser({email});
+  DB.set('session', {...DB.get('session'), email});
+  toast('E-mail atualizado!','suc');
+}
+
+async function savePassword(){
+  const curr    = document.getElementById('pass-current').value;
+  const newPass = document.getElementById('pass-new').value;
+  const confirm = document.getElementById('pass-confirm').value;
+  const msg = document.getElementById('pass-msg');
+  msg.style.display='none';
+  if(currentUser.password && btoa(curr) !== currentUser.password){
+    msg.textContent='Senha atual incorreta.'; msg.style.color='var(--red)'; msg.style.display='block'; return;
+  }
+  if(newPass.length < 6){
+    msg.textContent='A nova senha deve ter no mínimo 6 caracteres.'; msg.style.color='var(--red)'; msg.style.display='block'; return;
+  }
+  if(newPass !== confirm){
+    msg.textContent='As senhas não coincidem.'; msg.style.color='var(--red)'; msg.style.display='block'; return;
+  }
+  currentUser.password = btoa(newPass);
+  updateCurrentUser({password: btoa(newPass)});
+  msg.textContent='Senha alterada com sucesso!'; msg.style.color='var(--green)'; msg.style.display='block';
+  document.getElementById('pass-current').value='';
+  document.getElementById('pass-new').value='';
+  document.getElementById('pass-confirm').value='';
+}
+
+async function requestPlan(){
+  const plan = document.getElementById('plan-new').value;
+  const obs  = document.getElementById('plan-obs').value.trim();
+  const msg  = document.getElementById('plan-msg');
+  try {
+    await sbFetch('registrations', 'POST', {
+      id: 'plan-'+Date.now(),
+      name: currentUser.name,
+      email: currentUser.email,
+      role: currentUser.role,
+      plan: plan,
+      goal: 'Solicitação de mudança de plano: '+obs,
+      status: 'pending'
+    });
+  } catch(e){}
+  msg.textContent='Solicitação enviada! O administrador será notificado.';
+  msg.style.color='var(--green)'; msg.style.display='block';
+  toast('Solicitação enviada ao admin!','suc');
+}
+
+function updateCurrentUser(fields){
+  // Update localStorage
+  const users = DB.get('users')||[];
+  const idx = users.findIndex(u=>u.id===currentUser.id);
+  if(idx>=0){ users[idx]={...users[idx],...fields}; DB.set('users',users); }
+  // Update Supabase async (fire and forget)
+  sbFetch('users?id=eq.'+currentUser.id, 'PATCH', fields).catch(()=>{});
+}
+
+
+// ══════════════════════════════════════════════
+// INÍCIO DO CICLO — Fase G
+// ══════════════════════════════════════════════
+function closeCycleFromG(cycleId){
+  showConfirm('Encerrar ciclo','Encerrar este ciclo? Ele ficará no histórico.','Encerrar',async()=>{
+    const email = currentUser?.email;
+    const cycles = DB.get('cycles_'+email)||[];
+    const c = cycles.find(x=>x.id===cycleId);
+    if(c){ c.status='closed'; DB.set('cycles_'+email,cycles); }
+    await sbFetch('cycles?id=eq.'+cycleId,'PATCH',{status:'closed'}).catch(()=>{});
+    if(DB.get('current_cycle_id')===cycleId) DB.set('current_cycle_id',null);
+    toast('Ciclo encerrado','suc');
+    renderInicioCiclo();
+  });
+}
+
+function deleteCycleFromG(cycleId, name){
+  showConfirm('Apagar ciclo','Apagar "'+name+'"? Esta ação não pode ser desfeita.','Apagar',async()=>{
+    const email = currentUser?.email;
+    const cycles = (DB.get('cycles_'+email)||[]).filter(c=>c.id!==cycleId);
+    DB.set('cycles_'+email, cycles);
+    await sbFetch('cycles?id=eq.'+cycleId,'DELETE').catch(()=>{});
+    if(DB.get('current_cycle_id')===cycleId) DB.set('current_cycle_id',null);
+    toast('Ciclo apagado','suc');
+    renderInicioCiclo();
+  });
+}
+
+
+async function createCycleFromG(){
+  const name  = document.getElementById('new-cycle-name-g')?.value.trim();
+  const start = document.getElementById('new-cycle-start-g')?.value;
+  const end   = document.getElementById('new-cycle-end-g')?.value;
+  if(!name){ toast('Informe o nome do ciclo','err'); return; }
+  if(!currentUser){ toast('Faça login primeiro','err'); return; }
+
+  const radars = DB.get('comp_radars')||[];
+  const activeRadar = radars.find(r=>r.id===DB.get('comp_active_radar'))||radars[0];
+  const cycle = {
+    id:'cyc'+Date.now(), mentee_email:currentUser.email, name,
+    status:'active', started_at:start||today(), ends_at:end||'',
+    competencias:activeRadar?.competencias||[], questions_360:[],
+    frozen_at:null, frozen_by:null, created_at:new Date().toISOString()
+  };
+  await saveCycle(cycle);
+  DB.set('current_cycle_id', cycle.id);
+  const existing = DB.get('cycles_'+currentUser.email)||[];
+  existing.unshift(cycle);
+  DB.set('cycles_'+currentUser.email, existing);
+  toast('Ciclo "'+name+'" criado!','suc');
+  renderInicioCiclo();
+}
+
+
+async function renderInicioCiclo(){
+  document.getElementById('content-area').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;"><div style="text-align:center;"><div style="width:24px;height:24px;border:2px solid var(--gold);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;margin:0 auto 12px;"></div><div style="font-size:12px;color:var(--text3);">Carregando...</div></div></div>';
+
+  const menteeEmail = currentUser?.email || '';
+  const cycles      = menteeEmail ? await loadCycles(menteeEmail) : [];
+  const cycleId     = getCurrentCycleId() || cycles.find(c=>c.status==='active')?.id;
+  const cycle       = cycles.find(c=>c.id===cycleId) || null;
+  const data        = cycle ? (DB.get('inicio_ciclo_'+cycle.id) || DB.get('inicio_ciclo') || {}) : {};
+  const sigs        = cycle ? getAcordoSignatures(cycle.id) : {};
+
+  document.getElementById('content-area').innerHTML = `
+  <div class="page-header">
+    <div class="page-title">Gestar Acordo <span style="font-size:14px;font-weight:400;color:var(--text3);">— Fase G</span></div>
+    <div class="page-sub">Semana 1 · Alinhe escopo, metas e papéis antes de iniciar a jornada</div>
+  </div>
+
+  <!-- ── CYCLE MANAGER ──────────────────────────────────────── -->
+  <div class="panel" style="margin-bottom:20px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Ciclo de Mentoria</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">O ciclo vincula todos os instrumentos da Fase U. Você pode ter um ciclo ativo por vez.</div>
+
+    <!-- Existing cycles -->
+    ${cycles.length ? `
+    <div style="margin-bottom:16px;">
+      ${cycles.map(c=>{
+        const cSigs = getAcordoSignatures(c.id);
+        const isActive = c.id === cycleId;
+        const signed = cSigs.mentee && cSigs.mentor;
+        return `
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:var(--radius-sm);border:1px solid ${isActive?'var(--gold-border)':'var(--border)'};background:${isActive?'rgba(240,192,64,.04)':'var(--glass-bg)'};margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:600;color:${isActive?'var(--gold)':'var(--text)'};">${c.name}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px;">${c.started_at||'—'} → ${c.ends_at||'—'} · <span style="color:${c.status==='active'?'var(--green)':'var(--text4)'};">${c.status==='active'?'Ativo':'Encerrado'}</span>${signed?' · <span style="color:var(--green);">✓ Termo assinado</span>':cSigs.mentee?' · <span style="color:var(--amber);">Aguarda assinatura do mentor</span>':''}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            ${!isActive ? `<button class="btn btn-outline btn-xs" onclick="DB.set('current_cycle_id','${c.id}');renderInicioCiclo()">Selecionar</button>` : '<span style="font-size:10px;font-weight:700;color:var(--gold);padding:3px 8px;border:1px solid var(--gold-border);border-radius:20px;">ATIVO</span>'}
+            ${c.status==='active' ? `<button class="btn btn-outline btn-xs" onclick="closeCycleFromG('${c.id}')">Encerrar</button>` : ''}
+            <button class="btn btn-xs" style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);" onclick="deleteCycleFromG('${c.id}','${c.name}')">Apagar</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+
+    <!-- Create new cycle -->
+    <div style="padding:14px;border:1px dashed var(--border2);border-radius:var(--radius-sm);background:rgba(255,255,255,.02);">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.07em;margin-bottom:12px;">CRIAR NOVO CICLO</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="flex:2;min-width:160px;">
+          <label class="field-label">Nome do ciclo</label>
+          <input class="form-input" id="new-cycle-name" placeholder="Ex: Ciclo 1 — Q2 2026" style="font-size:12px;">
+        </div>
+        <div style="flex:1;min-width:120px;">
+          <label class="field-label">Início</label>
+          <input class="form-input" type="date" id="new-cycle-start" value="${today()}" style="font-size:12px;">
+        </div>
+        <div style="flex:1;min-width:120px;">
+          <label class="field-label">Término previsto</label>
+          <input class="form-input" type="date" id="new-cycle-end" style="font-size:12px;">
+        </div>
+      </div>
+      <button class="btn btn-gold btn-sm" style="margin-top:12px;" onclick="createCycleFromG()">+ Criar ciclo</button>
+    </div>
+  </div>
+
+  ${cycle ? `
+  <!-- ── ACORDO CONTENT ─────────────────────────────────────── -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+    <div style="font-size:14px;font-weight:600;color:var(--text);">Conteúdo do Acordo — <span style="color:var(--gold);">${cycle.name}</span></div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-outline btn-sm" onclick="saveInicioCiclo()">💾 Salvar</button>
+      <button class="btn btn-gold btn-sm" onclick="signAcordo('${cycle.id}','mentee')">✍ Assinar o termo</button>
+    </div>
+  </div>
+
+  <!-- Signature status -->
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:160px;padding:12px 16px;border-radius:var(--radius-sm);border:1px solid ${sigs.mentee?'var(--green-border)':'var(--gold-border)'};">
+      <div style="font-size:10px;font-weight:700;color:var(--text4);margin-bottom:6px;">MENTORADO</div>
+      ${sigs.mentee
+        ? `<div style="font-size:12px;color:var(--green);">✓ ${sigs.mentee.name}</div><div style="font-size:10px;color:var(--text4);">${sigs.mentee.date}</div>`
+        : `<div style="font-size:12px;color:var(--amber);">Aguardando sua assinatura</div>`}
+    </div>
+    <div style="flex:1;min-width:160px;padding:12px 16px;border-radius:var(--radius-sm);border:1px solid ${sigs.mentor?'var(--green-border)':'var(--border)'};">
+      <div style="font-size:10px;font-weight:700;color:var(--text4);margin-bottom:6px;">MENTOR</div>
+      ${sigs.mentor
+        ? `<div style="font-size:12px;color:var(--green);">✓ ${sigs.mentor.name}</div><div style="font-size:10px;color:var(--text4);">${sigs.mentor.date}</div>`
+        : `<div style="font-size:12px;color:var(--text4);">Aguardando assinatura do mentor</div>`}
+    </div>
+    ${sigs.mentee && sigs.mentor
+      ? `<div style="flex:1;min-width:160px;padding:12px 16px;border-radius:var(--radius-sm);border:1px solid var(--green-border);background:var(--green-bg);display:flex;align-items:center;gap:8px;">
+          <div style="font-size:20px;">✓</div>
+          <div style="font-size:12px;font-weight:600;color:var(--green);">Termo assinado por ambas as partes</div>
+         </div>`
+      : ''}
+  </div>
+
+  <!-- Form fields -->
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Escopo do Ciclo</div>
+      <div class="field">
+        <label class="field-label">Objetivo central do ciclo</label>
+        <textarea class="form-input" id="ic-objetivo" rows="3" placeholder="O que você quer alcançar ao final das 12 semanas?">${data.objetivo||''}</textarea>
+      </div>
+      <div class="field">
+        <label class="field-label">Área de foco principal</label>
+        <input class="form-input" id="ic-foco" value="${data.foco||''}" placeholder="Ex: Liderança, Carreira executiva, Transição de área...">
+      </div>
+      <div class="field">
+        <label class="field-label">Contexto atual (cargo, empresa, momento)</label>
+        <textarea class="form-input" id="ic-contexto" rows="2" placeholder="Descreva brevemente seu momento profissional atual">${data.contexto||''}</textarea>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Metas e Expectativas</div>
+      <div class="field">
+        <label class="field-label">3 resultados concretos esperados</label>
+        <textarea class="form-input" id="ic-metas" rows="3" placeholder="1. ...
+2. ...
+3. ...">${data.metas||''}</textarea>
+      </div>
+      <div class="field">
+        <label class="field-label">Como o sucesso será medido?</label>
+        <input class="form-input" id="ic-sucesso" value="${data.sucesso||''}" placeholder="Indicadores, entregas, mudanças observáveis...">
+      </div>
+      <div class="field">
+        <label class="field-label">Maior desafio percebido</label>
+        <input class="form-input" id="ic-desafio" value="${data.desafio||''}" placeholder="O que pode dificultar o processo?">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Papéis e Responsabilidades</div>
+    <div class="grid-2">
+      <div>
+        <label class="field-label">Compromissos do mentorado</label>
+        <textarea class="form-input" id="ic-comp-mentee" rows="3" placeholder="O que você se compromete a fazer entre as sessões?">${data.comp_mentee||''}</textarea>
+      </div>
+      <div>
+        <label class="field-label">Compromissos do mentor</label>
+        <textarea class="form-input" id="ic-comp-mentor" rows="3" placeholder="O que o mentor se compromete a oferecer?">${data.comp_mentor||''}</textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Formato das Sessões</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+      <div class="field" style="flex:1;min-width:140px;">
+        <label class="field-label">Frequência</label>
+        <select class="form-select" id="ic-freq">
+          ${['Semanal','Quinzenal','Mensal'].map(f=>`<option ${(data.freq||'Semanal')===f?'selected':''}>${f}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="flex:1;min-width:140px;">
+        <label class="field-label">Duração</label>
+        <select class="form-select" id="ic-dur">
+          ${['50 minutos','60 minutos','90 minutos'].map(d=>`<option ${(data.dur||'50 minutos')===d?'selected':''}>${d}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="flex:1;min-width:140px;">
+        <label class="field-label">Canal</label>
+        <select class="form-select" id="ic-canal">
+          ${['Google Meet','Zoom','Teams','Presencial'].map(c=>`<option ${(data.canal||'Google Meet')===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <button class="btn btn-gold" onclick="saveInicioCiclo()">💾 Salvar acordo</button>
+    <button class="btn btn-outline" onclick="signAcordo('${cycle.id}','mentee')">✍ Assinar o termo</button>
+    <button class="btn btn-outline" onclick="generateIAGuiaPlan()">IA GUIA ✦ Plano de Ciclo</button>
+    ${sigs.mentee && sigs.mentor ? `<button class="btn btn-outline btn-sm" onclick="createAditivo('${cycle.id}')">+ Aditivo</button>` : ''}
+  </div>
+  <div id="ic-ia-result" style="display:none;margin-top:16px;"></div>
+  ` : `
+  <!-- No cycle selected -->
+  <div class="panel" style="text-align:center;padding:32px;">
+    <div style="font-size:13px;color:var(--text3);">Crie ou selecione um ciclo acima para preencher o acordo de mentoria.</div>
+  </div>`}
   `;
 }
 

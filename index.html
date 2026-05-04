@@ -704,7 +704,7 @@ tr:hover td{ background:var(--glass-hover); }
 <div class="admin-bar" id="admin-bar">⬡ MODO ADMINISTRADOR — Gestão de usuários e acessos</div>
 
 <!-- TOPBAR -->
-<div class="topbar">
+<div class="topbar" id="main-topbar" style="display:none;">
   <div class="logo">
     <span style="font-family:'Sacramento',cursive;font-size:15px;color:rgba(215,215,215,0.88);line-height:1.2;display:inline-flex;flex-direction:column;letter-spacing:0.02em">
       <span style="font-size:12px;padding-left:6px">AI</span>
@@ -750,7 +750,7 @@ tr:hover td{ background:var(--glass-hover); }
 </div>
 
 <!-- LAYOUT -->
-<div class="layout">
+<div class="layout" id="main-layout" style="display:none;">
   <div class="sidebar" id="sidebar"></div>
   <div class="content" id="content-area"></div>
 </div>
@@ -1012,9 +1012,11 @@ function bootApp(user){
   const authEl = document.getElementById('auth-screen');
   if(authEl) authEl.style.display='none';
 
-  // Show main
-  const mainEl = document.getElementById('main-wrap');
-  if(mainEl) mainEl.style.display='flex';
+  // Show main layout elements
+  const topbar = document.getElementById('main-topbar') || document.querySelector('.topbar');
+  const layout = document.getElementById('main-layout') || document.querySelector('.layout');
+  if(topbar) topbar.style.display='flex';
+  if(layout) layout.style.display='flex';
 
   // Update topbar
   updateTopbar();
@@ -1056,8 +1058,10 @@ function doLogout(){
   currentUser=null; currentRole=null;
   const authEl=document.getElementById('auth-screen');
   if(authEl) authEl.style.display='flex';
-  const mainEl=document.getElementById('main-wrap');
-  if(mainEl) mainEl.style.display='none';
+  const topbar2 = document.getElementById('main-topbar') || document.querySelector('.topbar');
+  const layout2 = document.getElementById('main-layout') || document.querySelector('.layout');
+  if(topbar2) topbar2.style.display='none';
+  if(layout2) layout2.style.display='none';
 }
 
 function updateTopbar(){

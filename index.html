@@ -2032,18 +2032,40 @@ function addCompFromSelect(){
 
 function addCompByName(name){
   if(!name) return;
-  const radars = DB.get('comp_radars')||[];
   const activeId = DB.get('comp_active_radar');
+  const menteeEmail = currentUser?.email;
+
+  // ── Cycle-first: a UI lê do ciclo, então gravamos no ciclo ──
+  if(menteeEmail && activeId){
+    const cycles = DB.get('cycles_'+menteeEmail)||[];
+    const cycle = cycles.find(c=>c.id===activeId);
+    if(cycle){
+      if(cycle.frozen_at){ toast('Competências congeladas — encerre o ciclo para editar','err'); return; }
+      if(!cycle.competencias) cycle.competencias = [];
+      if(cycle.competencias.length>=7){ toast('Limite de 7 competências atingido','err'); return; }
+      if(cycle.competencias.find(c=>c.name===name)){ toast('Competência já adicionada','err'); return; }
+      cycle.competencias.push({name,me:3,mentor:3});
+      DB.set('cycles_'+menteeEmail, cycles);
+      sbFetch('cycles?id=eq.'+activeId,'PATCH',{competencias:cycle.competencias}).catch(()=>{});
+      renderCompEdit(currentRole==='mentor', activeId, cycle);
+      renderCompList();
+      setTimeout(initRadarChart, 150);
+      toast(name+' adicionada','suc');
+      return;
+    }
+  }
+
+  // ── Fallback: legacy comp_radars ──
+  const radars = DB.get('comp_radars')||[];
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   if(!radar) return;
   if(radar.competencias.length>=7){ toast('Limite de 7 competências atingido','err'); return; }
   if(radar.competencias.find(c=>c.name===name)){ toast('Competência já adicionada','err'); return; }
   radar.competencias.push({name,me:3,mentor:3});
   DB.set('comp_radars', radars);
-  // Re-render full edit panel so select refreshes with remaining options
   renderCompEdit(currentRole==='mentor', activeId);
+  renderCompList();
   setTimeout(initRadarChart, 150);
-  updateRadarChart();
   toast(name+' adicionada','suc');
 }
 
@@ -2056,14 +2078,35 @@ function addComp(){
 }
 
 function removeComp(ci){
-  const radars = DB.get('comp_radars')||[];
   const activeId = DB.get('comp_active_radar');
+  const menteeEmail = currentUser?.email;
+
+  // ── Cycle-first ──
+  if(menteeEmail && activeId){
+    const cycles = DB.get('cycles_'+menteeEmail)||[];
+    const cycle = cycles.find(c=>c.id===activeId);
+    if(cycle && cycle.competencias){
+      if(cycle.frozen_at){ toast('Competências congeladas — não é possível remover','err'); return; }
+      cycle.competencias.splice(ci,1);
+      DB.set('cycles_'+menteeEmail, cycles);
+      sbFetch('cycles?id=eq.'+activeId,'PATCH',{competencias:cycle.competencias}).catch(()=>{});
+      renderCompEdit(currentRole==='mentor', activeId, cycle);
+      renderCompList();
+      setTimeout(initRadarChart, 150);
+      toast('Competência removida','suc');
+      return;
+    }
+  }
+
+  // ── Fallback: legacy ──
+  const radars = DB.get('comp_radars')||[];
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   if(!radar) return;
   radar.competencias.splice(ci,1);
   DB.set('comp_radars', radars);
+  renderCompEdit(currentRole==='mentor', activeId);
   renderCompList();
-  updateRadarChart();
+  setTimeout(initRadarChart, 150);
   toast('Competência removida','suc');
 }
 
@@ -2803,6 +2846,72 @@ const PEER_QUESTIONS = [
 // ══════════════════════════════════════════════
 // PEER 360° V2 — Cycle-aware with AI questions
 // ══════════════════════════════════════════════
+
+async function analyze360WithIA(){
+  if(!currentUser) return;
+  const menteeEmail = currentUser.email;
+  const cycles = DB.get('cycles_'+menteeEmail)||[];
+  const cycleId = getCurrentCycleId() || cycles.find(c=>c.status==='active')?.id;
+  const cycle = cycles.find(c=>c.id===cycleId);
+  const peers = (DB.get('peer360')||[]).filter(p=>p.done && p.respostas);
+  if(!peers.length){ toast('Nenhuma resposta 360° recebida ainda','err'); return; }
+
+  const el = document.getElementById('peer360-ia');
+  if(el) el.style.display='block';
+  showIALoading('peer360-ia','Cruzando 360°, autoavaliação e objetivos do ciclo');
+
+  const comps = cycle?.competencias||[];
+  const questions = cycle?.questions_360||[];
+  const acordo = DB.get('inicio_ciclo_'+cycleId) || DB.get('inicio_ciclo') || {};
+  const mapa = DB.get('mapa_obj_'+cycleId) || DB.get('mapa_obj') || {};
+  const objetivos = Object.entries(mapa).map(([persp,rows])=>
+    (Array.isArray(rows)?rows:[]).filter(r=>r&&r.objetivo).map(r=>'['+persp+'] '+r.objetivo).join('\n')
+  ).filter(Boolean).join('\n');
+
+  // Aggregate scores per question
+  const labels = ['','Nunca','Raramente','Frequentemente','Sempre'];
+  let qIdx = 0;
+  const aggregated = [];
+  questions.forEach(qb=>{
+    (qb.situacoes||[]).forEach(s=>{
+      const vals = peers.map(p=>p.respostas?.[qIdx]).filter(v=>v!=null);
+      const avg = vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length) : null;
+      if(avg!=null) aggregated.push('"'+s.texto+'" → média '+avg.toFixed(1)+'/4 ('+labels[Math.round(avg)]+') [competência: '+qb.competencia+']');
+      qIdx++;
+    });
+  });
+  const obsTexts = peers.map(p=>p.obs).filter(Boolean).map(o=>'- "'+o+'"').join('\n');
+
+  const prompt = `Você é um psicólogo organizacional sênior analisando um Feedback 360° dentro de um ciclo de mentoria executiva (Metodologia GUIA).
+
+CONTEXTO DO MENTORADO:
+Objetivo do ciclo: ${acordo.objetivo||'—'}
+Foco: ${acordo.foco||'—'}
+Contexto profissional: ${acordo.contexto||'—'}
+Objetivos estratégicos de carreira:
+${objetivos||'—'}
+
+COMPETÊNCIAS DO CICLO (autoavaliação vs mentor, escala 1-5):
+${comps.map(c=>`${c.name}: auto=${c.me||'—'}, mentor=${c.mentor||'—'}`).join('\n')||'—'}
+
+RESPOSTAS 360° AGREGADAS (${peers.length} avaliadores, escala 1-4):
+${aggregated.join('\n')||'—'}
+
+OBSERVAÇÕES QUALITATIVAS DOS AVALIADORES:
+${obsTexts||'Nenhuma'}
+
+Produza uma análise integrada com:
+1. PONTOS FORTES CONFIRMADOS — onde 360°, autoavaliação e mentor convergem positivamente, e como alavancá-los para os objetivos de carreira declarados.
+2. PONTOS CEGOS — onde a autoavaliação diverge da percepção dos avaliadores (para mais ou para menos). Seja específico.
+3. FRAQUEZAS CRÍTICAS PARA A TRAJETÓRIA — gaps que mais ameaçam os objetivos de carreira do ciclo, em ordem de prioridade.
+4. RECOMENDAÇÃO DE FOCO — as 2 competências que merecem o microplano da Fase I, com justificativa ligada aos objetivos.
+5. PERGUNTA PARA A PRÓXIMA SESSÃO — a pergunta mais poderosa que o mentor deveria fazer com base nesses dados.
+
+Seja direto, específico ao contexto e orientado à ação.`;
+
+  const result = await callAI(prompt);
+  if(result) showIAResult('peer360-ia', result, 'IA GUIA ✦ Análise Integrada 360°');
+}
 
 async function renderPeer360(){
   document.getElementById('content-area').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;"><div style="text-align:center;"><div style="width:24px;height:24px;border:2px solid var(--gold);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;margin:0 auto 12px;"></div><div style="font-size:12px;color:var(--text3);">Carregando...</div></div></div>';

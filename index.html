@@ -1859,14 +1859,14 @@ function renderCompEdit(isMentor, activeId, activeCycle){
     : `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
         <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:10px;">ADICIONAR COMPETÊNCIA AO CICLO</div>
         <div style="display:flex;gap:6px;margin-bottom:8px;">
-          <select id="comp-sel" class="form-select" style="flex:1;font-size:12px;">
+          <select id="comp-sel" class="form-select" style="flex:1;font-size:12px;" onchange="if(this.value)addCompFromSelect()">
             <option value="">Selecione do banco de competências...</option>
             ${selOpts}
           </select>
           <button class="btn btn-outline btn-sm" onclick="addCompFromSelect()">+ Banco</button>
         </div>
         <div style="display:flex;gap:6px;">
-          <input class="form-input" id="new-comp" placeholder="Ou cadastre uma competência personalizada..." style="flex:1;font-size:12px;">
+          <input class="form-input" id="new-comp" placeholder="Ou cadastre uma competência personalizada..." style="flex:1;font-size:12px;" onkeydown="if(event.key==='Enter')addComp()">
           <button class="btn btn-gold btn-sm" onclick="addComp()">+ Cadastrar</button>
         </div>
       </div>`;
@@ -6845,7 +6845,7 @@ function renderMinhaJornada(){
     <div class="page-title">Minha Jornada</div>
     <div class="page-sub">Acompanhe seu progresso nas 4 fases da metodologia GUIA</div>
   </div>
-  <!-- checkpoint slot filled after render -->
+  <div id="checkpoint-slot"></div>
 
   <!-- Phase progress overview -->
   <div class="grid-2" style="margin-bottom:20px;">

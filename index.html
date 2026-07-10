@@ -796,6 +796,10 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <button class="role-btn active" onclick="switchRole('mentor')" id="rb-mentor">Mentor</button>
     <button class="role-btn" onclick="switchRole('mentorado')" id="rb-mentorado">Mentorado</button>
   </div>
+  <div style="position:relative;margin-right:6px;">
+    <button onclick="toggleNotifPanel()" style="background:none;border:1px solid var(--border);border-radius:50%;width:32px;height:32px;cursor:pointer;color:var(--text2);font-size:14px;position:relative;" title="Notificações">◔<span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;border-radius:7px;align-items:center;justify-content:center;padding:0 3px;">0</span></button>
+    <div id="notif-panel" style="display:none;position:absolute;top:40px;right:0;width:340px;max-height:420px;overflow-y:auto;background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:300;"></div>
+  </div>
   <div class="user-info">
     <div onclick="toggleProfileMenu()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;border-radius:20px;transition:background .15s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'">
       <div class="avatar-xs" id="top-av">AI</div>
@@ -994,6 +998,170 @@ function updatePendingBadge(){
       }
     }
   });
+}
+
+
+// ══════════════════════════════════════════════
+// CENTRAL DE NOTIFICAÇÕES — computadas dos dados compartilhados
+// ══════════════════════════════════════════════
+
+async function computeNotifications(){
+  if(!currentUser) return [];
+  const notifs = [];
+  const email = currentUser.email;
+  const role  = currentUser.role;
+  const push = (ts, icon, title, body, page) => { const t = ts?(Date.parse(ts)||Date.now()):Date.now(); notifs.push({ts:t, icon, title, body, page}); };
+
+  try {
+    if(role === 'mentorado'){
+      const cycles = DB.get('cycles_'+email)||[];
+      cycles.forEach(cy=>{
+        const sigs = DB.get('acordo_sigs_'+cy.id) || cy.signatures || {};
+        if(sigs.mentor) push(sigs.mentor.date, '✍', 'Mentor assinou o termo', 'O acordo do ciclo "'+cy.name+'" está completo.', 'inicio-ciclo');
+        if(cy.ends_at && cy.status==='active'){
+          const days = Math.ceil((new Date(cy.ends_at)-new Date())/(24*60*60*1000));
+          if(days>0 && days<=14) push(null, '⏳', 'Ciclo termina em '+days+' dia(s)', 'Finalize os instrumentos pendentes de "'+cy.name+'".', 'minha-jornada');
+        }
+      });
+      const rel = getPhaseReleases(currentUser.id)||{};
+      Object.entries(rel).forEach(([ph,v])=>{ if(v) push(v.date||null, '◈', 'Fase '+ph+' liberada', 'Seu mentor liberou a fase '+ph+'.', 'minha-jornada'); });
+      (DB.get('peer360')||[]).filter(p=>p.done).forEach(p=> push(p.respondedAt||p.sentAt, '◷', 'Resposta 360° recebida', p.avaliador+' respondeu sua avaliação.', 'peer360'));
+      const checks = getCheckpoints(email);
+      const last = checks[0] ? new Date(checks[0].date).getTime() : 0;
+      if(Date.now()-last > 7*24*60*60*1000) push(null, '◉', 'Checkpoint semanal pendente', 'Registre sua semana em 60 segundos.', 'minha-jornada');
+    }
+
+    if(role === 'mentor' || role === 'admin'){
+      const users = DB.get('users')||[];
+      const mentees = users.filter(u=>u.role==='mentorado' && (role==='admin' || u.mentor_id===currentUser.id || u.mentor===currentUser.id));
+      for(const m of mentees){
+        const cycles = DB.get('cycles_'+m.email)||[];
+        cycles.forEach(cy=>{
+          const sigs = DB.get('acordo_sigs_'+cy.id) || cy.signatures || {};
+          if(sigs.mentee && !sigs.mentor) push(sigs.mentee.date, '✍', m.name+' assinou o termo', 'Sua assinatura está pendente no ciclo "'+cy.name+'".', 'dash');
+          if(cy.frozen_at) push(cy.frozen_at, '🔒', m.name+' congelou competências', 'Perguntas 360° geradas.', 'dash');
+        });
+        const checks = getCheckpoints(m.email);
+        if(checks[0] && checks[0].energia<=2) push(checks[0].timestamp, '⚠', 'Energia baixa: '+m.name, 'Checkpoint com energia '+checks[0].energia+'/5.', 'dash');
+      }
+    }
+  } catch(e){ console.warn('notifs:', e); }
+
+  notifs.sort((a,b)=>b.ts-a.ts);
+  return notifs.slice(0,20);
+}
+
+async function refreshNotifBadge(){
+  if(!currentUser) return;
+  const notifs = await computeNotifications();
+  const lastSeen = Number(DB.get('notifs_seen_'+currentUser.id))||0;
+  const unread = notifs.filter(n=>n.ts>lastSeen).length;
+  const badge = document.getElementById('notif-badge');
+  if(badge){ badge.textContent = unread>9?'9+':String(unread); badge.style.display = unread>0?'flex':'none'; }
+}
+
+async function toggleNotifPanel(){
+  const panel = document.getElementById('notif-panel');
+  if(!panel) return;
+  if(panel.style.display==='block'){ panel.style.display='none'; return; }
+  panel.style.display='block';
+  panel.innerHTML = '<div style="padding:20px;text-align:center;font-size:12px;color:var(--text3);">Carregando...</div>';
+  const notifs = await computeNotifications();
+  const lastSeen = Number(DB.get('notifs_seen_'+currentUser.id))||0;
+  panel.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);">
+      <div style="font-size:12px;font-weight:700;color:var(--text);">Notificações</div>
+      <button onclick="markNotifsSeen()" style="background:none;border:none;color:var(--gold);font-size:10px;cursor:pointer;font-weight:600;">Marcar como lidas</button>
+    </div>
+    ${notifs.length ? notifs.map(n=>`
+    <div onclick="document.getElementById('notif-panel').style.display='none';showPage('${n.page}')" style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;${n.ts>lastSeen?'background:rgba(240,192,64,.04);':''}">
+      <div style="font-size:16px;flex-shrink:0;">${n.icon}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:11px;font-weight:600;color:var(--text);">${n.title}${n.ts>lastSeen?' <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold);"></span>':''}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;line-height:1.5;">${n.body}</div>
+      </div>
+    </div>`).join('') : '<div style="padding:24px;text-align:center;font-size:12px;color:var(--text4);">Nenhuma notificação.</div>'}
+  `;
+}
+
+function markNotifsSeen(){
+  if(currentUser) DB.set('notifs_seen_'+currentUser.id, Date.now());
+  const panel = document.getElementById('notif-panel');
+  if(panel) panel.style.display='none';
+  refreshNotifBadge();
+}
+
+function computeNextBestAction(){
+  if(!currentUser || currentUser.role!=='mentorado') return null;
+  const email = currentUser.email;
+  const cycles = DB.get('cycles_'+email)||[];
+  const active = cycles.find(c=>c.status==='active');
+  if(!active) return {icon:'📋', label:'Crie seu ciclo de mentoria', desc:'Tudo começa aqui: defina objetivos e formalize o acordo com seu mentor.', btn:'Criar ciclo', page:'inicio-ciclo'};
+  const sigs = DB.get('acordo_sigs_'+active.id) || active.signatures || {};
+  if(!sigs.mentee) return {icon:'✍', label:'Assine o termo de mentoria', desc:'O ciclo "'+active.name+'" aguarda sua assinatura.', btn:'Assinar agora', page:'inicio-ciclo'};
+  const disc = DB.get('disc_result_full') || DB.get('disc');
+  if(!disc) return {icon:'◈', label:'Faça seu Perfil DISC', desc:'12 questões que revelam seu perfil natural e adaptado.', btn:'Fazer DISC', page:'disc'};
+  const comps = active.competencias||[];
+  if(comps.length<3) return {icon:'◎', label:'Selecione suas competências', desc:'Escolha de 3 a 7 competências ('+comps.length+' até agora).', btn:'Selecionar', page:'comp'};
+  if(!active.frozen_at) return {icon:'🔒', label:'Congele as competências', desc:'Congelar gera as perguntas do 360° e destrava os convites.', btn:'Congelar', page:'comp'};
+  const peers = DB.get('peer360')||[];
+  if(!peers.length) return {icon:'◷', label:'Convide avaliadores para o 360°', desc:'Convide de 3 a 5 pessoas que trabalham com você.', btn:'Convidar', page:'peer360'};
+  const checks = getCheckpoints(email);
+  const last = checks[0] ? new Date(checks[0].date).getTime() : 0;
+  if(Date.now()-last > 7*24*60*60*1000) return {icon:'◉', label:'Registre seu checkpoint semanal', desc:'60 segundos: conquista, bloqueio e energia.', btn:'Registrar', page:'minha-jornada'};
+  return {icon:'✓', label:'Você está em dia!', desc:'Continue executando seu plano da Fase I.', btn:'Ver plano', page:'microplano'};
+}
+
+function exportCycleClosureReport(){
+  if(!currentUser) return;
+  const email = currentUser.email;
+  const cycles = DB.get('cycles_'+email)||[];
+  const cycleId = getCurrentCycleId() || (cycles.find(c=>c.status==='active')||{}).id;
+  const cy = cycles.find(c=>c.id===cycleId);
+  if(!cy){ toast('Nenhum ciclo selecionado','err'); return; }
+  const acordo = DB.get('inicio_ciclo_'+cy.id) || DB.get('inicio_ciclo') || {};
+  const comps = cy.competencias||[];
+  const peers = (DB.get('peer360')||[]).filter(p=>p.done);
+  const checks = getCheckpoints(email);
+  const nps = DB.get('nps_history')||[];
+  const avgEnergy = checks.length ? (checks.reduce((a,x)=>a+(x.energia||0),0)/checks.length).toFixed(1) : '—';
+  const L = [];
+  L.push('ARCALA INSIGHT — RELATÓRIO DE ENCERRAMENTO DE CICLO');
+  L.push('====================================================');
+  L.push('Mentorado: '+currentUser.name+' · Ciclo: '+cy.name);
+  L.push('Gerado em '+new Date().toLocaleDateString('pt-BR'));
+  L.push('');
+  L.push('OBJETIVO DO CICLO'); L.push(acordo.objetivo||'—'); L.push('');
+  L.push('EVOLUÇÃO DAS COMPETÊNCIAS (1-5)');
+  comps.forEach(cp=>{ L.push('· '+cp.name+': auto '+(cp.me||'—')+' | mentor '+(cp.mentor||'—')+(cp.aferido!=null?' | aferido '+cp.aferido:'')); });
+  L.push('');
+  L.push('FEEDBACK 360°: '+peers.length+' avaliador(es)');
+  peers.forEach(p=>{ if(p.obs) L.push('· "'+p.obs+'" — '+p.relacao); });
+  L.push('');
+  L.push('ENGAJAMENTO: '+checks.length+' checkpoints · energia média '+avgEnergy+'/5');
+  if(nps.length) L.push('NPS: '+nps[nps.length-1].score+'/10');
+  L.push('');
+  L.push('PRÓXIMOS PASSOS'); L.push(acordo.metas||'—');
+  const blob = new Blob([L.join('\n')], {type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='encerramento-ciclo.txt'; a.click(); URL.revokeObjectURL(url);
+  toast('Relatório de encerramento exportado!','suc');
+}
+
+function copy360Link(token){
+  const url = window.location.href.split('?')[0]+'?responder360='+token;
+  (navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(url):Promise.reject()).then(()=>toast('Link copiado!','suc')).catch(()=>{ prompt('Copie o link:', url); });
+}
+function resend360(token){
+  const p = (DB.get('peer360')||[]).find(x=>x.token===token);
+  if(!p) return;
+  const url = window.location.href.split('?')[0]+'?responder360='+token;
+  const subject = encodeURIComponent('[Lembrete] Avaliação 360° — '+(currentUser?currentUser.name:''));
+  const body = encodeURIComponent('Olá, '+p.avaliador+'! Lembrete: sua avaliação leva 5 minutos. 👉 '+url);
+  window.open('mailto:'+p.email+'?subject='+subject+'&body='+body,'_blank');
+  const peers = DB.get('peer360'); const pp = peers.find(x=>x.token===token); pp.sentAt = new Date().toISOString(); DB.set('peer360',peers);
+  toast('Lembrete preparado para '+p.avaliador,'suc');
 }
 
 (function ensureAdmin(){
@@ -2232,11 +2400,21 @@ function initRadarChart(){
 }
 
 function updateRadarChart(){
-  const radars = DB.get('comp_radars')||[];
   const activeId = DB.get('comp_active_radar');
-  const radar = radars.find(r=>r.id===activeId)||radars[0];
-  const data = radar ? radar.competencias : [];
+  const menteeEmail = currentUser?.email;
+  let data = [];
+  // Cycle-first: mesma fonte que a lista e os mutators
+  if(menteeEmail && activeId){
+    const cycle = (DB.get('cycles_'+menteeEmail)||[]).find(c=>c.id===activeId);
+    if(cycle) data = cycle.competencias||[];
+  }
+  if(!data.length){
+    const radars = DB.get('comp_radars')||[];
+    const radar = radars.find(r=>r.id===activeId)||radars[0];
+    data = radar ? radar.competencias : [];
+  }
   if(!charts.radar){ initRadarChart(); return; }
+  if(!charts.radar.data || !charts.radar.data.datasets) return;
   charts.radar.data.labels = data.map(c=>c.name.split(' ').slice(0,2).join(' '));
   charts.radar.data.datasets[0].data = data.map(c=>c.me);
   charts.radar.data.datasets[1].data = data.map(c=>c.mentor);
@@ -2305,7 +2483,7 @@ async function renderInstrumentoA(){
 
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
-    <div class="page-title">Fase A — Aferição do Ciclo</div>
+    <div class="page-title" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">Fase A — Aferição do Ciclo <button class="btn btn-outline btn-sm" onclick="exportCycleClosureReport()">📄 Relatório de Encerramento</button></div>
     <div class="page-sub">Instrumento de avaliação de resultados e avanços — metodologia GUIA</div>
   </div>
 
@@ -2612,13 +2790,81 @@ const DISC_DATA = {
 };
 
 const DISC_BLOCKS = [
-  {id:1,instruction:"Em situações de pressão e desafio no trabalho, eu costumo:",opts:[{text:"Agir rapidamente e tomar decisões firmes, mesmo com informações incompletas",disc:"D"},{text:"Motivar e engajar as pessoas ao meu redor com entusiasmo",disc:"I"},{text:"Manter a calma e buscar estabilidade antes de agir",disc:"S"},{text:"Analisar todos os dados disponíveis antes de decidir",disc:"C"}]},
-  {id:2,instruction:"Quando trabalho em equipe, as pessoas geralmente me descrevem como:",opts:[{text:"Direto, assertivo e focado em resultados concretos",disc:"D"},{text:"Comunicativo, animado e que gosta de colaborar",disc:"I"},{text:"Confiável, paciente e sempre disposto a ajudar",disc:"S"},{text:"Metódico, detalhista e comprometido com a qualidade",disc:"C"}]},
-  {id:3,instruction:"Diante de um problema complexo no trabalho, minha primeira reação é:",opts:[{text:"Identificar rapidamente a solução e agir para resolver",disc:"D"},{text:"Conversar com outras pessoas e buscar apoio e ideias",disc:"I"},{text:"Seguir processos estabelecidos e buscar consenso",disc:"S"},{text:"Levantar todas as informações e fazer uma análise criteriosa",disc:"C"}]},
-  {id:4,instruction:"No ambiente de trabalho, o que mais me motiva é:",opts:[{text:"Superar desafios, atingir metas e ter autonomia para decidir",disc:"D"},{text:"Trabalhar em equipe, ter reconhecimento e influenciar pessoas",disc:"I"},{text:"Ter estabilidade, trabalhar em harmonia e ser parte de um grupo coeso",disc:"S"},{text:"Ter clareza nas regras, fazer um trabalho preciso e bem feito",disc:"C"}]},
-  {id:5,instruction:"Quando preciso convencer alguém de uma ideia, eu costumo:",opts:[{text:"Apresentar os fatos e argumentar com firmeza e objetividade",disc:"D"},{text:"Usar entusiasmo, storytelling e criar conexão emocional",disc:"I"},{text:"Construir confiança gradualmente e mostrar consistência",disc:"S"},{text:"Apresentar dados, evidências e uma análise detalhada",disc:"C"}]},
-  {id:6,instruction:"Em reuniões e discussões em grupo, meu comportamento típico é:",opts:[{text:"Ir direto ao ponto, tomar posições claras e pressionar por decisões",disc:"D"},{text:"Participar ativamente, compartilhar ideias e animar o grupo",disc:"I"},{text:"Ouvir com atenção e contribuir de forma equilibrada e ponderada",disc:"S"},{text:"Fazer perguntas técnicas, checar detalhes e garantir precisão",disc:"C"}]},
-  {id:7,instruction:"Quando cometo um erro no trabalho, minha reação mais comum é:",opts:[{text:"Assumir rapidamente e focar em como corrigir e seguir em frente",disc:"D"},{text:"Conversar sobre isso, buscar apoio e aprender com os outros",disc:"I"},{text:"Refletir com cuidado e garantir que não vai se repetir",disc:"S"},{text:"Analisar em detalhes o que houve e documentar o aprendizado",disc:"C"}]},
+  // ── BLOCOS 1-6: PERFIL NATURAL (comportamento instintivo) ──
+  {id:1,tipo:'natural',instruction:"Em situações de pressão e desafio, minha reação INSTINTIVA é:",opts:[
+    {text:"Agir rapidamente e tomar decisões firmes, mesmo com informações incompletas",disc:"D"},
+    {text:"Motivar e engajar as pessoas ao meu redor com entusiasmo",disc:"I"},
+    {text:"Manter a calma e buscar estabilidade antes de agir",disc:"S"},
+    {text:"Analisar todos os dados disponíveis antes de decidir",disc:"C"}
+  ]},
+  {id:2,tipo:'natural',instruction:"Quando estou completamente à vontade, as pessoas me descrevem como:",opts:[
+    {text:"Direto, assertivo e focado em resultados concretos",disc:"D"},
+    {text:"Comunicativo, animado e que irradia energia positiva",disc:"I"},
+    {text:"Confiável, paciente e sempre disponível para ajudar",disc:"S"},
+    {text:"Preciso, metódico e comprometido com a qualidade",disc:"C"}
+  ]},
+  {id:3,tipo:'natural',instruction:"Diante de um conflito, minha primeira reação ESPONTÂNEA é:",opts:[
+    {text:"Enfrentar diretamente e resolver na hora",disc:"D"},
+    {text:"Conversar, mediar e buscar um ambiente positivo",disc:"I"},
+    {text:"Evitar o confronto e preservar a harmonia do grupo",disc:"S"},
+    {text:"Analisar a situação com cuidado antes de qualquer posição",disc:"C"}
+  ]},
+  {id:4,tipo:'natural',instruction:"No tempo livre ou fora do trabalho, naturalmente prefiro:",opts:[
+    {text:"Atividades competitivas, metas pessoais e novos desafios",disc:"D"},
+    {text:"Socializar, conhecer pessoas e experiências em grupo",disc:"I"},
+    {text:"Rotinas confortáveis, família e ambientes conhecidos",disc:"S"},
+    {text:"Aprofundar conhecimentos, pesquisar e planejar",disc:"C"}
+  ]},
+  {id:5,tipo:'natural',instruction:"Quando criança ou jovem, eu era tipicamente:",opts:[
+    {text:"O líder do grupo, sempre querendo estar no controle",disc:"D"},
+    {text:"O mais popular, cheio de amigos e sempre animado",disc:"I"},
+    {text:"O mais calmo e cooperativo, bom ouvinte",disc:"S"},
+    {text:"O mais organizado e detalhista, perfeccionista",disc:"C"}
+  ]},
+  {id:6,tipo:'natural',instruction:"Quando tomo decisões importantes na vida pessoal, eu:",opts:[
+    {text:"Decido rápido com base na intuição e assumo o risco",disc:"D"},
+    {text:"Busco a opinião de amigos e sigo o que parece mais animador",disc:"I"},
+    {text:"Tomo tempo, consulto pessoas próximas e priorizo a segurança",disc:"S"},
+    {text:"Pesquiso exaustivamente, faço listas e analiso prós e contras",disc:"C"}
+  ]},
+
+  // ── BLOCOS 7-12: PERFIL ADAPTADO (comportamento no trabalho atual) ──
+  {id:7,tipo:'adaptado',instruction:"No meu trabalho ATUAL, as pessoas me descrevem como:",opts:[
+    {text:"Orientado a resultados, direto e que pressiona por performance",disc:"D"},
+    {text:"Comunicativo, entusiasta e que motiva a equipe",disc:"I"},
+    {text:"Estável, confiável e que mantém o ritmo do time",disc:"S"},
+    {text:"Rigoroso, analítico e que garante qualidade e precisão",disc:"C"}
+  ]},
+  {id:8,tipo:'adaptado',instruction:"No meu ambiente de trabalho atual, para ter sucesso eu precisei:",opts:[
+    {text:"Ser mais assertivo, direto e focar em entregas e metas",disc:"D"},
+    {text:"Ser mais comunicativo, colaborativo e influenciar pessoas",disc:"I"},
+    {text:"Ser mais paciente, consistente e trabalhar em equipe",disc:"S"},
+    {text:"Ser mais preciso, organizado e seguir processos com rigor",disc:"C"}
+  ]},
+  {id:9,tipo:'adaptado',instruction:"Em reuniões profissionais, meu comportamento mais frequente é:",opts:[
+    {text:"Ir direto ao ponto, tomar posições e pressionar por decisões",disc:"D"},
+    {text:"Participar ativamente, contar histórias e animar o grupo",disc:"I"},
+    {text:"Ouvir com atenção e contribuir de forma equilibrada",disc:"S"},
+    {text:"Fazer perguntas técnicas, checar detalhes e garantir precisão",disc:"C"}
+  ]},
+  {id:10,tipo:'adaptado',instruction:"Quando cometo um erro no trabalho, minha reação profissional é:",opts:[
+    {text:"Assumir rapidamente e focar em como corrigir e seguir em frente",disc:"D"},
+    {text:"Conversar sobre isso e aprender com o feedback dos outros",disc:"I"},
+    {text:"Refletir com cuidado e garantir que não vai se repetir",disc:"S"},
+    {text:"Analisar em detalhes o que houve e documentar o aprendizado",disc:"C"}
+  ]},
+  {id:11,tipo:'adaptado',instruction:"O que mais me motiva PROFISSIONALMENTE hoje é:",opts:[
+    {text:"Superar metas, ter autonomia e vencer desafios difíceis",disc:"D"},
+    {text:"Reconhecimento, trabalho em equipe e influenciar pessoas",disc:"I"},
+    {text:"Estabilidade, harmonia e ser parte de um grupo coeso",disc:"S"},
+    {text:"Clareza, processos bem definidos e trabalho de alta qualidade",disc:"C"}
+  ]},
+  {id:12,tipo:'adaptado',instruction:"Quando preciso convencer alguém no trabalho, eu costumo:",opts:[
+    {text:"Apresentar os fatos e argumentar com firmeza e objetividade",disc:"D"},
+    {text:"Usar entusiasmo, storytelling e criar conexão emocional",disc:"I"},
+    {text:"Construir confiança gradualmente e mostrar consistência",disc:"S"},
+    {text:"Apresentar dados, evidências e uma análise técnica detalhada",disc:"C"}
+  ]},
 ];
 
 let discPage = 0;
@@ -2720,14 +2966,46 @@ function discNavigate(dir){
       return;
     }
     if(discPage===DISC_BLOCKS.length-1){
-      const scores = calcDISCScores();
-      const winner = Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
-      discSel = winner;
-      discScores = scores;
-      DB.set('disc', winner);
-      DB.set('disc_scores', scores);
-      toast(`Perfil ${winner} — ${DISC_DATA[winner].name} identificado!`,'suc');
-      renderDISCResult(winner, scores);
+      const {natural, adaptado} = calcDISCScores();
+      const naturalPct  = normalizeToPercent(natural);
+      const adaptadoPct = normalizeToPercent(adaptado);
+      const effort      = calcEffort(naturalPct, adaptadoPct);
+      const winNatural  = getDominant(natural);
+      const winAdaptado = getDominant(adaptado);
+
+      const result = {
+        natural: winNatural, adaptado: winAdaptado,
+        naturalScores: natural, adaptadoScores: adaptado,
+        naturalPct, adaptadoPct, effort,
+        date: new Date().toISOString()
+      };
+
+      discSel    = winNatural;
+      discScores = natural;
+      DB.set('disc', winNatural);
+      DB.set('disc_scores', natural);
+      DB.set('disc_result_full', result);
+
+      // Save Natural (locked forever on first run)
+      const existingNat = getDISCNatural(currentUser?.email);
+      if(!existingNat && currentUser){
+        saveDISCProfile(currentUser.email, {
+          dominant: winNatural, scores: natural, pct: naturalPct,
+          date: result.date, locked: true
+        }, 'natural');
+      }
+      // Save Adaptado for current cycle
+      if(currentUser){
+        const cycleId = getCurrentCycleId();
+        const key = cycleId ? 'adaptado_'+cycleId : 'adaptado';
+        saveDISCProfile(currentUser.email, {
+          dominant: winAdaptado, scores: adaptado, pct: adaptadoPct,
+          effort, date: result.date, cycleId: cycleId||null
+        }, key);
+      }
+
+      toast('Perfil '+winNatural+' (Natural) · '+winAdaptado+' (Adaptado) identificados!','suc');
+      renderDISCResult(result);
       return;
     }
   }
@@ -2736,62 +3014,229 @@ function discNavigate(dir){
 }
 
 function calcDISCScores(){
-  const scores = {D:0,I:0,S:0,C:0};
+  const natural   = {D:0,I:0,S:0,C:0};
+  const adaptado  = {D:0,I:0,S:0,C:0};
   discAnswers.forEach((ans,pi)=>{
     const block = discShuffled[pi];
-    if(ans.most!==null) scores[block.opts[ans.most].disc]+=2;
-    if(ans.least!==null) scores[block.opts[ans.least].disc]-=1;
+    const target = block.tipo === 'natural' ? natural : adaptado;
+    if(ans.most!==null)  target[block.opts[ans.most].disc]  += 2;
+    if(ans.least!==null) target[block.opts[ans.least].disc] -= 1;
   });
-  Object.keys(scores).forEach(k=>{ if(scores[k]<0) scores[k]=0; });
-  return scores;
+  // Normalize — no negatives, min 0
+  ['D','I','S','C'].forEach(k=>{
+    if(natural[k]  < 0) natural[k]  = 0;
+    if(adaptado[k] < 0) adaptado[k] = 0;
+  });
+  return { natural, adaptado };
 }
 
-function renderDISCResult(winner, scores){
+function getDominant(scores){
+  return Object.entries(scores).sort((a,b)=>b[1]-a[1])[0][0];
+}
+
+function normalizeToPercent(scores){
+  const total = Object.values(scores).reduce((a,b)=>a+b,0) || 1;
+  const pct = {};
+  Object.keys(scores).forEach(k => pct[k] = Math.round((scores[k]/total)*100));
+  // Ensure sums to 100
+  const diff = 100 - Object.values(pct).reduce((a,b)=>a+b,0);
+  const maxKey = Object.entries(pct).sort((a,b)=>b[1]-a[1])[0][0];
+  pct[maxKey] += diff;
+  return pct;
+}
+
+function calcEffort(naturalPct, adaptadoPct){
+  // Effort = how much each dimension changed from Natural to Adapted
+  // Positive = amplifying (using more), Negative = suppressing (using less)
+  const effort = {};
+  ['D','I','S','C'].forEach(k => effort[k] = adaptadoPct[k] - naturalPct[k]);
+  return effort;
+}
+
+function renderDISCResult(result){
   document.getElementById('disc-assessment-wrap').style.display='none';
   const wrap = document.getElementById('disc-result-wrap');
   wrap.style.display='block';
-  const d = DISC_DATA[winner];
-  const total = scores ? Object.values(scores).reduce((a,b)=>a+b,0)||1 : 4;
-  const order = ['D','I','S','C'];
-  const colorMap = {D:'var(--red)',I:'var(--amber)',S:'var(--green)',C:'var(--blue)'};
-  const bgMap = {D:'var(--red-bg)',I:'var(--amber-bg)',S:'var(--green-bg)',C:'var(--blue-bg)'};
-  const borderMap = {D:'var(--red-border)',I:'var(--amber-border)',S:'var(--green-border)',C:'var(--blue-border)'};
+
+  // Support legacy calls (result could be just a winner string + scores obj)
+  if(typeof result === 'string'){
+    const saved = DB.get('disc_result_full');
+    result = saved || {
+      natural: result, adaptado: result,
+      naturalPct: {D:25,I:25,S:25,C:25}, adaptadoPct: {D:25,I:25,S:25,C:25},
+      effort: {D:0,I:0,S:0,C:0}
+    };
+  }
+
+  const {natural, adaptado, naturalPct, adaptadoPct, effort} = result;
+  const colorMap   = {D:'var(--red)',I:'var(--amber)',S:'var(--green)',C:'var(--blue)'};
+  const bgMap      = {D:'var(--red-bg)',I:'var(--amber-bg)',S:'var(--green-bg)',C:'var(--blue-bg)'};
+  const borderMap  = {D:'var(--red-border)',I:'var(--amber-border)',S:'var(--green-border)',C:'var(--blue-border)'};
+  const labelMap   = {D:'Dominância',I:'Influência',S:'Estabilidade',C:'Conformidade'};
+  const order      = ['D','I','S','C'];
+
+  // Effort label helper
+  const effortLabel = (val) => {
+    if(val > 12) return {label:'Amplificando muito', color:'var(--red)'};
+    if(val > 5)  return {label:'Amplificando', color:'var(--amber)'};
+    if(val < -12)return {label:'Suprimindo muito', color:'var(--blue)'};
+    if(val < -5) return {label:'Suprimindo', color:'var(--blue)'};
+    return {label:'Equilibrado', color:'var(--green)'};
+  };
+
+  // Pattern descriptions
+  const patterns = {
+    DD:'Realizador — foco máximo em resultados e controle',
+    DI:'Inspirador — liderança com carisma e urgência',
+    DS:'Investigador — orientado a resultado com consistência',
+    DC:'Criador — perfeccionista voltado para conquistas',
+    ID:'Persuasivo — entusiasta com orientação para ação',
+    II:'Promotor — comunicação e influência como força máxima',
+    IS:'Conselheiro — suporte às pessoas com diplomacia',
+    IC:'Avaliador — analítico com habilidade social',
+    SD:'Agente — paciente, mas orientado a resultados',
+    SI:'Apoiador — colaborativo e empático',
+    SS:'Especialista — consistente e profundo no que faz',
+    SC:'Objetivo — equilibrado entre processo e pessoas',
+    CD:'Calculista — analítico com orientação para resultados',
+    CI:'Perfeccionista Social — qualidade com habilidade relacional',
+    CS:'Analítico — preciso, sistemático e cuidadoso',
+    CC:'Precisionista — excelência técnica como identidade',
+  };
+  const patternKey = natural + (adaptado !== natural ? adaptado : '');
+  const patternDesc = patterns[patternKey] || patterns[natural+natural] || DISC_DATA[natural].name;
 
   wrap.innerHTML = `
-    <div style="margin-bottom:20px;">
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">
+  <!-- Header -->
+  <div style="margin-bottom:20px;">
+    <div style="font-size:11px;font-weight:700;color:var(--text4);letter-spacing:.09em;margin-bottom:6px;">PERFIL DISC IDENTIFICADO</div>
+    <div style="font-size:24px;font-weight:700;color:var(--text);margin-bottom:4px;">
+      <span style="color:${colorMap[natural]};">${natural}</span>${natural!==adaptado?`<span style="color:var(--text3);font-size:18px;"> → </span><span style="color:${colorMap[adaptado]};">${adaptado}</span>`:''}
+      <span style="font-size:14px;font-weight:400;color:var(--text3);margin-left:8px;">${patternDesc}</span>
+    </div>
+    <div style="font-size:12px;color:var(--text3);">
+      Natural: <strong style="color:${colorMap[natural]};">${labelMap[natural]}</strong>
+      ${natural!==adaptado ? ` · Adaptado: <strong style="color:${colorMap[adaptado]};">${labelMap[adaptado]}</strong>` : ' · Natural e Adaptado coincidem'}
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:20px;">
+    <!-- LEFT: DISC bar chart (vertical, DISC real style) -->
+    <div class="panel">
+      <div class="panel-title"><div class="panel-title-dot"></div> Gráfico de Perfil</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:16px;display:flex;gap:16px;flex-wrap:wrap;">
+        <span style="display:flex;align-items:center;gap:6px;">
+          <span style="width:14px;height:3px;background:var(--gold);display:inline-block;border-radius:2px;"></span>Natural
+        </span>
+        <span style="display:flex;align-items:center;gap:6px;">
+          <span style="width:14px;height:3px;background:var(--blue);display:inline-block;border-radius:2px;border:1px dashed var(--blue);"></span>Adaptado
+        </span>
+      </div>
+
+      <!-- Vertical bar chart -->
+      <div style="display:flex;gap:16px;align-items:flex-end;height:200px;padding:0 8px;">
         ${order.map(k=>{
-          const pct = scores ? Math.round((scores[k]/total)*100) : 0;
-          const isW = k===winner;
-          return `<div style="border-radius:var(--radius);padding:14px;text-align:center;background:${bgMap[k]};border:${isW?'2px':'1px'} solid ${isW?colorMap[k]:borderMap[k]};">
-            <div style="font-size:22px;font-weight:700;color:${colorMap[k]};font-family:'Space Mono',monospace">${k}</div>
-            <div style="font-size:10px;color:${colorMap[k]};margin-bottom:6px">${DISC_DATA[k].name}</div>
-            <div style="font-size:16px;font-weight:700;color:${colorMap[k]};font-family:'Space Mono',monospace">${pct}%</div>
-            <div style="height:4px;background:var(--border2);border-radius:2px;margin-top:6px;overflow:hidden">
-              <div style="width:${pct}%;height:100%;background:${colorMap[k]};border-radius:2px"></div>
+          const natH = Math.round((naturalPct[k]/100)*180);
+          const adpH = Math.round((adaptadoPct[k]/100)*180);
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <!-- Labels top -->
+            <div style="display:flex;gap:4px;margin-bottom:4px;">
+              <span style="font-size:10px;font-weight:700;color:${colorMap[k]};">${naturalPct[k]}%</span>
+              ${naturalPct[k]!==adaptadoPct[k]?`<span style="font-size:10px;color:var(--blue);">${adaptadoPct[k]}%</span>`:''}
             </div>
+            <!-- Bars side by side -->
+            <div style="display:flex;gap:3px;align-items:flex-end;height:180px;width:100%;">
+              <!-- Natural bar -->
+              <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:180px;">
+                <div style="width:100%;height:${natH}px;background:${colorMap[k]};border-radius:4px 4px 0 0;opacity:.9;min-height:4px;transition:height .4s;"></div>
+              </div>
+              <!-- Adaptado bar (dashed border style) -->
+              <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:180px;">
+                <div style="width:100%;height:${adpH}px;background:transparent;border:2px dashed ${colorMap[k]};border-bottom:none;border-radius:4px 4px 0 0;min-height:4px;box-sizing:border-box;"></div>
+              </div>
+            </div>
+            <!-- D I S C label -->
+            <div style="font-size:18px;font-weight:700;color:${colorMap[k]};font-family:'Space Mono',monospace;">${k}</div>
+            <div style="font-size:9px;color:var(--text4);text-align:center;">${labelMap[k]}</div>
           </div>`;
         }).join('')}
       </div>
 
-      <div class="ai-panel" style="margin-bottom:14px;">
-        <div class="ai-header">
-          <div class="ai-badge">PERFIL IDENTIFICADO</div>
-          <span style="font-size:12px;color:var(--text3)">${winner} — ${d.name}</span>
-        </div>
-        <div class="ai-rec" style="margin-bottom:10px">${d.desc}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">
-          ${d.traits.map(t=>`<span style="font-size:10px;padding:3px 9px;border-radius:20px;background:rgba(0,0,0,.25);color:${colorMap[winner]}">${t}</span>`).join('')}
-        </div>
-        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.06em;margin-bottom:8px">DESENVOLVIMENTO PRIORITÁRIO</div>
-        ${d.devs.map(dev=>`<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);line-height:1.5"><span style="color:var(--gold);flex-shrink:0">→</span>${dev}</div>`).join('')}
-        <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-gold btn-sm" onclick="analyzeDISCWithIA()">✦ IA GUIA ✦ Carreira ↗</button>
-          <button class="btn btn-outline btn-sm" onclick="discRestart()">Refazer assessment</button>
-        </div>
+      <!-- 50% reference line description -->
+      <div style="font-size:10px;color:var(--text4);margin-top:12px;text-align:center;">
+        Barra sólida = Natural · Barra tracejada = Adaptado
       </div>
-      <div id="disc-ia-result" style="display:none;"></div>
-    </div>`;
+    </div>
+
+    <!-- RIGHT: Effort analysis -->
+    <div>
+      <div class="panel" style="margin-bottom:14px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Esforço por dimensão</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6;">
+          Mostra o quanto você está <strong>amplificando ou suprimindo</strong> cada dimensão no trabalho atual em relação ao seu perfil natural.
+        </div>
+        ${order.map(k=>{
+          const val = effort[k] || 0;
+          const info = effortLabel(val);
+          const barW = Math.min(Math.abs(val)*3, 100);
+          return `<div style="margin-bottom:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:14px;font-weight:700;color:${colorMap[k]};font-family:'Space Mono',monospace;">${k}</span>
+                <span style="font-size:11px;color:var(--text2);">${labelMap[k]}</span>
+              </div>
+              <div style="font-size:10px;font-weight:700;color:${info.color};padding:2px 8px;border-radius:20px;background:${info.color}18;">
+                ${val>0?'+':''}${val}pp · ${info.label}
+              </div>
+            </div>
+            <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;position:relative;">
+              <div style="position:absolute;left:50%;top:0;width:1px;height:100%;background:var(--border2);"></div>
+              ${val>=0
+                ? `<div style="position:absolute;left:50%;width:${barW/2}%;height:100%;background:${colorMap[k]};border-radius:0 3px 3px 0;"></div>`
+                : `<div style="position:absolute;right:${50}%;width:${barW/2}%;height:100%;background:var(--blue);border-radius:3px 0 0 3px;"></div>`
+              }
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:2px;">
+              <span style="font-size:9px;color:var(--text4);">← Suprimindo</span>
+              <span style="font-size:9px;color:var(--text4);">Amplificando →</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile description -->
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Perfil Natural — ${labelMap[natural]}</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px;">${DISC_DATA[natural].desc}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+      ${DISC_DATA[natural].traits.map(t=>`<span style="font-size:11px;padding:4px 12px;border-radius:20px;background:${bgMap[natural]};color:${colorMap[natural]};border:1px solid ${borderMap[natural]};">${t}</span>`).join('')}
+    </div>
+    ${natural !== adaptado ? `
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;">
+      <div style="font-size:12px;font-weight:600;color:${colorMap[adaptado]};margin-bottom:8px;">Perfil Adaptado — ${labelMap[adaptado]}</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.6;">${DISC_DATA[adaptado].desc}</div>
+    </div>` : ''}
+  </div>
+
+  <!-- Development priorities -->
+  <div class="panel" style="margin-bottom:16px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> Desenvolvimento prioritário</div>
+    ${DISC_DATA[natural].devs.map(dev=>`
+    <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);line-height:1.6;">
+      <span style="color:var(--gold);flex-shrink:0;">→</span>${dev}
+    </div>`).join('')}
+  </div>
+
+  <!-- Actions -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+    <button class="btn btn-gold btn-sm" onclick="analyzeDISCWithIA()">IA GUIA ✦ Análise de Carreira</button>
+    <button class="btn btn-outline btn-sm" onclick="renderDISCComparison(currentUser?.email)">📊 Comparar ciclos</button>
+    <button class="btn btn-outline btn-sm" onclick="discRestart()">↺ Refazer assessment</button>
+  </div>
+  <div id="disc-ia-wrap" style="display:none;margin-top:8px;"></div>
+  `;
 }
 
 function discRestart(){
@@ -3032,7 +3477,7 @@ async function renderPeer360(){
             <span class="pill ${p.done?'pill-active':'pill-pending'}">${p.done?'RECEBIDO':'PENDENTE'}</span>
           </div>
           ${p.done && p.obs ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:6px;">"${p.obs}"</div>` : ''}
-          ${!p.done ? `<div style="font-size:11px;color:var(--text4);">Aguardando resposta...</div>` : ''}
+          ${!p.done ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;"><div style="font-size:10px;color:var(--text4);">Enviado ${p.sentAt?new Date(p.sentAt).toLocaleDateString('pt-BR'):'—'} · aguardando</div><div style="display:flex;gap:6px;"><button class="btn btn-outline btn-xs" onclick="copy360Link('${p.token}')">Copiar link</button><button class="btn btn-outline btn-xs" onclick="resend360('${p.token}')">Reenviar ↗</button></div></div>` : ''}
         </div>`).join('') : `<div style="font-size:12px;color:var(--text4);padding:10px 0;">Nenhum avaliador convidado ainda.</div>`}
       </div>
     </div>
@@ -6437,6 +6882,47 @@ function renderDash(){
   }
 }
 
+function renderMentorDigest(mentees){
+  // Resumo semanal automático: energia, checkpoints e alertas por mentorado (string pura, sem template aninhado)
+  try {
+    const now = Date.now();
+    const rows = [];
+    const alerts = [];
+    mentees.forEach(m => {
+      const checks = getCheckpoints(m.email) || [];
+      const last = checks[0];
+      const lastTs = last ? new Date(last.date).getTime() : 0;
+      const daysAgo = lastTs ? Math.floor((now - lastTs) / 86400000) : null;
+      const avg = checks.length ? (checks.slice(0,4).reduce((a,c)=>a+(c.energia||0),0) / Math.min(checks.length,4)) : null;
+      if(daysAgo === null || daysAgo > 7) alerts.push({name:m.name, msg: daysAgo===null ? 'nunca registrou checkpoint' : 'sem checkpoint há '+daysAgo+' dias'});
+      else if(avg !== null && avg < 2.5) alerts.push({name:m.name, msg:'energia média baixa ('+avg.toFixed(1)+'/5)'});
+      rows.push({name:m.name, phase:m.phase||'G', avg, daysAgo, bloqueio:(last&&last.bloqueio)||''});
+    });
+    if(!rows.length) return '';
+    const alertHtml = alerts.length
+      ? '<div style="background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;">'
+        + '<div style="font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.07em;margin-bottom:6px;">⚠ REQUER ATENÇÃO ESTA SEMANA</div>'
+        + alerts.map(a=>'<div style="font-size:11px;color:var(--text2);padding:2px 0;">• <strong>'+a.name+'</strong> — '+a.msg+'</div>').join('')
+        + '</div>'
+      : '<div style="font-size:11px;color:var(--green);margin-bottom:12px;">✓ Todos os mentorados em dia com os checkpoints.</div>';
+    const rowsHtml = rows.map(r=>{
+      const energyColor = r.avg===null ? 'var(--text4)' : r.avg>=4 ? 'var(--green)' : r.avg>=2.5 ? 'var(--gold)' : 'var(--red)';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:11px;">'
+        + '<div style="flex:1;min-width:0;color:var(--text);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+r.name+'</div>'
+        + '<span style="font-family:\'Space Mono\',monospace;color:var(--gold);width:14px;text-align:center;">'+r.phase+'</span>'
+        + '<span style="color:'+energyColor+';width:64px;text-align:right;">'+(r.avg!==null ? '⚡ '+r.avg.toFixed(1)+'/5' : '⚡ —')+'</span>'
+        + '<span style="color:var(--text4);width:110px;text-align:right;">'+(r.daysAgo===null ? 'sem checkpoint' : r.daysAgo===0 ? 'checkpoint hoje' : 'há '+r.daysAgo+'d')+'</span>'
+        + '</div>'
+        + (r.bloqueio ? '<div style="font-size:10px;color:var(--amber);padding:0 0 6px 0;">↳ bloqueio: "'+r.bloqueio.substring(0,90)+'"</div>' : '');
+    }).join('');
+    return '<div class="panel" style="margin-bottom:16px;">'
+      + '<div class="panel-title"><div class="panel-title-dot"></div> Digest da semana <span style="font-size:10px;font-weight:400;color:var(--text4);">— gerado agora</span></div>'
+      + alertHtml
+      + rowsHtml
+      + '</div>';
+  } catch(e){ console.warn('digest:', e); return ''; }
+}
+
 function renderMentorDash(){
   const users = DB.get('users')||[];
   // Admin sees all mentorados; mentor sees only their own
@@ -6464,6 +6950,7 @@ function renderMentorDash(){
     <div class="page-title">Painel do Mentor</div>
     <div class="page-sub">Selecione um mentorado para acompanhar sua jornada e liberar as fases</div>
   </div>
+  ${renderMentorDigest(mentees)}
 
   <div class="section-label">Seus mentorados (${mentees.length})</div>
   <div style="margin-bottom:20px;">
@@ -6845,6 +7332,7 @@ function renderMinhaJornada(){
     <div class="page-title">Minha Jornada</div>
     <div class="page-sub">Acompanhe seu progresso nas 4 fases da metodologia GUIA</div>
   </div>
+  <div id="nba-slot"></div>
   <div id="checkpoint-slot"></div>
 
   <!-- Phase progress overview -->
@@ -6904,6 +7392,14 @@ function renderMinhaJornada(){
   // Inject checkpoint widget after render (avoids nested template literal issue)
   const ckSlot = document.getElementById('checkpoint-slot');
   if(ckSlot) ckSlot.innerHTML = renderCheckpointWidget();
+  const nba = computeNextBestAction();
+  const nbaSlot = document.getElementById('nba-slot');
+  if(nbaSlot && nba) nbaSlot.innerHTML = '<div style="background:linear-gradient(135deg,rgba(240,192,64,.1) 0%,rgba(240,192,64,.03) 100%);border:1px solid var(--gold-border);border-left:4px solid var(--gold);border-radius:var(--radius);padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
+    + '<div style="font-size:26px;flex-shrink:0;">'+nba.icon+'</div>'
+    + '<div style="flex:1;min-width:200px;"><div style="font-size:10px;font-weight:700;color:var(--gold);letter-spacing:.09em;margin-bottom:3px;">PRÓXIMA MELHOR AÇÃO</div>'
+    + '<div style="font-size:14px;font-weight:600;color:var(--text);">'+nba.label+'</div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-top:2px;line-height:1.5;">'+nba.desc+'</div></div>'
+    + '<button class="btn btn-gold btn-sm" onclick="showPage(\''+nba.page+'\')">'+nba.btn+' →</button></div>';
 
 }
 
@@ -9012,7 +9508,7 @@ async function doLogin(){
       errEl.classList.add('show'); return;
     }
 
-    DB.set('session', {userId:user.id, role:user.role, name:user.name, email:user.email});
+    DB.set('session', {userId:user.id, role:user.role, name:user.name, email:user.email, expires:Date.now()+7*24*60*60*1000});
     bootApp(user);
 
   } catch(e){
@@ -9115,6 +9611,7 @@ function bootApp(user){
   }
   startHealthCheck();
   setTimeout(updatePendingBadge, 500);
+  setTimeout(refreshNotifBadge, 900);
 }
 
 function updateTopbar(){
@@ -9131,6 +9628,7 @@ function updateTopbar(){
 
 function checkSession(){
   const session = DB.get('session');
+  if(session && session.expires && Date.now() > session.expires){ DB.set('session', null); return; }
   if(session){
     const users = DB.get('users') || [];
     const user = users.find(u => u.id === session.userId);
@@ -9245,7 +9743,7 @@ async function sendPeer360(){
   } catch(e){ console.warn('SB 360:', e); }
 
   const peers = DB.get('peer360')||[];
-  peers.push({avaliador:name,email,relacao:rel,token,cycle_id:cycleId,respostas:null,obs:'',done:false});
+  peers.push({avaliador:name,email,relacao:rel,token,cycle_id:cycleId,respostas:null,obs:'',done:false,sentAt:new Date().toISOString()});
   DB.set('peer360',peers);
 
   const baseUrl = window.location.href.split('?')[0];

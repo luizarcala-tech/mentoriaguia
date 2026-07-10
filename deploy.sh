@@ -33,6 +33,14 @@ if missing:
 print('✅ Funções críticas presentes')
 "
 
+echo "🧪 Executando suíte de 50 testes (25 isolados + 25 integrados)..."
+if ! node tests.js | tail -1 | grep -q "FAIL=0"; then
+    echo "❌ TESTES FALHARAM — deploy abortado:"
+    node tests.js | tail -6
+    exit 1
+fi
+echo "✅ 50/50 testes passaram"
+
 echo "📦 Commitando em main..."
 git add index.html
 git commit -m "$MSG"

@@ -970,8 +970,24 @@ async function loadAllUsers(){
       };
     });
     local.forEach(lu=>{ if(!result.find(r=>r.email===lu.email)) result.push(lu); });
-    DB.set('users', result);
-    return result;
+
+    // Blindagem: se o Supabase (ou o merge) produzir mais de uma linha para o mesmo
+    // e-mail, colapsa em uma só — preferindo a que tem dado local mais recente, e
+    // registrando um aviso para investigação (isso evita que a UI leia por acaso a
+    // linha "errada" quando há duplicidade de cadastro).
+    const byEmail = {};
+    result.forEach(r => {
+      if(!byEmail[r.email]){ byEmail[r.email] = r; return; }
+      console.warn('loadAllUsers: e-mail duplicado detectado —', r.email, '— unificando registros.');
+      byEmail[r.email] = { ...byEmail[r.email], ...r,
+        role: byEmail[r.email].role || r.role,
+        active: (byEmail[r.email].active !== undefined) ? byEmail[r.email].active : r.active,
+      };
+    });
+    const deduped = Object.values(byEmail);
+
+    DB.set('users', deduped);
+    return deduped;
   } catch(e){ return local; }
 }
 

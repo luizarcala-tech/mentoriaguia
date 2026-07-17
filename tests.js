@@ -165,6 +165,41 @@ await TA('J05b troca de role sobrevive mesmo com PATCH falhando (RLS)', async()=
   const after = reloaded.find(x=>x.email==='role@t.com');
   if(after.role!=='mentor') throw new Error('role revertido para: '+after.role);
 });
+await TA('J05c cenário real: editUser→form→updateUser→renderAdminUsers mantém novo role', async()=>{
+  DB.set('users',[
+    {id:'a1',name:'Admin',email:'adm2@t.com',role:'admin',active:true},
+    {id:'v1',name:'Verena',email:'verena@t.com',role:'mentor',active:true},
+    {id:'lf1',name:'Luiz Fellipe',email:'lf@t.com',role:'mentorado',active:false,mentor_id:'v1',plan:'Ciclo único — 12 semanas'},
+  ]);
+  currentUser={id:'a1',name:'Admin',email:'adm2@t.com',role:'admin',active:true}; currentRole='admin';
+  editUser('lf@t.com');
+  document.getElementById('nu-name').value='Luiz Fellipe';
+  document.getElementById('nu-role').value='mentor';
+  document.getElementById('nu-plan').value='Ciclo único — 12 semanas';
+  document.getElementById('nu-empresa').value='';
+  document.getElementById('nu-mentor').value='v1';
+  document.getElementById('nu-active').value='0';
+  await updateUser();
+  await renderAdminUsers();
+  const after = DB.get('users').find(u=>u.email==='lf@t.com');
+  if(after.role!=='mentor') throw new Error('role ficou: '+after.role);
+});
+T('J05d e-mail duplicado no retorno do Supabase é unificado sem perder o role local', ()=>{
+  DB.set('users',[{id:'d1',name:'Dup',email:'dup@t.com',role:'mentor',active:true}]);
+});
+await TA('J05d2 dedup real via loadAllUsers', async()=>{
+  const origFetch = global.fetch;
+  // Supabase retorna DUAS linhas para o mesmo e-mail (cenário de duplicidade real)
+  global.fetch = async () => ({ok:true, status:200, json:async()=>[
+    {id:'d1',name:'Dup',email:'dup@t.com',role:'mentorado',active:true},
+    {id:'d1-old',name:'Dup',email:'dup@t.com',role:'mentorado',active:true},
+  ], text:async()=>''});
+  const reloaded = await loadAllUsers();
+  global.fetch = origFetch;
+  const matches = reloaded.filter(u=>u.email==='dup@t.com');
+  if(matches.length!==1) throw new Error('não unificou — ainda há '+matches.length+' linhas');
+  if(matches[0].role!=='mentor') throw new Error('role local perdido no dedup: '+matches[0].role);
+});
 
 // Jornada completa do mentorado: ciclo → assina → DISC → competências → freeze → 360 → checkpoint → diário
 reset(); const cy = seed();

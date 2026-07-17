@@ -1,18 +1,79 @@
 // ══════════════════════════════════════════════════════════════════
 // ARCALA INSIGHT — Suíte de testes (launcher)
 // Uso: node tests.js — combina stubs + plataforma + testes e executa
-// 25 testes ISOLADOS (I01-I25) + 25 INTEGRADOS (J01-J25)
+// 25 testes ISOLADOS (I01-I25) + 26 INTEGRADOS (J01-J25 + J05b)
+// + AUDITORIA ESTRUTURAL (S00, S01): análise estática sobre o HTML real,
+//   sem stubs — pega bugs que os testes de lógica NÃO conseguem ver
+//   (ex.: getElementById apontando para um id que não existe de verdade).
 // ══════════════════════════════════════════════════════════════════
 const fs = require('fs'), cp = require('child_process'), os = require('os'), path = require('path');
 const html = fs.readFileSync(__dirname + '/index.html', 'utf8');
 const platformJs = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+
+// ── S00/S01: auditoria estrutural (estática, sem stubs, sem eval) ──
+let s00Pass = true, s01Pass = true;
+const structFailures = [];
+(function structuralAudit(){
+  const htmlOnly = html.replace(/<script>[\s\S]*?<\/script>/g, '');
+  const staticIds = new Set([
+    ...[...htmlOnly.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]),
+    ...[...htmlOnly.matchAll(/\bid='([^']+)'/g)].map(m=>m[1]),
+  ]);
+  const dynamicIds = new Set([
+    ...[...platformJs.matchAll(/\bid="([^"$]+)"/g)].map(m=>m[1]),
+    ...[...platformJs.matchAll(/\bid='([^'$]+)'/g)].map(m=>m[1]),
+    ...[...platformJs.matchAll(/\bid=\\"([^"\\$]+)\\"/g)].map(m=>m[1]),
+    ...[...platformJs.matchAll(/\.id\s*=\s*'([^']+)'/g)].map(m=>m[1]),
+    ...[...platformJs.matchAll(/\.id\s*=\s*"([^"]+)"/g)].map(m=>m[1]),
+  ]);
+  const allIds = new Set([...staticIds, ...dynamicIds]);
+  const gets = [
+    ...[...platformJs.matchAll(/getElementById\('([^'$]+)'\)/g)].map(m=>m[1]),
+    ...[...platformJs.matchAll(/getElementById\("([^"$]+)"\)/g)].map(m=>m[1]),
+  ];
+  // Elementos cosméticos conhecidos e sem impacto funcional (guardados com if(el))
+  const ALLOWLIST_COSMETIC = new Set(['platform-version-badge']);
+  const missing = [...new Set(gets.filter(g => !allIds.has(g) && !ALLOWLIST_COSMETIC.has(g)))];
+  if(missing.length){
+    s00Pass = false;
+    missing.forEach(m => structFailures.push("S00 getElementById('"+m+"') — elemento não existe em lugar nenhum do HTML/JS"));
+  }
+
+  const fnNames = [...platformJs.matchAll(/(?:async )?function (\w+)\s*\(/g)].map(m=>m[1]);
+  const counts = {}; fnNames.forEach(n=>counts[n]=(counts[n]||0)+1);
+  const dupes = Object.entries(counts).filter(([,c])=>c>1);
+  if(dupes.length){
+    s01Pass = false;
+    dupes.forEach(([n,c]) => structFailures.push('S01 função "'+n+'" definida '+c+'x — a última sobrescreve as demais silenciosamente'));
+  }
+})();
+
+// ── I01-I25 / J01-J25(+J05b): testes de lógica em ambiente Node isolado ──
 const self = fs.readFileSync(__filename, 'utf8');
 const stubs = self.split('//STUBS_'+'START')[1].split('//STUBS_'+'END')[0];
 const tests = self.split('//TESTS_'+'START')[1].split('//TESTS_'+'END')[0];
 fs.writeFileSync(path.join(os.tmpdir(),'_arcala_run.js'), stubs + '\n' + platformJs + '\n' + tests);
 const r = cp.spawnSync('node', [path.join(os.tmpdir(),'_arcala_run.js')], {encoding:'utf8', timeout:60000});
+
+const m = /PASS=(\d+) FAIL=(\d+)/.exec(r.stdout||'');
+const logicPass = m ? parseInt(m[1]) : 0;
+const logicFail = m ? parseInt(m[2]) : 1;
+
+console.log('── Auditoria estrutural (análise estática do HTML/JS real, sem stubs) ──');
+console.log(s00Pass ? "✅ S00 todo getElementById aponta para um elemento que existe de verdade" : "❌ S00 há getElementById apontando para elemento inexistente");
+console.log(s01Pass ? "✅ S01 nenhuma função duplicada" : "❌ S01 há função(ões) duplicada(s)");
+structFailures.forEach(f => console.log('   ↳ '+f));
+
+console.log('\n── Testes de lógica (ambiente Node com stubs) ──');
 process.stdout.write(r.stdout||''); process.stderr.write(r.stderr||'');
-process.exit(r.status ?? 1);
+
+const structPassCount = (s00Pass?1:0) + (s01Pass?1:0);
+const structFailCount = (s00Pass?0:1) + (s01Pass?0:1);
+const finalPass = logicPass + structPassCount;
+const finalFail = logicFail + structFailCount;
+console.log('\n════ RESULTADO FINAL: PASS='+finalPass+' FAIL='+finalFail+' ════');
+process.exit(finalFail>0 ? 1 : 0);
+
 
 // As seções abaixo nunca executam neste arquivo (process.exit acima) — são fonte para o combinador.
 function __sections__(){

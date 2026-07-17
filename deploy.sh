@@ -33,13 +33,13 @@ if missing:
 print('✅ Funções críticas presentes')
 "
 
-echo "🧪 Executando suíte de 50 testes (25 isolados + 25 integrados)..."
+echo "🧪 Executando suíte (auditoria estrutural + 51 testes de lógica)..."
 if ! node tests.js | tail -1 | grep -q "FAIL=0"; then
     echo "❌ TESTES FALHARAM — deploy abortado:"
-    node tests.js | tail -6
+    node tests.js
     exit 1
 fi
-echo "✅ 50/50 testes passaram"
+echo "✅ Auditoria estrutural + testes de lógica — tudo passou"
 
 echo "📦 Commitando em main..."
 git add index.html

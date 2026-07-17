@@ -7811,19 +7811,25 @@ OKRs: ${(mp.okrs||[]).map(o=>o.desc).join('; ')||'—'}`;
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SB_KEY,
+        'apikey': SB_KEY,
         'x-platform-token': 'arcala-guia-2026',
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
         max_tokens: 1024,
         system: systemContext,
+        prompt: prompt,
         messages: [{role:'user', content: prompt}]
       })
     });
     const data = await response.json();
+    if(response.status === 401){
+      return 'Acesso negado pelo proxy de IA (401). O secret PLATFORM_TOKEN no Supabase precisa ser exatamente "arcala-guia-2026". Verifique em Supabase → Edge Functions → ai-proxy → Secrets.';
+    }
     if(data.content && data.content[0]) return data.content[0].text;
     if(data.error) return 'Erro da API: ' + (data.error.message || JSON.stringify(data.error));
-    return 'Erro ao processar resposta.';
+    return 'Erro ao processar resposta (status '+response.status+').';
   } catch(e){
     if(e.message === 'Failed to fetch'){
       return 'Erro de conexão com o serviço de IA. Causas prováveis:\n\n1) O projeto Supabase pode estar pausado (plano gratuito pausa após 7 dias de inatividade) — acesse supabase.com e clique em "Restore project".\n2) A Edge Function "ai-proxy" pode ter sido removida — verifique em Supabase → Edge Functions.\n\nApós resolver, tente novamente.';

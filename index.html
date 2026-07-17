@@ -930,7 +930,8 @@ DB.init();
 // ══════════════════════════════════════════════
 
 async function sbPatchUser(email, fields){
-  try { await sbFetch('users?email=eq.'+encodeURIComponent(email),'PATCH',fields); } catch(e){}
+  try { await sbFetch('users?email=eq.'+encodeURIComponent(email),'PATCH',fields); return true; }
+  catch(e){ console.warn('sbPatchUser falhou (dado mantido localmente):', e.message); return false; }
 }
 
 async function sbUpsertUser(userData){
@@ -954,6 +955,13 @@ async function loadAllUsers(){
       if(!lu) return su;
       return {
         ...su,
+        // Campos administrativos: local prevalece — evita reversão quando o PATCH ao
+        // Supabase falha silenciosamente (ex.: RLS bloqueando) e o próximo fetch traria
+        // de volta o valor antigo por cima da edição feita no admin.
+        name: lu.name || su.name,
+        role: lu.role || su.role,
+        plan: lu.plan || su.plan,
+        active: (lu.active !== undefined && lu.active !== null) ? lu.active : su.active,
         mentor_id: su.mentor_id || lu.mentor_id || lu.mentor || null,
         empresa_id: su.empresa_id || lu.empresa_id || null,
         mentorados: su.mentorados || lu.mentorados || null,
@@ -1630,9 +1638,13 @@ async function updateUser(){
   DB.set('users',users);
 
   // Supabase — patch by email
-  await sbPatchUser(email,{name,role,plan,empresa_id:empresa||null,mentor_id:mentorId||null,active});
+  const synced = await sbPatchUser(email,{name,role,plan,empresa_id:empresa||null,mentor_id:mentorId||null,active});
 
-  toast(`${name} atualizado!`,'suc');
+  if(synced){
+    toast(`${name} atualizado!`,'suc');
+  } else {
+    toast(`${name} atualizado localmente — sincronização com o banco falhou (verifique RLS no Supabase)`,'err');
+  }
   editingUser=null; editingUserId=null;
   renderAdminUsers();
 }

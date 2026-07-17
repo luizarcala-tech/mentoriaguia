@@ -90,6 +90,20 @@ await TA('J02 sessão gravada com expires', async()=>{ const s=DB.get('session')
 await TA('J03 senha errada rejeitada', async()=>{ currentUser=null; document.getElementById('login-pass').value='errada'; await doLogin(); if(currentUser) throw new Error('x'); });
 await TA('J04 migração base64→sha256', async()=>{ const us=DB.get('users'); us.push({id:'l1',name:'Leg',email:'leg@t.com',role:'mentorado',active:true,password:btoa('s1')}); DB.set('users',us); document.getElementById('login-email').value='leg@t.com'; document.getElementById('login-pass').value='s1'; await doLogin(); const u=DB.get('users').find(x=>x.email==='leg@t.com'); if(!/^[a-f0-9]{64}$/.test(u.password)) throw new Error('x'); });
 await TA('J05 inativo bloqueado', async()=>{ const us=DB.get('users'); us.push({id:'i1',name:'In',email:'in@t.com',role:'mentorado',active:false,password:await hashPassword('x')}); DB.set('users',us); currentUser=null; document.getElementById('login-email').value='in@t.com'; document.getElementById('login-pass').value='x'; await doLogin(); if(currentUser) throw new Error('x'); });
+await TA('J05b troca de role sobrevive mesmo com PATCH falhando (RLS)', async()=>{
+  const us=DB.get('users'); us.push({id:'r1',name:'Trocar Role',email:'role@t.com',role:'mentorado',active:true}); DB.set('users',us);
+  // Simula PATCH ao Supabase falhando (RLS bloqueando) — sbFetch lança erro
+  const origFetch = global.fetch;
+  global.fetch = async () => { throw new Error('RLS violation'); };
+  const u = DB.get('users').find(x=>x.email==='role@t.com');
+  u.role='mentor'; DB.set('users', DB.get('users').map(x=>x.email===u.email?u:x));
+  await sbPatchUser('role@t.com', {role:'mentor'}); // deve falhar silenciosamente e retornar false
+  global.fetch = async (url) => ({ok:true, status:200, json:async()=>[{id:'r1',name:'Trocar Role',email:'role@t.com',role:'mentorado',active:true}], text:async()=>''});
+  const reloaded = await loadAllUsers();
+  global.fetch = origFetch;
+  const after = reloaded.find(x=>x.email==='role@t.com');
+  if(after.role!=='mentor') throw new Error('role revertido para: '+after.role);
+});
 
 // Jornada completa do mentorado: ciclo → assina → DISC → competências → freeze → 360 → checkpoint → diário
 reset(); const cy = seed();

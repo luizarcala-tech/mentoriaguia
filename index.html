@@ -7811,8 +7811,6 @@ OKRs: ${(mp.okrs||[]).map(o=>o.desc).join('; ')||'—'}`;
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + SB_KEY,
-        'apikey': SB_KEY,
         'x-platform-token': 'arcala-guia-2026',
       },
       body: JSON.stringify({

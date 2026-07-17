@@ -48,6 +48,16 @@ const structFailures = [];
   }
 })();
 
+// ── S02: prompt da prova pede o campo "explicacao" (suporte à análise crítica) ──
+let s02Pass = true;
+(function checkQuizExplanationField(){
+  const idx = platformJs.indexOf('function startQuiz');
+  if(idx < 0){ s02Pass = false; structFailures.push('S02 função startQuiz não encontrada'); return; }
+  const fnSrc = platformJs.slice(idx, idx+2500);
+  if(!fnSrc.includes('explicacao')){ s02Pass = false; structFailures.push('S02 prompt da prova não pede o campo "explicacao"'); }
+  if(!fnSrc.includes('refletir') && !fnSrc.includes('crítica')){ s02Pass = false; structFailures.push('S02 prompt da prova não orienta reflexão crítica'); }
+})();
+
 // ── I01-I25 / J01-J25(+J05b): testes de lógica em ambiente Node isolado ──
 const self = fs.readFileSync(__filename, 'utf8');
 const stubs = self.split('//STUBS_'+'START')[1].split('//STUBS_'+'END')[0];
@@ -62,13 +72,14 @@ const logicFail = m ? parseInt(m[2]) : 1;
 console.log('── Auditoria estrutural (análise estática do HTML/JS real, sem stubs) ──');
 console.log(s00Pass ? "✅ S00 todo getElementById aponta para um elemento que existe de verdade" : "❌ S00 há getElementById apontando para elemento inexistente");
 console.log(s01Pass ? "✅ S01 nenhuma função duplicada" : "❌ S01 há função(ões) duplicada(s)");
+console.log(s02Pass ? "✅ S02 prova pede campo de explicação para análise crítica" : "❌ S02 prova sem campo de explicação");
 structFailures.forEach(f => console.log('   ↳ '+f));
 
 console.log('\n── Testes de lógica (ambiente Node com stubs) ──');
 process.stdout.write(r.stdout||''); process.stderr.write(r.stderr||'');
 
-const structPassCount = (s00Pass?1:0) + (s01Pass?1:0);
-const structFailCount = (s00Pass?0:1) + (s01Pass?0:1);
+const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0);
+const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1);
 const finalPass = logicPass + structPassCount;
 const finalFail = logicFail + structFailCount;
 console.log('\n════ RESULTADO FINAL: PASS='+finalPass+' FAIL='+finalFail+' ════');
@@ -340,6 +351,34 @@ T('J34 removeCurriculo limpa o registro local', ()=>{
   if(getCurriculo('cv5@t.com')) throw new Error('currículo não foi removido');
 });
 
+T('J35 submitQuiz mostra gabarito com acerto/erro e explicação por pergunta', ()=>{
+  currentQuiz = {
+    lessonId: 1,
+    questions: [
+      {q:'Pergunta 1?', options:['A1','B1','C1','D1'], correct:0, explicacao:'Explicação da pergunta 1 para reflexão crítica.'},
+      {q:'Pergunta 2?', options:['A2','B2','C2','D2'], correct:2, explicacao:'Explicação da pergunta 2 para reflexão crítica.'},
+    ]
+  };
+  quizAnswers = {0:0, 1:1}; // acerta a 1, erra a 2
+  DB.set('training_progress', null);
+  submitQuiz();
+  const html = document.getElementById('content-area').innerHTML;
+  if(!html.includes('Gabarito e análise crítica')) throw new Error('painel de gabarito não apareceu');
+  if(!html.includes('✅')) throw new Error('não marcou a pergunta certa');
+  if(!html.includes('❌')) throw new Error('não marcou a pergunta errada');
+  if(!html.includes('Explicação da pergunta 1')) throw new Error('explicação da P1 ausente');
+  if(!html.includes('Explicação da pergunta 2')) throw new Error('explicação da P2 ausente');
+  if(!html.includes('Resposta correta')) throw new Error('não mostrou a resposta correta na pergunta errada');
+});
+T('J36 gabarito não expõe "resposta correta" redundante quando o mentor já acertou', ()=>{
+  currentQuiz = { lessonId:1, questions:[{q:'P?', options:['A','B','C','D'], correct:1, explicacao:'Dica.'}] };
+  quizAnswers = {0:1}; // acertou
+  DB.set('training_progress', null);
+  submitQuiz();
+  const html = document.getElementById('content-area').innerHTML;
+  const correctBlockCount = (html.match(/Resposta correta/g)||[]).length;
+  if(correctBlockCount !== 0) throw new Error('mostrou "Resposta correta" mesmo tendo acertado');
+});
 // ── RESULTADO ──
 console.log('PASS='+pass+' FAIL='+fail);
 if(failures.length){ failures.forEach(f=>console.log('❌ '+f)); process.exit(1); }

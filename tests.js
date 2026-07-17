@@ -200,6 +200,39 @@ await TA('J05d2 dedup real via loadAllUsers', async()=>{
   if(matches.length!==1) throw new Error('não unificou — ainda há '+matches.length+' linhas');
   if(matches[0].role!=='mentor') throw new Error('role local perdido no dedup: '+matches[0].role);
 });
+await TA('J06a cenário Claudinei: aprovar cadastro sincroniza com Supabase', async()=>{
+  let posted = null;
+  const origFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if(opts && opts.method==='POST' && url.includes('/users')){ posted = JSON.parse(opts.body); return {ok:true,status:201,json:async()=>[posted],text:async()=>JSON.stringify([posted])}; }
+    if(opts && opts.method==='PATCH'){ return {ok:true,status:200,json:async()=>[],text:async()=>''}; }
+    return {ok:true,status:200,json:async()=>[],text:async()=>''};
+  };
+  DB.set('registrations',[{id:'reg1',name:'Claudinei',email:'claudinei@t.com',role:'mentorado',plan:'Trial — 2 semanas',status:'pending'}]);
+  DB.set('users',[{id:'a1',name:'Admin',email:'adm3@t.com',role:'admin',active:true}]);
+  await approveReg('reg1');
+  global.fetch = origFetch;
+  if(!posted) throw new Error('approveReg NÃO chamou POST no Supabase — usuário fica preso só localmente');
+  if(posted.email!=='claudinei@t.com') throw new Error('POST com dados errados: '+JSON.stringify(posted));
+  const localUser = DB.get('users').find(u=>u.email==='claudinei@t.com');
+  if(!localUser) throw new Error('usuário aprovado não ficou salvo localmente');
+});
+await TA('J06b botão "Sincronizar todos" força upsert de cada usuário local', async()=>{
+  const postedEmails = [];
+  const origFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if(opts && opts.method==='POST' && url.includes('/users')){ const b=JSON.parse(opts.body); postedEmails.push(b.email); return {ok:true,status:201,json:async()=>[b],text:async()=>JSON.stringify([b])}; }
+    return {ok:true,status:200,json:async()=>[],text:async()=>''};
+  };
+  currentUser={id:'a1',name:'Admin',email:'adm4@t.com',role:'admin',active:true}; currentRole='admin';
+  DB.set('users',[
+    {id:'a1',name:'Admin',email:'adm4@t.com',role:'admin',active:true},
+    {id:'p1',name:'Preso Localmente',email:'preso@t.com',role:'mentorado',active:true},
+  ]);
+  await syncAllUsersToSupabase();
+  global.fetch = origFetch;
+  if(!postedEmails.includes('preso@t.com')) throw new Error('syncAllUsersToSupabase não sincronizou o usuário local: '+JSON.stringify(postedEmails));
+});
 
 // Jornada completa do mentorado: ciclo → assina → DISC → competências → freeze → 360 → checkpoint → diário
 reset(); const cy = seed();

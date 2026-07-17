@@ -937,8 +937,10 @@ async function sbPatchUser(email, fields){
 async function sbUpsertUser(userData){
   try {
     await sbFetch('users','POST',userData,{'Prefer':'resolution=merge-duplicates,return=representation'});
+    return true;
   } catch(e){
-    try { await sbFetch('users?email=eq.'+encodeURIComponent(userData.email),'PATCH',userData); } catch(e2){}
+    try { await sbFetch('users?email=eq.'+encodeURIComponent(userData.email),'PATCH',userData); return true; }
+    catch(e2){ console.warn('sbUpsertUser falhou (usuário existe só localmente):', e2.message); return false; }
   }
 }
 
@@ -1783,7 +1785,7 @@ async function renderAdminRegs(){
   </div>`;
 }
 
-function approveReg(id){
+async function approveReg(id){
   const regs = DB.get('registrations');
   const reg = regs.find(r=>r.id===id);
   if(!reg) return;
@@ -1791,9 +1793,16 @@ function approveReg(id){
   DB.set('registrations',regs);
   // Add to users
   const users = DB.get('users');
-  users.push({id:'u'+Date.now(),name:reg.name,email:reg.email,role:reg.role,plan:reg.plan,active:true,created:today(),phase:'G',week:0});
+  const newUser = {id:'u'+Date.now(),name:reg.name,email:reg.email,role:reg.role,plan:reg.plan,active:true,created:today(),phase:'G',week:0};
+  users.push(newUser);
   DB.set('users',users);
-  toast(`${reg.name} aprovado e acesso liberado!`,'suc');
+
+  // Sincroniza com o Supabase — sem isso, o usuário aprovado só existe no
+  // navegador deste admin e desaparece em qualquer outro dispositivo/sessão.
+  const synced = await sbUpsertUser(newUser);
+  try { await sbFetch('registrations?id=eq.'+id, 'PATCH', {status:'approved', decided_at: new Date().toISOString()}); } catch(e){}
+
+  toast(synced ? `${reg.name} aprovado e sincronizado!` : `${reg.name} aprovado localmente — sincronização com o banco falhou`, synced?'suc':'err');
   renderAdminRegs();
 }
 
@@ -9004,6 +9013,20 @@ function startHealthCheck(){
 }
 
 
+async function syncAllUsersToSupabase(){
+  const users = DB.get('users')||[];
+  if(!users.length){ toast('Nenhum usuário local para sincronizar','err'); return; }
+  toast('Sincronizando '+users.length+' usuário(s) com o Supabase...','');
+  let ok=0, fail=0;
+  for(const u of users){
+    const success = await sbUpsertUser(u);
+    if(success) ok++; else fail++;
+  }
+  if(fail===0) toast(`✓ ${ok} usuário(s) sincronizado(s) com sucesso`,'suc');
+  else toast(`${ok} sincronizados, ${fail} falharam — verifique RLS no Supabase`,'err');
+  renderAdminUsers();
+}
+
 async function renderAdminUsers(){
   document.getElementById('content-area').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:60px;"><div style="text-align:center;"><div style="width:24px;height:24px;border:2px solid var(--gold);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;margin:0 auto 12px;"></div><div style="font-size:12px;color:var(--text3);">Carregando...</div></div></div>';
   const users = await loadAllUsers();
@@ -9095,6 +9118,7 @@ async function renderAdminUsers(){
         <div class="panel-title-dot"></div> Todos os usuários
         <span style="font-size:11px;color:var(--text4);font-weight:400;"> — clique para editar</span>
       </div>
+      <button class="btn btn-outline btn-xs" onclick="syncAllUsersToSupabase()" title="Força a sincronização de todos os usuários com o Supabase — use se algum usuário não aparecer em outro dispositivo">↻ Sincronizar todos</button>
       <input class="inline-inp" id="usr-search" placeholder="🔍 Buscar..." style="width:200px;" oninput="filterUsers('usr-search')">
     </div>
     <div class="table-wrap">

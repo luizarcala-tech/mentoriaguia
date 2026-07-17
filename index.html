@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Arcala Insight — Plataforma de Mentoria</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -4245,6 +4246,79 @@ document.addEventListener('click', e=>{
   }
 });
 
+// ══════════════════════════════════════════════
+// CURRÍCULO (PDF do LinkedIn) — extração e contexto de IA
+// ══════════════════════════════════════════════
+
+function getCurriculo(email){
+  return DB.get('curriculo_'+email) || null;
+}
+
+async function saveCurriculo(email, data){
+  DB.set('curriculo_'+email, data);
+  const synced = await sbPatchUser(email, { curriculo_texto: data.texto, curriculo_arquivo: data.arquivo, curriculo_data: data.data });
+  return synced;
+}
+
+function removeCurriculo(){
+  if(!currentUser) return;
+  showConfirm('Remover currículo', 'Remover o PDF enviado? Ele deixará de ser usado como contexto nas análises de IA.', 'Remover', async ()=>{
+    DB.set('curriculo_'+currentUser.email, null);
+    await sbPatchUser(currentUser.email, { curriculo_texto: null, curriculo_arquivo: null, curriculo_data: null });
+    toast('Currículo removido','suc');
+    renderPerfil();
+  });
+}
+
+async function handleCurriculoUpload(event){
+  const file = event.target.files?.[0];
+  if(!file) return;
+  if(file.type !== 'application/pdf'){ toast('Envie um arquivo PDF','err'); return; }
+  if(file.size > 8*1024*1024){ toast('Arquivo muito grande (máx. 8MB)','err'); return; }
+
+  const progressEl = document.getElementById('curriculo-upload-progress');
+  if(progressEl) progressEl.style.display='block';
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const texto = await extractPdfText(arrayBuffer);
+    if(!texto || texto.trim().length < 30){
+      throw new Error('Não foi possível extrair texto do PDF — verifique se é um PDF exportado do LinkedIn (não uma imagem escaneada).');
+    }
+    const data = { texto: texto.trim(), arquivo: file.name, data: new Date().toISOString() };
+    const synced = await saveCurriculo(currentUser.email, data);
+    toast(synced ? 'Currículo enviado e sincronizado!' : 'Currículo salvo localmente — sincronização com o banco falhou', synced?'suc':'err');
+    renderPerfil();
+  } catch(e){
+    toast('Erro ao processar PDF: '+e.message, 'err');
+    if(progressEl) progressEl.style.display='none';
+  }
+}
+
+async function extractPdfText(arrayBuffer){
+  if(typeof pdfjsLib === 'undefined'){
+    throw new Error('Biblioteca de leitura de PDF não carregou — verifique sua conexão e recarregue a página.');
+  }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = '';
+  for(let i=1; i<=pdf.numPages; i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    fullText += content.items.map(it=>it.str).join(' ') + '\n\n';
+  }
+  return fullText;
+}
+
+// Snippet do currículo para incluir no contexto de IA — limitado para não estourar o prompt
+function getCurriculoContextSnippet(email){
+  const c = getCurriculo(email);
+  if(!c || !c.texto) return '';
+  const MAX = 3000;
+  const snippet = c.texto.length > MAX ? c.texto.slice(0, MAX) + '... [currículo resumido]' : c.texto;
+  return '\n\nCURRÍCULO (LinkedIn, enviado pelo mentorado):\n' + snippet;
+}
+
 function openProfilePage(section){
   document.getElementById('profile-menu').classList.remove('open');
   showPage('perfil');
@@ -4292,6 +4366,19 @@ function renderPerfil(){
         <div class="field"><label class="field-label">Confirme sua senha atual</label><input type="password" class="form-input" id="email-pass" placeholder="••••••••"></div>
         <button class="btn btn-gold btn-sm" onclick="saveEmail()">Salvar e-mail</button>
       </div>
+
+      <!-- CURRÍCULO / LINKEDIN -->
+      <div class="panel" id="perfil-curriculo" style="margin-bottom:16px;">
+        <div class="panel-title"><div class="panel-title-dot"></div> Currículo (PDF do LinkedIn)</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6;">
+          Exporte seu perfil do LinkedIn em PDF (Perfil → Mais → Salvar como PDF) e envie aqui.
+          O conteúdo é usado como contexto nas análises de IA GUIA ✦ ao longo da sua jornada — trajetória, cargos e formação ficam disponíveis para o mentor e para as recomendações.
+        </div>
+        <div id="curriculo-status"></div>
+        <input type="file" id="curriculo-file-input" accept="application/pdf" style="display:none;" onchange="handleCurriculoUpload(event)">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('curriculo-file-input').click()">📄 Selecionar PDF</button>
+        <div id="curriculo-upload-progress" style="display:none;font-size:11px;color:var(--text3);margin-top:8px;">Processando PDF...</div>
+      </div>
     </div>
 
     <!-- COLUNA DIREITA -->
@@ -4328,6 +4415,25 @@ function renderPerfil(){
       </div>
     </div>
   </div>`;
+
+  // Injeta o status do currículo após o render (evita template literal aninhado)
+  const curriculoStatusEl = document.getElementById('curriculo-status');
+  if(curriculoStatusEl){
+    const c = getCurriculo(u.email);
+    if(c && c.texto){
+      const preview = c.texto.slice(0,220).replace(/\s+/g,' ').trim();
+      curriculoStatusEl.innerHTML =
+        '<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:4px;">✓ ' + (c.arquivo||'Currículo') + '</div>' +
+        '<div style="font-size:10px;color:var(--text4);margin-bottom:6px;">Enviado em ' + new Date(c.data).toLocaleString('pt-BR') + '</div>' +
+        '<div style="font-size:11px;color:var(--text3);line-height:1.5;">' + preview + '...</div>' +
+        '<button class="btn btn-outline btn-xs" style="margin-top:8px;" onclick="removeCurriculo()">Remover</button>' +
+        '</div>';
+    } else {
+      curriculoStatusEl.innerHTML =
+        '<div style="font-size:12px;color:var(--text4);margin-bottom:12px;">Nenhum currículo enviado ainda.</div>';
+    }
+  }
 }
 
 async function savePhoto(){
@@ -4455,6 +4561,8 @@ async function renderInicioCiclo(){
     <div class="page-title">Início do Ciclo — Fase G</div>
     <div class="page-sub">Gestar acordo · Alinhar escopo, metas e papéis · Semana 1</div>
   </div>
+
+  <div id="curriculo-nudge-slot"></div>
 
   <!-- CICLO ATIVO -->
   <div class="panel" style="margin-bottom:20px;border-color:${activeCycle?'var(--gold-border)':'var(--border)'};">
@@ -4631,6 +4739,17 @@ async function renderInicioCiclo(){
   </div>
   <div id="ic-ia-result" style="margin-top:16px;display:none;"></div>
   `;
+
+  // Lembrete de currículo (evita template literal aninhado)
+  const nudgeSlot = document.getElementById('curriculo-nudge-slot');
+  if(nudgeSlot && currentUser && currentUser.role==='mentorado'){
+    const c = getCurriculo(currentUser.email);
+    nudgeSlot.innerHTML = (c && c.texto) ? '' :
+      '<div style="background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+      '<div style="flex:1;min-width:200px;font-size:12px;color:var(--text2);">📄 <strong style="color:var(--gold);">Envie seu currículo do LinkedIn</strong> — ele enriquece as análises de IA GUIA ✦ ao longo de toda a sua jornada.</div>' +
+      '<button class="btn btn-gold btn-xs" onclick="openProfilePage(\'curriculo\')">Enviar agora</button>' +
+      '</div>';
+  }
 }
 
 function saveInicioCiclo(){
@@ -7866,7 +7985,7 @@ Fase atual: ${currentUser.phase || 'G'}
 PERFIL DISC: ${disc ? disc + ' — ' + (DISC_DATA[disc]?.name || '') : 'Não realizado'}
 SWOT — Forças: ${(swot.f||[]).join(', ')||'—'} | Fraquezas: ${(swot.fr||[]).join(', ')||'—'}
 Visão: ${vf.profissional||'—'}
-OKRs: ${(mp.okrs||[]).map(o=>o.desc).join('; ')||'—'}`;
+OKRs: ${(mp.okrs||[]).map(o=>o.desc).join('; ')||'—'}` + getCurriculoContextSnippet(currentUser.email);
     }
 
     // Route through Supabase Edge Function proxy — API key stays server-side

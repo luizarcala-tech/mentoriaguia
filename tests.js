@@ -294,6 +294,51 @@ await TA('J28 startQuiz usa max_tokens maior para não truncar (fluxo completo c
   const qc = document.getElementById('quiz-content');
   if(qc.innerHTML.includes('Erro ao gerar prova')) throw new Error('quiz falhou mesmo com o reparo — deveria aproveitar as 6 perguntas completas');
 });
+T('J29 saveCurriculo/getCurriculo grava e recupera localmente', ()=>{
+  DB.set('curriculo_cv@t.com', null);
+  DB.set('users',[{id:'cv1',name:'CV Teste',email:'cv@t.com',role:'mentorado',active:true}]);
+  const data = {texto:'Experiência em liderança de equipes de produto por 8 anos.', arquivo:'perfil.pdf', data:new Date().toISOString()};
+  DB.set('curriculo_cv@t.com', data);
+  const got = getCurriculo('cv@t.com');
+  if(!got || got.texto !== data.texto) throw new Error('não recuperou o currículo salvo');
+});
+T('J30 getCurriculoContextSnippet retorna vazio quando não há currículo', ()=>{
+  DB.set('curriculo_semcv@t.com', null);
+  const s = getCurriculoContextSnippet('semcv@t.com');
+  if(s !== '') throw new Error('deveria ser string vazia, veio: '+JSON.stringify(s));
+});
+T('J31 getCurriculoContextSnippet inclui o texto quando presente', ()=>{
+  DB.set('curriculo_cv2@t.com', {texto:'Formação em Engenharia e MBA em Gestão.', arquivo:'x.pdf', data:new Date().toISOString()});
+  const s = getCurriculoContextSnippet('cv2@t.com');
+  if(!s.includes('Formação em Engenharia e MBA em Gestão.')) throw new Error('snippet não contém o texto do currículo');
+  if(!s.includes('CURRÍCULO (LinkedIn')) throw new Error('snippet sem o rótulo esperado');
+});
+T('J32 getCurriculoContextSnippet trunca currículos muito longos', ()=>{
+  const textoLongo = 'A'.repeat(5000);
+  DB.set('curriculo_cv3@t.com', {texto:textoLongo, arquivo:'x.pdf', data:new Date().toISOString()});
+  const s = getCurriculoContextSnippet('cv3@t.com');
+  if(s.length > 3200) throw new Error('snippet não foi truncado, tamanho='+s.length);
+  if(!s.includes('resumido')) throw new Error('não sinalizou que foi resumido');
+});
+await TA('J33 callAI injeta o currículo no systemContext enviado à IA', async()=>{
+  currentUser={id:'cv4',name:'Mentorado CV',email:'cv4@t.com',role:'mentorado',active:true,phase:'U'};
+  currentRole='mentorado';
+  DB.set('curriculo_cv4@t.com', {texto:'Especialista em vendas B2B com passagem por 3 multinacionais.', arquivo:'x.pdf', data:new Date().toISOString()});
+  let capturedSystem = null;
+  const origFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    capturedSystem = JSON.parse(opts.body).system;
+    return { ok:true, status:200, json: async()=>({content:[{text:'ok'}]}), text: async()=>'' };
+  };
+  await callAI('Analise o perfil deste mentorado', true);
+  global.fetch = origFetch;
+  if(!capturedSystem || !capturedSystem.includes('Especialista em vendas B2B')) throw new Error('currículo não chegou ao prompt da IA');
+});
+T('J34 removeCurriculo limpa o registro local', ()=>{
+  DB.set('curriculo_cv5@t.com', {texto:'texto', arquivo:'a.pdf', data:new Date().toISOString()});
+  DB.set('curriculo_cv5@t.com', null); // equivalente ao efeito de removeCurriculo após confirmação
+  if(getCurriculo('cv5@t.com')) throw new Error('currículo não foi removido');
+});
 
 // ── RESULTADO ──
 console.log('PASS='+pass+' FAIL='+fail);

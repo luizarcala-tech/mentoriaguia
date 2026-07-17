@@ -5774,6 +5774,29 @@ function renderLesson6(){
 }
 
 // QUIZ SYSTEM
+function repairTruncatedQuizJSON(text){
+  // Encontra o último "}" que fecha uma pergunta completa dentro do array "questions"
+  // e descarta qualquer coisa incompleta depois dele, fechando o JSON corretamente.
+  const qIdx = text.indexOf('"questions"');
+  if(qIdx < 0) throw new Error('Formato de resposta inesperado (sem campo questions)');
+  const arrStart = text.indexOf('[', qIdx);
+  if(arrStart < 0) throw new Error('Formato de resposta inesperado (sem array de perguntas)');
+
+  let depth = 0, lastCompleteEnd = -1;
+  for(let i=arrStart; i<text.length; i++){
+    const ch = text[i];
+    if(ch === '{') depth++;
+    else if(ch === '}'){
+      depth--;
+      if(depth === 0) lastCompleteEnd = i; // fechou um objeto de pergunta completo
+    }
+  }
+  if(lastCompleteEnd < 0) throw new Error('Nenhuma pergunta completa na resposta — tente novamente');
+
+  const questionsPart = text.substring(arrStart, lastCompleteEnd+1);
+  return '{"questions":' + questionsPart + ']}';
+}
+
 async function startQuiz(lessonId){
   const lesson = LESSONS.find(l=>l.id===lessonId);
   if(!lesson) return;
@@ -5816,13 +5839,21 @@ Regras:
 - Responda APENAS o JSON, sem nenhum texto antes ou depois`;
 
   try {
-    const result = await callAI(prompt, false);
+    const result = await callAI(prompt, false, 4000);
     let cleanResult = result.trim();
     // Remove possible markdown code blocks
     cleanResult = cleanResult.replace(/^```json\s*/i,'').replace(/^```\s*/i,'').replace(/```$/,'').trim();
-    const data = JSON.parse(cleanResult);
+    let data;
+    try {
+      data = JSON.parse(cleanResult);
+    } catch(parseErr){
+      // Resposta pode ter sido cortada (limite de tokens) — tenta reparar
+      // fechando a última pergunta incompleta e o array/objeto.
+      const repaired = repairTruncatedQuizJSON(cleanResult);
+      data = JSON.parse(repaired);
+    }
     if(!data.questions || data.questions.length < 5){
-      throw new Error('Quiz inválido');
+      throw new Error('Quiz inválido — poucas perguntas geradas');
     }
     renderQuiz(lessonId, data.questions);
   } catch(e){
@@ -7810,7 +7841,7 @@ function purgeUser(id){
 }
 
 
-async function callAI(prompt, includeUserContext=true){
+async function callAI(prompt, includeUserContext=true, maxTokens=1024){
   if(!checkAIRateLimit()) return null;
   try{
     let systemContext = 'Você é um estrategista sênior de desenvolvimento executivo e career coach da plataforma Arcala Insight. Seja direto, específico e orientado à ação. Evite clichês e textos genéricos.';
@@ -7848,7 +7879,7 @@ OKRs: ${(mp.okrs||[]).map(o=>o.desc).join('; ')||'—'}`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-5',
-        max_tokens: 1024,
+        max_tokens: maxTokens,
         system: systemContext,
         prompt: prompt,
         messages: [{role:'user', content: prompt}]

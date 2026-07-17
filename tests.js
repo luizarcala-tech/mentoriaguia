@@ -256,6 +256,44 @@ T('J22 renderMinhaJornada injeta checkpoint widget', ()=>{ renderMinhaJornada();
 T('J23 digest do mentor com alerta e energia', ()=>{ currentUser=DB.get('users').find(u=>u.role==='mentor'); currentRole='mentor'; const d=renderMentorDigest(DB.get('users').filter(u=>u.role==='mentorado')); if(!d.includes('Digest da semana')) throw new Error('x'); });
 await TA('J24 renderMentorDash com digest', async()=>{ await renderMentorDash(); });
 await TA('J25 telas admin executam', async()=>{ currentUser=DB.get('users').find(u=>u.role==='admin'); currentRole='admin'; await renderAdminUsers(); await renderAdminMatch(); await renderDashboardROI(); });
+T('J26 repairTruncatedQuizJSON reconstrói perguntas completas de resposta cortada', ()=>{
+  // Simula exatamente o erro relatado: JSON cortado no meio de uma string (resposta truncada por max_tokens)
+  const truncated = '{"questions":[' +
+    '{"q":"O que é a Metodologia GUIA?","options":["Um framework de mentoria","Um software","Um curso","Uma empresa"],"correct":0},' +
+    '{"q":"Quantas fases tem o GUIA?","options":["2","3","4","5"],"correct":2},' +
+    '{"q":"O que significa a fase G?","options":["Gerar","Gestar Acordo","Guiar","Gerenciar"],"correct":1},' +
+    '{"q":"Pergunta cortada no meio da string por limite de token';
+  const repaired = repairTruncatedQuizJSON(truncated);
+  const data = JSON.parse(repaired);
+  if(data.questions.length !== 3) throw new Error('esperava 3 perguntas completas, veio '+data.questions.length);
+  if(data.questions[2].q !== 'O que significa a fase G?') throw new Error('conteúdo da última pergunta completa incorreto');
+});
+T('J27 repairTruncatedQuizJSON preserva todas as perguntas quando o JSON já está completo', ()=>{
+  const complete = '{"questions":[{"q":"P1","options":["A","B","C","D"],"correct":0},{"q":"P2","options":["A","B","C","D"],"correct":1}]}';
+  const data = JSON.parse(complete); // fluxo normal nem chama o reparo
+  if(data.questions.length !== 2) throw new Error('x');
+});
+await TA('J28 startQuiz usa max_tokens maior para não truncar (fluxo completo com resposta cortada)', async()=>{
+  currentUser={id:'m1',name:'Mentor Teste',email:'mentor@t.com',role:'mentor',active:true};
+  currentRole='mentor';
+  document.querySelector = () => ({ innerText: 'Conteúdo da aula sobre a Metodologia GUIA.' });
+  let capturedMaxTokens = null;
+  const origFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    capturedMaxTokens = body.max_tokens;
+    // Simula a IA cortando a resposta no meio (mesmo padrão do erro relatado)
+    const truncatedContent = '{"questions":[' +
+      Array.from({length:6}, (_,i) => '{"q":"Pergunta '+(i+1)+'?","options":["A","B","C","D"],"correct":0}').join(',') +
+      ',{"q":"Pergunta cortada no meio';
+    return { ok:true, status:200, json: async()=>({content:[{text:truncatedContent}]}), text: async()=>'' };
+  };
+  await startQuiz(1);
+  global.fetch = origFetch;
+  if(capturedMaxTokens < 3000) throw new Error('max_tokens ainda baixo demais para 10 perguntas: '+capturedMaxTokens);
+  const qc = document.getElementById('quiz-content');
+  if(qc.innerHTML.includes('Erro ao gerar prova')) throw new Error('quiz falhou mesmo com o reparo — deveria aproveitar as 6 perguntas completas');
+});
 
 // ── RESULTADO ──
 console.log('PASS='+pass+' FAIL='+fail);

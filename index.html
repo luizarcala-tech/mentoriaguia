@@ -9205,13 +9205,17 @@ function submitCheckpoint(){
 
 function calculateStreak(checks){
   if(!checks.length) return 0;
-  let streak = 0;
+  // Ordena do mais recente para o mais antigo — a lógica de streak exige isso
+  // e não podia depender da ordem de chegada do chamador.
+  const sorted = [...checks].sort((a,b)=> new Date(b.date) - new Date(a.date));
   const now = new Date();
-  for(let i=0; i<checks.length; i++){
-    const d = new Date(checks[i].date);
-    const weekDiff = Math.floor((now-d)/(7*24*60*60*1000));
-    if(weekDiff <= i+1) streak++;
-    else break;
+  const firstGap = Math.floor((now - new Date(sorted[0].date)) / (7*24*60*60*1000));
+  if(firstGap > 1) return 0; // mais de uma semana sem checkpoint: streak zerado
+  let streak = 1;
+  for(let i=1; i<sorted.length; i++){
+    const gap = Math.floor((new Date(sorted[i-1].date) - new Date(sorted[i].date)) / (7*24*60*60*1000));
+    if(gap <= 1) streak++;
+    else break; // semana pulada — streak termina aqui
   }
   return streak;
 }
@@ -9794,13 +9798,11 @@ async function saveDISCProfile(email, profileData, tipo){
   const key = tipo === 'natural' ? 'disc_natural_'+email : 'disc_adaptado_'+email;
   DB.set(key, profileData);
   await sbSaveDISC(email, getCurrentCycleId(), tipo, profileData);
-  try {
-    // Save to Supabase users table as JSONB fields
-    const patch = {};
-    if(tipo === 'natural') patch.disc_natural = profileData;
-    else patch.disc_adaptado = profileData;
-    await sbPatchUser(email, patch);
-  } catch(e){}
+  // Nota: disc_profiles (tabela tipada) é a fonte oficial do DISC.
+  // Um patch redundante para users.disc_natural/disc_adaptado existia aqui
+  // antes, mas essas colunas nunca estiveram na whitelist de sanitizeUserPayload
+  // — o PATCH sempre saía vazio e o dado nunca chegava ao servidor por essa via.
+  // Removido para não manter dois caminhos de escrita, um deles quebrado.
 }
 
 function getDISCNatural(email){
@@ -10149,6 +10151,38 @@ function switchAuthTab(tab){
   document.getElementById('signup-pending').style.display = 'none';
 }
 
+// Resolve o usuário do login. O Supabase é a fonte oficial: se o cache
+// local estiver desatualizado (ex.: role mudou de mentorado para mentor
+// no painel admin), o login precisa refletir o banco, não o cache.
+// Sem rede, cai no cache local para não travar o acesso.
+async function resolveUserForLogin(email){
+  const localUsers = DB.get('users') || [];
+  const local = localUsers.find(u => u.email === email) || null;
+
+  let remote = null;
+  try {
+    const rows = await Promise.race([
+      sbFetch('users?email=eq.'+encodeURIComponent(email)+'&select=*'),
+      new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 6000))
+    ]);
+    if(rows && rows.length > 0) remote = rows[0];
+  } catch(e){ /* offline: usa o cache local abaixo */ }
+
+  if(!remote) return local;
+
+  // Servidor vence nos campos de identidade/permissão. A senha local é
+  // preservada quando o banco não tem uma (migração base64 -> SHA-256).
+  const merged = {...local, ...remote};
+  if(!remote.password && local?.password) merged.password = local.password;
+
+  // Atualiza o cache para o restante da sessão refletir o servidor
+  const idx = localUsers.findIndex(u => u.email === email);
+  if(idx >= 0) localUsers[idx] = merged; else localUsers.push(merged);
+  DB.set('users', localUsers);
+
+  return merged;
+}
+
 async function doLogin(){
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
@@ -10164,27 +10198,9 @@ async function doLogin(){
   btn.textContent='Verificando...'; btn.disabled=true;
 
   try {
-    // 1. Tenta localStorage (admin e usuários cacheados)
-    const localUsers = DB.get('users') || [];
-    let user = localUsers.find(u => u.email === email) || null;
-
-    // 2. Se não achou localmente, busca no Supabase
-    if(!user){
-      try {
-        const rows = await Promise.race([
-          sbFetch('users?email=eq.'+encodeURIComponent(email)+'&select=*'),
-          new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 6000))
-        ]);
-        if(rows && rows.length > 0){
-          user = rows[0];
-          // Cacheia localmente para próximos logins
-          localUsers.push(user);
-          DB.set('users', localUsers);
-        }
-      } catch(sbErr){
-        // Supabase falhou — continua sem ele
-      }
-    }
+    // Resolve o usuário com o Supabase como fonte oficial (cache local
+    // só prevalece se o servidor estiver inacessível)
+    let user = await resolveUserForLogin(email);
 
     btn.textContent='Entrar na plataforma'; btn.disabled=false;
 

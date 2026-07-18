@@ -798,7 +798,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <div id="notif-panel" style="display:none;position:absolute;top:40px;right:0;width:340px;max-height:420px;overflow-y:auto;background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:300;"></div>
   </div>
   <div id="platform-version-badge" style="font-size:9px;color:var(--text4);font-family:'Space Mono',monospace;margin-right:10px;" title="Versão publicada — recarregue com Ctrl+Shift+R se este número parecer desatualizado"></div>
-  <div id="sync-badge" style="display:none;align-items:center;font-size:9px;color:var(--amber);font-family:'Space Mono',monospace;margin-right:10px;cursor:pointer;" title="Há dados salvos localmente que ainda não foram para o servidor. Clique para tentar sincronizar." onclick="syncQueueFlush().then(r=>toast(r.failed?('Ainda pendentes: '+r.failed):'Tudo sincronizado','suc'))"></div>
+  <div id="sync-badge" style="display:none;align-items:center;font-size:9px;color:var(--amber);font-family:'Space Mono',monospace;margin-right:10px;cursor:pointer;" title="Clique para ver o motivo das falhas e tentar sincronizar novamente." onclick="showSyncDiagnostic()"></div>
   <div class="user-info">
     <div onclick="toggleProfileMenu()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;border-radius:20px;transition:background .15s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'">
       <div class="avatar-xs" id="top-av">AI</div>
@@ -8256,8 +8256,9 @@ async function persist(path, method, body, opts={}){
     await sbFetch(path, method, body, opts.headers||{});
     return true;
   } catch(e){
-    console.warn('persist falhou, enfileirado:', path, e.message);
-    syncQueueAdd({path, method, body, headers: opts.headers});
+    const msg = String(e.message||e).slice(0,400);
+    console.warn('persist falhou, enfileirado:', path, msg);
+    syncQueueAdd({path, method, body, headers: opts.headers, last_error: msg});
     if(!opts.silent) toast('Salvo localmente — sincronização pendente','warn');
     return false;
   }
@@ -8441,6 +8442,102 @@ async function sbAudit(action, entity, entityId, meta={}){
     entity_id: String(entityId||''), meta,
     created_at: new Date().toISOString()
   }, {silent:true});
+}
+
+// ── DIAGNÓSTICO DE SINCRONIZAÇÃO (sem precisar de console) ────────────
+function explainSyncError(status, body){
+  const b = String(body||'').toLowerCase();
+  if(status === 401 || status === 403 || b.includes('row-level security') || b.includes('rls')){
+    return {causa:'Row Level Security (RLS) está bloqueando a escrita',
+            acao:'A tabela foi criada com RLS ativo e sem política de acesso. É preciso liberar acesso para a chave anon no painel do Supabase.'};
+  }
+  if(b.includes('pgrst204') || b.includes('column') && b.includes('not found')){
+    return {causa:'Coluna que o app envia não existe na tabela',
+            acao:'Falta rodar (ou re-rodar) o supabase_schema.sql. Veja o nome da coluna na mensagem técnica abaixo.'};
+  }
+  if(status === 409 || b.includes('duplicate key') || b.includes('unique constraint')){
+    return {causa:'Registro duplicado (violação de índice único)',
+            acao:'Já existe uma linha equivalente. Normalmente inofensivo — o dado já está no banco.'};
+  }
+  if(b.includes('does not exist') || b.includes('42p01')){
+    return {causa:'A tabela não existe no banco',
+            acao:'Rode o supabase_schema.sql no SQL Editor do Supabase.'};
+  }
+  if(status === 0 || b.includes('failed to fetch') || b.includes('networkerror')){
+    return {causa:'Sem conexão com o servidor',
+            acao:'Verifique a internet. Os dados estão salvos localmente e serão reenviados depois.'};
+  }
+  return {causa:'Erro não classificado (status '+status+')',
+          acao:'Copie a mensagem técnica abaixo e envie para análise.'};
+}
+
+async function showSyncDiagnostic(){
+  const q = DB.get(SYNC_QUEUE_KEY) || [];
+  const modal = document.createElement('div');
+  modal.id = 'sync-diag-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML = `
+    <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);max-width:720px;width:100%;max-height:85vh;overflow:auto;padding:24px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div style="font-size:16px;font-weight:600;color:var(--text);">Diagnóstico de sincronização</div>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('sync-diag-modal').remove()">Fechar</button>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">${q.length} operação(ões) aguardando envio ao servidor. Os dados estão salvos localmente e não serão perdidos.</div>
+      <div id="sync-diag-body" style="font-size:12px;color:var(--text2);">Testando conexão com cada tabela...</div>
+      <div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-gold btn-sm" onclick="syncQueueFlush().then(r=>{toast(r.failed?('Ainda pendentes: '+r.failed):'Tudo sincronizado','suc');document.getElementById('sync-diag-modal').remove();})">↻ Tentar sincronizar novamente</button>
+        <button class="btn btn-outline btn-sm" onclick="copySyncDiagnostic()">Copiar relatório</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  // Testa uma escrita real em cada tabela que está na fila
+  const tables = [...new Set(q.map(o=>String(o.path).split('?')[0]))];
+  if(!tables.length) tables.push('checkpoints');
+  const results = [];
+  for(const t of tables){
+    let status = 0, body = '';
+    try {
+      const res = await fetch(SB_URL+'/rest/v1/'+t+'?select=*&limit=1',
+        {headers:{apikey:SB_KEY, Authorization:'Bearer '+SB_KEY}});
+      status = res.status; body = await res.text();
+    } catch(e){ body = String(e.message||e); }
+    results.push({tabela:t, leitura_status:status, leitura_body:body});
+  }
+  // Erro registrado na própria fila
+  const queueErrors = q.map(o=>({path:o.path, tentativas:o.attempts||0, erro:o.last_error||'(sem detalhe registrado)'}));
+
+  window._syncDiagReport = JSON.stringify({results, queueErrors}, null, 2);
+
+  const first = queueErrors.find(e=>e.erro && e.erro !== '(sem detalhe registrado)');
+  const probe  = results.find(r=>r.leitura_status && r.leitura_status >= 400);
+  const ref    = probe ? explainSyncError(probe.leitura_status, probe.leitura_body)
+                       : explainSyncError(0, first?.erro||'');
+
+  document.getElementById('sync-diag-body').innerHTML = `
+    <div style="padding:12px 14px;background:var(--bg3);border-radius:var(--radius-sm);border-left:3px solid var(--amber);margin-bottom:14px;">
+      <div style="font-size:10px;font-weight:700;color:var(--amber);letter-spacing:.06em;margin-bottom:5px;">CAUSA PROVÁVEL</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:8px;">${ref.causa}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.06em;margin-bottom:4px;">O QUE FAZER</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;">${ref.acao}</div>
+    </div>
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.06em;margin-bottom:6px;">TESTE DE LEITURA POR TABELA</div>
+    ${results.map(r=>`
+      <div style="display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:11px;">
+        <div style="flex:1;color:var(--text2);">${r.tabela}</div>
+        <div style="color:${r.leitura_status===200?'var(--green)':'var(--red)'};">${r.leitura_status||'sem resposta'}</div>
+      </div>`).join('')}
+    <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.06em;margin:14px 0 6px;">MENSAGEM TÉCNICA</div>
+    <pre style="background:var(--bg3);padding:10px;border-radius:var(--radius-sm);font-size:10px;color:var(--text3);white-space:pre-wrap;word-break:break-all;max-height:180px;overflow:auto;">${
+      (probe ? probe.leitura_body : (first?.erro||'(nenhuma mensagem registrada)')).slice(0,1200)
+    }</pre>`;
+}
+
+function copySyncDiagnostic(){
+  const txt = window._syncDiagReport || '(nada a copiar)';
+  navigator.clipboard.writeText(txt)
+    .then(()=>toast('Relatório copiado — cole na conversa','suc'))
+    .catch(()=>toast('Não foi possível copiar automaticamente','err'));
 }
 
 // ── CYCLE SELECTOR — shown at top of each instrument page ────────────────────

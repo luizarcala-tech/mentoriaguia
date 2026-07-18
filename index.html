@@ -937,7 +937,11 @@ async function sbPatchUser(email, fields){
 
 async function sbUpsertUser(userData){
   try {
-    await sbFetch('users','POST',userData,{'Prefer':'resolution=merge-duplicates,return=representation'});
+    // on_conflict=email é essencial: sem isso, o Postgrest só detecta conflito pela
+    // chave primária (id), que é sempre nova (timestamp) — nunca colide sozinha.
+    // Com on_conflict=email, o banco de fato impede duas linhas com o mesmo e-mail
+    // (requer UNIQUE constraint em users.email — ver SQL de setup).
+    await sbFetch('users?on_conflict=email','POST',userData,{'Prefer':'resolution=merge-duplicates,return=representation'});
     return true;
   } catch(e){
     try { await sbFetch('users?email=eq.'+encodeURIComponent(userData.email),'PATCH',userData); return true; }

@@ -170,7 +170,7 @@ await TA('J05b troca de role sobrevive mesmo com PATCH falhando (RLS)', async()=
   const u = DB.get('users').find(x=>x.email==='role@t.com');
   u.role='mentor'; DB.set('users', DB.get('users').map(x=>x.email===u.email?u:x));
   await sbPatchUser('role@t.com', {role:'mentor'}); // deve falhar silenciosamente e retornar false
-  global.fetch = async (url) => ({ok:true, status:200, json:async()=>[{id:'r1',name:'Trocar Role',email:'role@t.com',role:'mentorado',active:true}], text:async()=>''});
+  global.fetch = async (url) => ({ok:true, status:200, json:async()=>[{id:'r1',name:'Trocar Role',email:'role@t.com',role:'mentorado',active:true}], text:async()=>JSON.stringify([{id:'r1',name:'Trocar Role',email:'role@t.com',role:'mentorado',active:true}])});
   const reloaded = await loadAllUsers();
   global.fetch = origFetch;
   const after = reloaded.find(x=>x.email==='role@t.com');
@@ -201,15 +201,63 @@ T('J05d e-mail duplicado no retorno do Supabase é unificado sem perder o role l
 await TA('J05d2 dedup real via loadAllUsers', async()=>{
   const origFetch = global.fetch;
   // Supabase retorna DUAS linhas para o mesmo e-mail (cenário de duplicidade real)
-  global.fetch = async () => ({ok:true, status:200, json:async()=>[
+  global.fetch = async () => { const rows=[
     {id:'d1',name:'Dup',email:'dup@t.com',role:'mentorado',active:true},
     {id:'d1-old',name:'Dup',email:'dup@t.com',role:'mentorado',active:true},
-  ], text:async()=>''});
+  ]; return {ok:true, status:200, json:async()=>rows, text:async()=>JSON.stringify(rows)}; };
   const reloaded = await loadAllUsers();
   global.fetch = origFetch;
   const matches = reloaded.filter(u=>u.email==='dup@t.com');
   if(matches.length!==1) throw new Error('não unificou — ainda há '+matches.length+' linhas');
   if(matches[0].role!=='mentor') throw new Error('role local perdido no dedup: '+matches[0].role);
+});
+await TA('J05e nome editado localmente sobrevive a duplicatas no Supabase com nomes antigos', async()=>{
+  DB.set('users',[{id:'n1',name:'Nome Editado No Admin',email:'nome@t.com',role:'mentorado',active:true}]);
+  const origFetch = global.fetch;
+  // Duas linhas duplicadas no Supabase, ambas com o nome ANTIGO (antes da edição)
+  global.fetch = async () => { const rows=[
+    {id:'n1',name:'Nome Antigo',email:'nome@t.com',role:'mentorado',active:true},
+    {id:'n1-dup',name:'Nome Antigo Duplicado',email:'nome@t.com',role:'mentorado',active:true},
+  ]; return {ok:true, status:200, json:async()=>rows, text:async()=>JSON.stringify(rows)}; };
+  const reloaded = await loadAllUsers();
+  global.fetch = origFetch;
+  const u = reloaded.find(x=>x.email==='nome@t.com');
+  if(u.name !== 'Nome Editado No Admin') throw new Error('nome revertido para: '+u.name);
+});
+await TA('J05f dedup de duplicatas SEM edição local é determinístico (não depende da ordem)', async()=>{
+  DB.set('users',[]); // nenhum registro local — simula outro dispositivo/sessão
+  const rowA = {id:'x1',name:'Perfil Completo',email:'det@t.com',role:'mentorado',active:true,plan:'Ciclo único — 12 semanas',empresa_id:'e1'};
+  const rowB = {id:'x2',name:'Perfil Incompleto',email:'det@t.com',role:'mentorado',active:true};
+  const origFetch = global.fetch;
+
+  global.fetch = async () => ({ok:true,status:200,json:async()=>[rowA,rowB],text:async()=>JSON.stringify([rowA,rowB])});
+  const result1 = await loadAllUsers();
+
+  DB.set('users',[]);
+  global.fetch = async () => ({ok:true,status:200,json:async()=>[rowB,rowA],text:async()=>JSON.stringify([rowB,rowA])}); // ordem invertida
+  const result2 = await loadAllUsers();
+  global.fetch = origFetch;
+
+  const u1 = result1.find(u=>u.email==='det@t.com');
+  const u2 = result2.find(u=>u.email==='det@t.com');
+  if(u1.name !== u2.name) throw new Error('resultado depende da ordem: '+u1.name+' vs '+u2.name);
+  if(u1.name !== 'Perfil Completo') throw new Error('não escolheu o registro mais completo: '+u1.name);
+});
+await TA('J05g cleanupDuplicateUsersInSupabase remove duplicatas de verdade via DELETE', async()=>{
+  currentUser={id:'a1',name:'Admin',email:'admcln@t.com',role:'admin',active:true}; currentRole='admin';
+  const deleted = [];
+  const origFetch = global.fetch;
+  global.fetch = async (url, opts) => {
+    if(opts && opts.method==='DELETE'){ deleted.push(url); return {ok:true,status:204,json:async()=>[],text:async()=>''}; }
+    const rows=[
+      {id:'k1',name:'Completo',email:'clean@t.com',role:'mentorado',active:true,plan:'X'},
+      {id:'k2',name:'Incompleto',email:'clean@t.com',role:'mentorado',active:true},
+    ]; return {ok:true,status:200,json:async()=>rows,text:async()=>JSON.stringify(rows)};
+  };
+  await cleanupDuplicateUsersInSupabase();
+  global.fetch = origFetch;
+  if(deleted.length !== 1) throw new Error('esperava 1 DELETE, houve '+deleted.length);
+  if(!deleted[0].includes('k2')) throw new Error('removeu o registro errado: '+deleted[0]);
 });
 await TA('J06a cenário Claudinei: aprovar cadastro sincroniza com Supabase', async()=>{
   let posted = null;

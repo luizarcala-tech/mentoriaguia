@@ -953,7 +953,26 @@ async function loadAllUsers(){
       new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),5000))
     ]);
     if(!sb || !sb.length) return local;
-    const result = sb.map(su=>{
+
+    // ── 1) Deduplica as linhas do Supabase por e-mail ANTES de mesclar com o local ──
+    // Fazer isso antes evita um bug sutil: se o merge com local fosse feito por linha
+    // (uma vez por duplicata) e só depois deduplicado, a ordem de chegada das duplicatas
+    // podia decidir de forma não-determinística qual nome/role sobrevivia — inclusive
+    // revertendo uma edição feita no admin. Deduplicando primeiro, o merge com local
+    // roda uma única vez por e-mail, sempre com o mesmo resultado.
+    const sbByEmail = {};
+    sb.forEach(su => {
+      if(!sbByEmail[su.email]){ sbByEmail[su.email] = su; return; }
+      console.warn('loadAllUsers: e-mail duplicado no Supabase —', su.email, '— mantendo o registro mais completo.');
+      const prev = sbByEmail[su.email];
+      // Prefere a linha com mais campos preenchidos (mais provável de ser a mais atual/completa)
+      const score = o => Object.values(o).filter(v=>v!==null&&v!==undefined&&v!=='').length;
+      sbByEmail[su.email] = score(su) >= score(prev) ? su : prev;
+    });
+    const sbDeduped = Object.values(sbByEmail);
+
+    // ── 2) Mescla cada usuário único do Supabase com o correspondente local ──
+    const result = sbDeduped.map(su=>{
       const lu = local.find(l=>l.email===su.email);
       if(!lu) return su;
       return {
@@ -974,24 +993,39 @@ async function loadAllUsers(){
     });
     local.forEach(lu=>{ if(!result.find(r=>r.email===lu.email)) result.push(lu); });
 
-    // Blindagem: se o Supabase (ou o merge) produzir mais de uma linha para o mesmo
-    // e-mail, colapsa em uma só — preferindo a que tem dado local mais recente, e
-    // registrando um aviso para investigação (isso evita que a UI leia por acaso a
-    // linha "errada" quando há duplicidade de cadastro).
-    const byEmail = {};
-    result.forEach(r => {
-      if(!byEmail[r.email]){ byEmail[r.email] = r; return; }
-      console.warn('loadAllUsers: e-mail duplicado detectado —', r.email, '— unificando registros.');
-      byEmail[r.email] = { ...byEmail[r.email], ...r,
-        role: byEmail[r.email].role || r.role,
-        active: (byEmail[r.email].active !== undefined) ? byEmail[r.email].active : r.active,
-      };
-    });
-    const deduped = Object.values(byEmail);
-
-    DB.set('users', deduped);
-    return deduped;
+    DB.set('users', result);
+    return result;
   } catch(e){ return local; }
+}
+
+// Ferramenta de reparo: remove de fato as linhas duplicadas no Supabase (não só na
+// leitura), mantendo a mais completa. Use se "loadAllUsers: e-mail duplicado" aparecer
+// muito no console, ou se edições parecerem "voltar atrás" sem explicação.
+async function cleanupDuplicateUsersInSupabase(){
+  toast('Verificando duplicatas no Supabase...','');
+  let sb;
+  try { sb = await sbFetch('users?select=*'); } catch(e){ toast('Não foi possível consultar o Supabase','err'); return; }
+  if(!sb || !sb.length){ toast('Nenhum usuário encontrado no Supabase','err'); return; }
+
+  const byEmail = {};
+  sb.forEach(su => { (byEmail[su.email] = byEmail[su.email]||[]).push(su); });
+  const dupEmails = Object.entries(byEmail).filter(([,rows])=>rows.length>1);
+
+  if(!dupEmails.length){ toast('Nenhuma duplicata encontrada — base está limpa','suc'); return; }
+
+  let removed=0, kept=0;
+  for(const [email, rows] of dupEmails){
+    const score = o => Object.values(o).filter(v=>v!==null&&v!==undefined&&v!=='').length;
+    const best = rows.reduce((a,b)=> score(b)>score(a) ? b : a);
+    kept++;
+    for(const row of rows){
+      if(row.id === best.id) continue;
+      try { await sbFetch('users?id=eq.'+encodeURIComponent(row.id), 'DELETE'); removed++; }
+      catch(e){ console.warn('Falha ao remover duplicata', row.id, e.message); }
+    }
+  }
+  toast(`Limpeza concluída: ${removed} duplicata(s) removida(s), ${kept} e-mail(s) unificado(s)`,'suc');
+  await renderAdminUsers();
 }
 
 // ── RESTORED GLOBAL STATE ──
@@ -9190,7 +9224,7 @@ async function syncAllUsersToSupabase(){
   }
   if(fail===0) toast(`✓ ${ok} usuário(s) sincronizado(s) com sucesso`,'suc');
   else toast(`${ok} sincronizados, ${fail} falharam — verifique RLS no Supabase`,'err');
-  renderAdminUsers();
+  await renderAdminUsers();
 }
 
 async function renderAdminUsers(){
@@ -9285,6 +9319,7 @@ async function renderAdminUsers(){
         <span style="font-size:11px;color:var(--text4);font-weight:400;"> — clique para editar</span>
       </div>
       <button class="btn btn-outline btn-xs" onclick="syncAllUsersToSupabase()" title="Força a sincronização de todos os usuários com o Supabase — use se algum usuário não aparecer em outro dispositivo">↻ Sincronizar todos</button>
+      <button class="btn btn-outline btn-xs" onclick="cleanupDuplicateUsersInSupabase()" title="Remove linhas duplicadas do mesmo e-mail no Supabase — use se uma edição parecer 'voltar atrás' sem explicação">🧹 Remover duplicatas</button>
       <input class="inline-inp" id="usr-search" placeholder="🔍 Buscar..." style="width:200px;" oninput="filterUsers('usr-search')">
     </div>
     <div class="table-wrap">

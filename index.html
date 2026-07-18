@@ -9226,9 +9226,13 @@ function startHealthCheck(){
 // campo novo que ainda não tem coluna correspondente no banco.
 const USERS_TABLE_COLUMNS = new Set([
   'id','name','email','role','plan','active','phase','week','created',
-  'password','mentor_id','empresa_id','mentorados',
+  'password','mentor_id','empresa_id',
   'curriculo_texto','curriculo_arquivo','curriculo_data','photo',
 ]);
+// NOTA: 'mentorados' foi removida de propósito. É redundante (a relação
+// mentor↔mentorado já fica gravada do lado do mentorado, em mentor_id) e sua
+// coluna correspondente no Supabase não está confirmada — melhor nunca enviar
+// do que depender de uma migração adicional para restaurar a sincronização.
 
 function sanitizeUserPayload(u){
   const clean = {};

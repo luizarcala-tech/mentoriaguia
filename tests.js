@@ -279,24 +279,25 @@ await TA('J05g cleanupDuplicateUsersInSupabase remove duplicatas de verdade via 
   if(deleted.length !== 1) throw new Error('esperava 1 DELETE, houve '+deleted.length);
   if(!deleted[0].includes('k2')) throw new Error('removeu o registro errado: '+deleted[0]);
 });
-T('J05h sanitizeUserPayload remove campos que não existem na tabela users', ()=>{
+T('J05h sanitizeUserPayload remove campos que não existem na tabela users (inclusive mentorados, removido de propósito)', ()=>{
   const dirty = {id:'z1', name:'X', email:'z@t.com', role:'mentor', mentorados:['a','b'],
                  campo_futuro_inventado: 'não deveria ir para o Supabase', outraCoisa: 123};
   const clean = sanitizeUserPayload(dirty);
   if('campo_futuro_inventado' in clean) throw new Error('campo desconhecido vazou para o payload');
   if('outraCoisa' in clean) throw new Error('outro campo desconhecido vazou');
-  if(clean.mentorados === undefined) throw new Error('campo válido (mentorados) foi removido por engano');
+  if('mentorados' in clean) throw new Error('mentorados não deveria mais ser enviado (coluna não confirmada no banco)');
   if(clean.name !== 'X') throw new Error('campo válido corrompido');
 });
-await TA('J05i cenário real: sincronizar usuário com campo mentorados não quebra (reproduz o bug relatado)', async()=>{
+await TA('J05i cenário real relatado: mentor com campo mentorados sincroniza sem erro de coluna', async()=>{
   currentUser={id:'a1',name:'Admin',email:'admmr@t.com',role:'admin',active:true}; currentRole='admin';
   let capturedBody = null;
   const origFetch = global.fetch;
   global.fetch = async (url, opts) => {
     if(opts && opts.method==='POST' && url.includes('/users')){
       capturedBody = JSON.parse(opts.body);
-      // Simula o Postgrest recusando coluna desconhecida — só aceita se o payload já vier limpo
-      const allowed = new Set(['id','name','email','role','plan','active','phase','week','created','password','mentor_id','empresa_id','mentorados','curriculo_texto','curriculo_arquivo','curriculo_data']);
+      // Simula o Postgrest real: essas são as colunas que de fato existem hoje no banco
+      // (mentorados NÃO está aqui — é exatamente o cenário reportado pelo usuário)
+      const allowed = new Set(['id','name','email','role','plan','active','phase','week','created','password','mentor_id','empresa_id','curriculo_texto','curriculo_arquivo','curriculo_data','photo']);
       const bad = Object.keys(capturedBody).find(k=>!allowed.has(k));
       if(bad) throw new Error("PGRST204: Could not find the '"+bad+"' column of 'users' in the schema cache");
       return {ok:true,status:201,json:async()=>[capturedBody],text:async()=>JSON.stringify([capturedBody])};
@@ -306,9 +307,9 @@ await TA('J05i cenário real: sincronizar usuário com campo mentorados não que
   DB.set('users',[{id:'mr1',name:'Mentor com Mentorados',email:'mr1@t.com',role:'mentor',active:true,mentorados:['x1','x2'],_localOnlyDebugField:'lixo qualquer'}]);
   await syncAllUsersToSupabase();
   global.fetch = origFetch;
-  if(!capturedBody) throw new Error('POST nunca foi chamado');
+  if(!capturedBody) throw new Error('POST nunca foi chamado (ou falhou antes de chegar aqui)');
   if('_localOnlyDebugField' in capturedBody) throw new Error('campo de lixo local vazou para o Supabase');
-  if(JSON.stringify(capturedBody.mentorados) !== JSON.stringify(['x1','x2'])) throw new Error('mentorados não foi preservado corretamente');
+  if('mentorados' in capturedBody) throw new Error('mentorados vazou mesmo não existindo a coluna no banco simulado');
 });
 await TA('J06a cenário Claudinei: aprovar cadastro sincroniza com Supabase', async()=>{
   let posted = null;

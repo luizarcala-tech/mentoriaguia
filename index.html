@@ -798,6 +798,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <div id="notif-panel" style="display:none;position:absolute;top:40px;right:0;width:340px;max-height:420px;overflow-y:auto;background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:300;"></div>
   </div>
   <div id="platform-version-badge" style="font-size:9px;color:var(--text4);font-family:'Space Mono',monospace;margin-right:10px;" title="Versão publicada — recarregue com Ctrl+Shift+R se este número parecer desatualizado"></div>
+  <div id="sync-badge" style="display:none;align-items:center;font-size:9px;color:var(--amber);font-family:'Space Mono',monospace;margin-right:10px;cursor:pointer;" title="Há dados salvos localmente que ainda não foram para o servidor. Clique para tentar sincronizar." onclick="syncQueueFlush().then(r=>toast(r.failed?('Ainda pendentes: '+r.failed):'Tudo sincronizado','suc'))"></div>
   <div class="user-info">
     <div onclick="toggleProfileMenu()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;border-radius:20px;transition:background .15s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'">
       <div class="avatar-xs" id="top-av">AI</div>
@@ -865,6 +866,27 @@ async function sbFetch(path, method='GET', body=null, extraHeaders={}){
 const DB = {
   get(k){ try{ return JSON.parse(localStorage.getItem('arcala_'+k)||'null') }catch(e){return null} },
   set(k,v){ localStorage.setItem('arcala_'+k, JSON.stringify(v)) },
+  // Scoped storage: instrument data belongs to a mentee (+ optional cycle),
+  // never to whoever happens to be logged in. Reading falls back to the legacy
+  // global key ONLY for the owner, so pre-migration data is not lost.
+  scopedKey(base, email, cycleId){
+    if(!email) return base;
+    return base + '__' + email + (cycleId ? '__' + cycleId : '');
+  },
+  getScoped(base, email, cycleId, legacyFallback){
+    const v = this.get(this.scopedKey(base, email, cycleId));
+    if(v !== null && v !== undefined) return v;
+    if(legacyFallback) {
+      const legacy = this.get(base);
+      if(legacy !== null && legacy !== undefined) return legacy;
+    }
+    return null;
+  },
+  setScoped(base, email, cycleId, value){
+    if(!email){ console.warn('setScoped without email, refusing to write:', base); return false; }
+    this.set(this.scopedKey(base, email, cycleId), value);
+    return true;
+  },
   init(){
     if(!this.get('users')) this.set('users', [
       {id:'u1',name:'Luiz Arcala',email:'luiz@arcala.com',role:'admin',active:true,created:'2026-01-15',plan:'Admin',password:'YWRtaW4xMjM='},
@@ -1162,7 +1184,7 @@ function computeNextBestAction(){
   if(!active) return {icon:'📋', label:'Crie seu ciclo de mentoria', desc:'Tudo começa aqui: defina objetivos e formalize o acordo com seu mentor.', btn:'Criar ciclo', page:'inicio-ciclo'};
   const sigs = DB.get('acordo_sigs_'+active.id) || active.signatures || {};
   if(!sigs.mentee) return {icon:'✍', label:'Assine o termo de mentoria', desc:'O ciclo "'+active.name+'" aguarda sua assinatura.', btn:'Assinar agora', page:'inicio-ciclo'};
-  const disc = DB.get('disc_result_full') || DB.get('disc');
+  const disc = discFullRead() || DB.get('disc');
   if(!disc) return {icon:'◈', label:'Faça seu Perfil DISC', desc:'12 questões que revelam seu perfil natural e adaptado.', btn:'Fazer DISC', page:'disc'};
   const comps = active.competencias||[];
   if(comps.length<3) return {icon:'◎', label:'Selecione suas competências', desc:'Escolha de 3 a 7 competências ('+comps.length+' até agora).', btn:'Selecionar', page:'comp'};
@@ -1256,7 +1278,7 @@ let currentRole = 'mentor';
 let currentPage = '';
 let currentUser = null;
 let charts = {};
-let swotData = DB.get('swot');
+let swotData = {f:[],fr:[],o:[],a:[]}; // populado por renderSWOT via swotRead()
 let discSel = DB.get('disc');
 
 // ══════════════════════════════════════════════
@@ -1973,7 +1995,7 @@ function renderAdminConfig(){
 const ALL_COMPETENCIAS = ['Liderança estratégica','Comunicação executiva','Gestão de stakeholders','Visão de negócio','Tomada de decisão','Influência sem autoridade','Presença executiva','Inteligência emocional','Gestão de equipes','Pensamento sistêmico','Gestão de mudança','Negociação','Orientação a resultados','Desenvolvimento de pessoas','Inovação e criatividade','Gestão de conflitos','Planejamento estratégico','Gestão financeira','Relacionamento com board','Marca pessoal e posicionamento'];
 
 function getActiveRadar(){
-  const radars = DB.get('comp_radars') || [];
+  const radars = radarsRead();
   const activeId = DB.get('comp_active_radar');
   return radars.find(r=>r.id===activeId) || radars[0] || null;
 }
@@ -2038,10 +2060,10 @@ async function renderComp(){
     }));
   } else {
     // Fallback: legacy comp_radars
-    radars = DB.get('comp_radars') || [];
+    radars = radarsRead();
     if(!radars.length){
       radars = [{id:'r1', name:'Radar Geral', createdAt: new Date().toLocaleDateString('pt-BR'), competencias:[]}];
-      DB.set('comp_radars', radars);
+      radarsWrite(radars);
     }
   }
 
@@ -2080,7 +2102,7 @@ function renderCompEdit(isMentor, activeId, activeCycle){
   if(activeCycle){
     radar = {id:activeCycle.id, name:activeCycle.name, competencias:activeCycle.competencias||[], frozen:!!activeCycle.frozen_at};
   } else {
-    const radars = DB.get('comp_radars')||[];
+    const radars = radarsRead();
     radar = radars.find(r=>r.id===activeId)||radars[0];
   }
   if(!radar) return;
@@ -2234,10 +2256,10 @@ function renderCompCompare(radars){
 function newRadarCycle(){
   const name = prompt('Nome do novo ciclo (ex: Ciclo Q3 2026):');
   if(!name) return;
-  const radars = DB.get('comp_radars') || [];
+  const radars = radarsRead();
   const newId = 'r'+Date.now();
   radars.push({id:newId, name:name.trim(), createdAt:new Date().toLocaleDateString('pt-BR'), competencias:[]});
-  DB.set('comp_radars', radars);
+  radarsWrite(radars);
   DB.set('comp_active_radar', newId);
   DB.set('comp_tab','edit');
   toast('Novo ciclo criado: '+name,'suc');
@@ -2245,19 +2267,19 @@ function newRadarCycle(){
 }
 
 function saveRadarSnapshot(){
-  const radars = DB.get('comp_radars') || [];
+  const radars = radarsRead();
   const activeId = DB.get('comp_active_radar');
   const r = radars.find(x=>x.id===activeId);
   if(r) r.closedAt = new Date().toLocaleDateString('pt-BR');
-  DB.set('comp_radars', radars);
+  radarsWrite(radars);
   toast('Ciclo fechado e salvo no histórico!','suc');
 }
 
 function deleteRadar(id){
   showConfirm('Excluir ciclo','Remover este ciclo permanentemente?','Excluir',function(){
-    let radars = DB.get('comp_radars')||[];
+    let radars = radarsRead();
     radars = radars.filter(r=>r.id!==id);
-    DB.set('comp_radars', radars);
+    radarsWrite(radars);
     if(radars.length) DB.set('comp_active_radar', radars[0].id);
     toast('Ciclo removido','suc');
     renderComp();
@@ -2298,13 +2320,13 @@ function addCompByName(name){
   }
 
   // ── Fallback: legacy comp_radars ──
-  const radars = DB.get('comp_radars')||[];
+  const radars = radarsRead();
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   if(!radar) return;
   if(radar.competencias.length>=7){ toast('Limite de 7 competências atingido','err'); return; }
   if(radar.competencias.find(c=>c.name===name)){ toast('Competência já adicionada','err'); return; }
   radar.competencias.push({name,me:3,mentor:3});
-  DB.set('comp_radars', radars);
+  radarsWrite(radars);
   renderCompEdit(currentRole==='mentor', activeId);
   renderCompList();
   setTimeout(initRadarChart, 150);
@@ -2341,11 +2363,11 @@ function removeComp(ci){
   }
 
   // ── Fallback: legacy ──
-  const radars = DB.get('comp_radars')||[];
+  const radars = radarsRead();
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   if(!radar) return;
   radar.competencias.splice(ci,1);
-  DB.set('comp_radars', radars);
+  radarsWrite(radars);
   renderCompEdit(currentRole==='mentor', activeId);
   renderCompList();
   setTimeout(initRadarChart, 150);
@@ -2364,7 +2386,7 @@ function renderCompList(){
   }
   // Fallback: legacy comp_radars
   if(!data.length){
-    const radars = DB.get('comp_radars')||[];
+    const radars = radarsRead();
     const radar = radars.find(r=>r.id===activeId)||radars[0];
     data = radar ? radar.competencias : [];
   }
@@ -2432,11 +2454,11 @@ function setCompVal(ci, role, val){
     }
   }
   // Fallback: legacy comp_radars
-  const radars = DB.get('comp_radars')||[];
+  const radars = radarsRead();
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   if(!radar||!radar.competencias[ci]) return;
   radar.competencias[ci][role] = val;
-  DB.set('comp_radars', radars);
+  radarsWrite(radars);
   renderCompList();
   updateRadarChart();
 }
@@ -2453,7 +2475,7 @@ function initRadarChart(){
     if(cycle) data = cycle.competencias||[];
   }
   if(!data.length){
-    const radars = DB.get('comp_radars')||[];
+    const radars = radarsRead();
     const radar = radars.find(r=>r.id===activeId)||radars[0];
     data = radar ? radar.competencias : [];
   }
@@ -2483,7 +2505,7 @@ function updateRadarChart(){
     if(cycle) data = cycle.competencias||[];
   }
   if(!data.length){
-    const radars = DB.get('comp_radars')||[];
+    const radars = radarsRead();
     const radar = radars.find(r=>r.id===activeId)||radars[0];
     data = radar ? radar.competencias : [];
   }
@@ -2496,7 +2518,7 @@ function updateRadarChart(){
 }
 
 async function analyzeCompWithIA(){
-  const radars = DB.get('comp_radars')||[];
+  const radars = radarsRead();
   const activeId = DB.get('comp_active_radar');
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   const data = radar ? radar.competencias : [];
@@ -2511,7 +2533,7 @@ async function analyzeCompWithIA(){
 }
 
 async function compareRadarsWithIA(){
-  const radars = DB.get('comp_radars')||[];
+  const radars = radarsRead();
   const elA = document.getElementById('cmp-ra');
   const elB = document.getElementById('cmp-rb');
   const idA = elA ? elA.value : (radars.length>0?radars[radars.length-1].id:'');
@@ -2527,7 +2549,7 @@ async function compareRadarsWithIA(){
 }
 
 function exportCompReport(){
-  const radars = DB.get('comp_radars')||[];
+  const radars = radarsRead();
   const activeId = DB.get('comp_active_radar');
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   const data = radar ? radar.competencias : [];
@@ -2548,12 +2570,12 @@ function toggleAferimento(){
 }
 
 async function renderInstrumentoA(){
-  const radars = DB.get('comp_radars')||[];
+  const radars = radarsRead();
   const activeId = DB.get('comp_active_radar');
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   const data = radar ? radar.competencias : [];
   const npsHistory = DB.get('nps_history')||[];
-  const microplano = DB.get('microplano')||{okrs:[]};
+  const microplano = mpRead();
 
   document.getElementById('content-area').innerHTML = `
   <div class="page-header">
@@ -2668,12 +2690,12 @@ async function renderInstrumentoA(){
 function setAferido(el){
   const ci = parseInt(el.dataset.ci);
   const val = parseInt(el.dataset.val);
-  const radars = DB.get('comp_radars')||[];
+  const radars = radarsRead();
   const activeId = DB.get('comp_active_radar');
   const radar = radars.find(r=>r.id===activeId)||radars[0];
   if(!radar||!radar.competencias[ci]) return;
   radar.competencias[ci].aferido = val;
-  DB.set('comp_radars', radars);
+  radarsWrite(radars);
   // Update visual
   const row = document.getElementById('af-row-'+ci);
   if(row) row.querySelectorAll('[data-val]').forEach(d=>{
@@ -2689,9 +2711,9 @@ function setAferido(el){
 
 function updateKR(i, val){
   document.getElementById('kr-pct-'+i).textContent = val+'%';
-  const mp = DB.get('microplano')||{okrs:[]};
+  const mp = mpRead();
   if(mp.okrs[i]) mp.okrs[i].atingimento = parseInt(val);
-  DB.set('microplano', mp);
+  mpWrite(mp);
 }
 
 function saveNPSFaseA(){
@@ -2700,6 +2722,7 @@ function saveNPSFaseA(){
   const nps = DB.get('nps_history')||[];
   nps.push({cycle:'Ciclo atual (Fase A)', score:selectedNPS, responses:1, comment, date:new Date().toLocaleDateString('pt-BR')});
   DB.set('nps_history', nps);
+  if(currentUser?.email) sbSaveNPS(currentUser.email, getCurrentCycleId(), selectedNPS, comment);
   toast('NPS registrado: '+selectedNPS+'/10','suc');
 }
 
@@ -2713,15 +2736,16 @@ function saveFaseA(){
     proximos:    document.getElementById('ea-proximos')?.value||'',
     savedAt:     new Date().toLocaleString('pt-BR'),
   };
-  DB.set('fase_a', data);
+  DB.setScoped('fase_a', currentUser?.email, getCurrentCycleId(), data);
+  if(currentUser?.email) sbSaveInstrument('fase_a', currentUser.email, getCurrentCycleId(), data);
   toast('Entrevista de aprendizado salva!','suc');
 }
 
 async function analyzeFaseAWithIA(){
   saveFaseA();
   const fa = DB.get('fase_a')||{};
-  const mp = DB.get('microplano')||{okrs:[]};
-  const radars = DB.get('comp_radars')||[];
+  const mp = mpRead();
+  const radars = radarsRead();
   const radar = radars.find(r=>r.id===DB.get('comp_active_radar'))||radars[0];
   const data = radar?.competencias||[];
   const krs = (mp.okrs||[]).map(o=>o.desc+': '+((o.atingimento||0))+'%').join('; ');
@@ -2763,8 +2787,66 @@ const SWOT_OPTIONS = {
   a:['Automação da função','Concorrência por posições','Reestruturações corporativas','Instabilidade econômica','Mudança de liderança','Obsolescência tecnológica','Burnout','Crise setorial'],
 };
 
+function mpRead(){
+  const email = currentUser?.email, cid = getCurrentCycleId();
+  return DB.getScoped('microplano', email, cid, true) || {objetivo:'',okrs:[],kanban:{todo:[],doing:[],done:[]}};
+}
+function mpWrite(mp){
+  const email = currentUser?.email, cid = getCurrentCycleId();
+  DB.setScoped('microplano', email, cid, mp);
+  if(email) sbSaveInstrument('microplano', email, cid, mp);
+}
+function radarsRead(){
+  const email = currentUser?.email, cid = getCurrentCycleId();
+  return DB.getScoped('comp_radars', email, cid, true) || [];
+}
+function radarsWrite(radars){
+  const email = currentUser?.email, cid = getCurrentCycleId();
+  DB.setScoped('comp_radars', email, cid, radars);
+  if(email) sbSaveInstrument('comp_radar', email, cid, radars);
+}
+
+function discScoresRead(){
+  return DB.getScoped('disc_scores', currentUser?.email, getCurrentCycleId(), true);
+}
+function discFullRead(){
+  return DB.getScoped('disc_result_full', currentUser?.email, getCurrentCycleId(), true);
+}
+function discScoresWrite(natural, full){
+  const email = currentUser?.email, cid = getCurrentCycleId();
+  DB.setScoped('disc_scores', email, cid, natural);
+  DB.setScoped('disc_result_full', email, cid, full);
+}
+
+function vfRead(email, cycleId){
+  return DB.getScoped('vf_history', email, cycleId, true) || [];
+}
+function vfWrite(list){
+  const email = currentUser?.email, cid = getCurrentCycleId();
+  DB.setScoped('vf_history', email, cid, list);
+  if(email) sbSaveInstrument('vf', email, cid, list);
+}
+function growRead(email, cycleId){
+  return DB.getScoped('grow_sessions', email, cycleId, true) || [];
+}
+function growWrite(list){
+  const email = currentUser?.email, cid = getCurrentCycleId();
+  DB.setScoped('grow_sessions', email, cid, list);
+  if(email) sbSaveInstrument('grow', email, cid, list);
+}
+
+function swotRead(email, cycleId){
+  return DB.getScoped('swot', email, cycleId, true) || {f:[],fr:[],o:[],a:[]};
+}
+function swotWrite(data){
+  const email = currentUser?.email;
+  const cid = getCurrentCycleId();
+  DB.setScoped('swot', email, cid, data);
+  if(email) sbSaveInstrument('swot', email, cid, data);
+}
+
 async function renderSWOT(){
-  swotData = DB.get('swot');
+  swotData = swotRead(currentUser?.email, getCurrentCycleId());
   const _swotCycles = currentUser ? await loadCycles(currentUser.email) : [];
   const _swotCycleId = getCurrentCycleId() || _swotCycles.find(c=>c.status==='active')?.id;
   const _swotCycle = _swotCycles.find(c=>c.id===_swotCycleId);
@@ -2811,27 +2893,27 @@ function addSwotTag(type, sel){
   if(!swotData[type]) swotData[type]=[];
   if(swotData[type].includes(val)){ sel.value=''; return; }
   swotData[type].push(val);
-  DB.set('swot',swotData);
+  swotWrite(swotData);
   sel.value='';
   renderSWOTGrid();
 }
 
 function removeSwotTag(type, val){
   swotData[type] = (swotData[type]||[]).filter(v=>v!==val);
-  DB.set('swot',swotData);
+  swotWrite(swotData);
   renderSWOTGrid();
 }
 
 function clearSWOT(){
   if(!confirm('Limpar todo o SWOT?')) return;
   swotData={f:[],fr:[],o:[],a:[]};
-  DB.set('swot',swotData);
+  swotWrite(swotData);
   renderSWOTGrid();
   toast('SWOT limpo','suc');
 }
 
 async function analyzeSWOTWithIA(){
-  const s = DB.get('swot');
+  const s = swotRead(currentUser?.email, getCurrentCycleId());
   showIALoading('swot-ia-result','Processando análise estratégica');
   const prompt = `Você é um estrategista sênior de carreira e desenvolvimento executivo.
 
@@ -2954,7 +3036,7 @@ async function renderDISC(){
   discScores = null;
 
   const saved = DB.get('disc');
-  const savedScores = DB.get('disc_scores');
+  const savedScores = discScoresRead();
 
   const _discCycles3 = currentUser ? await loadCycles(currentUser.email) : [];
   const _discCycleId = getCurrentCycleId() || _discCycles3.find(c=>c.status==='active')?.id;
@@ -3017,7 +3099,7 @@ function renderDISCAssessment(){
     <div style="display:flex;gap:10px;align-items:center;">
       <button class="btn btn-outline btn-sm" onclick="discNavigate(-1)" ${discPage===0?'disabled':''}>← Anterior</button>
       <button class="btn btn-gold btn-sm" onclick="discNavigate(1)">${discPage===DISC_BLOCKS.length-1?'Ver meu resultado →':'Próximo →'}</button>
-      ${discSel?`<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="renderDISCResult('${discSel}',DB.get('disc_scores'))">Ver resultado salvo</button>`:''}
+      ${discSel?`<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="renderDISCResult('${discSel}',discScoresRead())">Ver resultado salvo</button>`:''}
     </div>`;
 }
 
@@ -3057,8 +3139,7 @@ function discNavigate(dir){
       discSel    = winNatural;
       discScores = natural;
       DB.set('disc', winNatural);
-      DB.set('disc_scores', natural);
-      DB.set('disc_result_full', result);
+      discScoresWrite(natural, result);
 
       // Save Natural (locked forever on first run)
       const existingNat = getDISCNatural(currentUser?.email);
@@ -3134,7 +3215,7 @@ function renderDISCResult(result){
 
   // Support legacy calls (result could be just a winner string + scores obj)
   if(typeof result === 'string'){
-    const saved = DB.get('disc_result_full');
+    const saved = discFullRead();
     result = saved || {
       natural: result, adaptado: result,
       naturalPct: {D:25,I:25,S:25,C:25}, adaptadoPct: {D:25,I:25,S:25,C:25},
@@ -3615,7 +3696,7 @@ async function renderPeer360(){
 // MICROPLANO
 // ══════════════════════════════════════════════
 function renderMicroplano(){
-  const mp = DB.get('microplano');
+  const mp = mpRead();
   const weeks = [
     {num:'S1',ph:'G',desc:'Kick-off · Termo de mentoria · Alinhamento de objetivos',st:'done'},
     {num:'S2',ph:'U',desc:'Autodiagnóstico 360° · Radar de competências',st:'done'},
@@ -3700,9 +3781,9 @@ function renderMicroplano(){
 }
 
 function toggleOKR(i, el){
-  const mp = DB.get('microplano');
+  const mp = mpRead();
   mp.okrs[i].done = !mp.okrs[i].done;
-  DB.set('microplano',mp);
+  mpWrite(mp);
   el.classList.toggle('on');
   toast(mp.okrs[i].done?'OKR marcado como concluído!':'OKR reaberto','suc');
   renderMicroplano();
@@ -3713,9 +3794,9 @@ function addOKR(){
   if(!desc) return;
   const kr = prompt('Qual o Key Result mensurável?');
   if(!kr) return;
-  const mp = DB.get('microplano');
+  const mp = mpRead();
   mp.okrs.push({desc,kr,done:false});
-  DB.set('microplano',mp);
+  mpWrite(mp);
   toast('OKR adicionado!','suc');
   renderMicroplano();
 }
@@ -3723,15 +3804,15 @@ function addOKR(){
 function addKanban(col){
   const item = prompt('Nova atividade:');
   if(!item) return;
-  const mp = DB.get('microplano');
+  const mp = mpRead();
   mp.kanban[col].unshift(item);
-  DB.set('microplano',mp);
+  mpWrite(mp);
   toast('Atividade adicionada!','suc');
   renderMicroplano();
 }
 
 function saveGROW(){
-  const sessions = DB.get('grow_sessions')||[];
+  const sessions = growRead(currentUser?.email, getCurrentCycleId());
   sessions.push({
     date:today(),
     goal:document.getElementById('grow-g').value,
@@ -3739,7 +3820,7 @@ function saveGROW(){
     options:document.getElementById('grow-o').value,
     will:document.getElementById('grow-w').value,
   });
-  DB.set('grow_sessions',sessions);
+  growWrite(sessions);
   toast('Sessão GROW salva com sucesso!','suc');
 }
 
@@ -3748,7 +3829,7 @@ function saveGROW(){
 // ══════════════════════════════════════════════
 async function renderVF(){
   const vf = DB.get('vf') || {};
-  const history = DB.get('vf_history') || [];
+  const history = vfRead(currentUser?.email, getCurrentCycleId());
   const tab = DB.get('vf_tab') || 'edit';
 
   const historyBtns = history.length ? `
@@ -3870,14 +3951,14 @@ function renderVFCompare(history){
   <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
     <div class="field" style="margin-bottom:0;flex:1;">
       <label class="field-label">Versão A</label>
-      <select class="form-select" id="cmp-a" onchange="renderVFCompare(DB.get('vf_history')||[])">
+      <select class="form-select" id="cmp-a" onchange="renderVFCompare(vfRead(currentUser?.email, getCurrentCycleId()))">
         ${selOpts.replace(`value="${history.length-1}"`,`value="${history.length-1}" selected`)}
       </select>
     </div>
     <div style="font-size:20px;color:var(--text4);padding-top:18px;">⇄</div>
     <div class="field" style="margin-bottom:0;flex:1;">
       <label class="field-label">Versão B</label>
-      <select class="form-select" id="cmp-b" onchange="renderVFCompare(DB.get('vf_history')||[])">
+      <select class="form-select" id="cmp-b" onchange="renderVFCompare(vfRead(currentUser?.email, getCurrentCycleId()))">
         ${selOpts.replace(`value="${history.length-2}"`,`value="${history.length-2}" selected`)}
       </select>
     </div>
@@ -3903,7 +3984,7 @@ function renderVFCompare(history){
 }
 
 function loadVFVersion(idx){
-  const history = DB.get('vf_history')||[];
+  const history = vfRead(currentUser?.email, getCurrentCycleId());
   if(!history[idx]) return;
   DB.set('vf', history[idx]);
   DB.set('vf_tab','edit');
@@ -3913,16 +3994,16 @@ function loadVFVersion(idx){
 
 function deleteVFVersion(idx){
   showConfirm('Excluir versão','Remover esta versão do histórico?','Excluir',()=>{
-    const history = DB.get('vf_history')||[];
+    const history = vfRead(currentUser?.email, getCurrentCycleId());
     history.splice(idx,1);
-    DB.set('vf_history',history);
+    vfWrite(history);
     toast('Versão removida','suc');
     renderVF();
   });
 }
 
 async function compareVFWithIA(){
-  const history = DB.get('vf_history')||[];
+  const history = vfRead(currentUser?.email, getCurrentCycleId());
   const selA = document.getElementById('cmp-a');
   const selB = document.getElementById('cmp-b');
   const idxA = selA ? parseInt(selA.value) : history.length-1;
@@ -3970,9 +4051,9 @@ function saveVF(){
   DB.set('vf', nova);
 
   // Append to history
-  const history = DB.get('vf_history') || [];
+  const history = vfRead(currentUser?.email, getCurrentCycleId());
   history.push(nova);
-  DB.set('vf_history', history);
+  vfWrite(history);
 
   toast('Visão salva! Versão ' + history.length + ' registrada com data.','suc');
 
@@ -4025,10 +4106,10 @@ function renderIAMain(){
       ${[
         {label:'DISC',val:discSel||DB.get('disc')?`Perfil ${DB.get('disc')||discSel}`:'Pendente',ok:!!(DB.get('disc'))},
         {label:'Radar',val:`${DB.get('competencias').length} competências`,ok:true},
-        {label:'SWOT',val:`${Object.values(DB.get('swot')||{}).flat().length} itens`,ok:Object.values(DB.get('swot')||{}).flat().length>0},
+        {label:'SWOT',val:`${Object.values(swotRead(currentUser?.email,getCurrentCycleId())||{}).flat().length} itens`,ok:Object.values(swotRead(currentUser?.email,getCurrentCycleId())||{}).flat().length>0},
         {label:'360°',val:`${DB.get('peer360').filter(p=>p.done).length} respostas`,ok:DB.get('peer360').filter(p=>p.done).length>0},
         {label:'Visão',val:DB.get('vf')?.profissional?'Preenchida':'Pendente',ok:!!DB.get('vf')?.profissional},
-        {label:'GROW',val:`${(DB.get('grow_sessions')||[]).length} sessões`,ok:(DB.get('grow_sessions')||[]).length>0},
+        {label:'GROW',val:`${(growRead(currentUser?.email, getCurrentCycleId())).length} sessões`,ok:(growRead(currentUser?.email, getCurrentCycleId())).length>0},
       ].map(d=>`<div style="background:var(--bg3);border:1px solid ${d.ok?'var(--green-border)':'var(--border)'};border-radius:var(--radius-sm);padding:10px 14px;">
         <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${d.label}</div>
         <div style="font-size:12px;font-weight:600;color:${d.ok?'var(--green)':'var(--text3)'}">${d.val}</div>
@@ -4059,7 +4140,7 @@ function renderIAMain(){
 async function runFullAnalysis(){
   const disc = DB.get('disc');
   const comps = DB.get('competencias');
-  const swot = DB.get('swot');
+  const swot = swotRead(currentUser?.email, getCurrentCycleId());
   const peers = DB.get('peer360').filter(p=>p.done);
   const vf = DB.get('vf');
   const gaps = comps.filter(c=>c.me<c.mentor).map(c=>c.name).join(', ');
@@ -4569,7 +4650,7 @@ async function createCycleFromG(){
   if(!name){ toast('Informe o nome do ciclo','err'); return; }
   if(!currentUser){ toast('Faça login primeiro','err'); return; }
 
-  const radars = DB.get('comp_radars')||[];
+  const radars = radarsRead();
   const activeRadar = radars.find(r=>r.id===DB.get('comp_active_radar'))||radars[0];
   const cycle = {
     id:'cyc'+Date.now(), mentee_email:currentUser.email, name,
@@ -4814,7 +4895,8 @@ function saveInicioCiclo(){
     aceite:      true,
     savedAt:     new Date().toLocaleString('pt-BR'),
   };
-  DB.set('inicio_ciclo', data);
+  DB.setScoped('inicio_ciclo', currentUser?.email, getCurrentCycleId(), data);
+  if(currentUser?.email) sbSaveInstrument('termo_mentoria', currentUser.email, getCurrentCycleId(), data);
   toast('Termo de mentoria salvo e assinado!','suc');
 }
 
@@ -5268,7 +5350,7 @@ async function generateWeeklyEmail(){
 
   const disc = DB.get('disc');
   const vf = DB.get('vf')||{};
-  const mp = DB.get('microplano')||{okrs:[]};
+  const mp = mpRead();
   const pendentes = (mp.kanban?.todo||[]).slice(0,3).join(', ');
 
   const prompt = `Você é o assistente de desenvolvimento de carreira da plataforma Arcala Insight.
@@ -8024,11 +8106,11 @@ async function callAI(prompt, includeUserContext=true, maxTokens=1024){
     if(includeUserContext && currentUser){
       const disc = DB.get('disc');
       const comps = DB.get('competencias') || [];
-      const swot = DB.get('swot') || {};
+      const swot = swotRead(currentUser?.email, getCurrentCycleId()) || {};
       const vf = DB.get('vf') || {};
       const peers = (DB.get('peer360') || []).filter(p=>p.done);
-      const mp = DB.get('microplano') || {};
-      const discScores = DB.get('disc_scores') || {};
+      const mp = mpRead();
+      const discScores = discScoresRead() || {};
       const gaps = comps.filter(c=>c.me<c.mentor).map(c=>c.name).join(', ');
       const strengths = comps.filter(c=>c.me>=4).map(c=>c.name).join(', ');
       systemContext += `
@@ -8120,6 +8202,247 @@ function getActiveCycle(menteeEmail){
   return cycles.find(c=>c.status==='active') || null;
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// CAMADA DE PERSISTÊNCIA — Supabase é a fonte oficial
+// Regra: todo dado preenchido na plataforma é replicado no backend.
+// Local (localStorage) é cache otimista, nunca destino final.
+// Falha de sync NUNCA é engolida em silêncio — fica na fila e avisa.
+// ══════════════════════════════════════════════════════════════════════
+
+const SYNC_QUEUE_KEY = 'sync_queue';
+
+function syncQueueAdd(op){
+  const q = DB.get(SYNC_QUEUE_KEY) || [];
+  q.push({...op, queued_at: new Date().toISOString(), attempts: 0});
+  DB.set(SYNC_QUEUE_KEY, q);
+  updateSyncBadge();
+}
+
+function syncQueuePending(){
+  return (DB.get(SYNC_QUEUE_KEY) || []).length;
+}
+
+function updateSyncBadge(){
+  const el = document.getElementById('sync-badge');
+  if(!el) return;
+  const n = syncQueuePending();
+  el.style.display = n ? 'inline-flex' : 'none';
+  el.textContent = n ? '⚠ ' + n + ' não sincronizado' + (n>1?'s':'') : '';
+}
+
+// Reenvia o que ficou pendente. Chamado no login e periodicamente.
+async function syncQueueFlush(){
+  const q = DB.get(SYNC_QUEUE_KEY) || [];
+  if(!q.length) return {sent:0, failed:0};
+  const remaining = []; let sent = 0;
+  for(const op of q){
+    try {
+      await sbFetch(op.path, op.method, op.body, op.headers||{});
+      sent++;
+    } catch(e){
+      op.attempts = (op.attempts||0) + 1;
+      op.last_error = String(e.message||e).slice(0,200);
+      remaining.push(op);
+    }
+  }
+  DB.set(SYNC_QUEUE_KEY, remaining);
+  updateSyncBadge();
+  return {sent, failed: remaining.length};
+}
+
+// Escrita canônica: local + backend. Retorna true/false honestamente.
+async function persist(path, method, body, opts={}){
+  try {
+    await sbFetch(path, method, body, opts.headers||{});
+    return true;
+  } catch(e){
+    console.warn('persist falhou, enfileirado:', path, e.message);
+    syncQueueAdd({path, method, body, headers: opts.headers});
+    if(!opts.silent) toast('Salvo localmente — sincronização pendente','warn');
+    return false;
+  }
+}
+
+// Upsert por chave natural: apaga a linha equivalente e reinsere.
+async function persistUpsert(table, matchQuery, row, opts={}){
+  try {
+    await sbFetch(table + '?' + matchQuery, 'DELETE');
+  } catch(e){ /* linha pode não existir ainda */ }
+  return persist(table, 'POST', row, opts);
+}
+
+const eqp = v => encodeURIComponent(v);
+const rowId = pfx => pfx + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+
+// ── Instrumentos qualitativos versionados (SWOT, VF, GROW, etc.) ──────
+async function sbSaveInstrument(instrument, menteeEmail, cycleId, payload){
+  if(!menteeEmail) return false;
+  // versão anterior deixa de ser vigente — histórico é preservado
+  try {
+    await sbFetch('instrument_data?mentee_email=eq.'+eqp(menteeEmail)
+      +'&instrument=eq.'+eqp(instrument)
+      +'&cycle_id=eq.'+eqp(cycleId||'null')
+      +'&is_current=eq.true', 'PATCH', {is_current:false});
+  } catch(e){}
+  return persist('instrument_data', 'POST', {
+    id: rowId(instrument),
+    mentee_email: menteeEmail,
+    cycle_id: cycleId || null,
+    instrument,
+    payload,
+    is_current: true,
+    updated_by: currentUser?.email || null,
+    created_at: new Date().toISOString()
+  }, {silent:true});
+}
+
+async function sbLoadInstrument(instrument, menteeEmail, cycleId){
+  try {
+    const rows = await sbFetch('instrument_data?mentee_email=eq.'+eqp(menteeEmail)
+      +'&instrument=eq.'+eqp(instrument)
+      +'&cycle_id=eq.'+eqp(cycleId||'null')
+      +'&is_current=eq.true&select=*');
+    return rows?.[0]?.payload ?? null;
+  } catch(e){ return null; }
+}
+
+async function sbLoadInstrumentHistory(instrument, menteeEmail){
+  try {
+    return await sbFetch('instrument_data?mentee_email=eq.'+eqp(menteeEmail)
+      +'&instrument=eq.'+eqp(instrument)
+      +'&select=*&order=created_at.desc') || [];
+  } catch(e){ return []; }
+}
+
+// ── Checkpoints ───────────────────────────────────────────────────────
+async function sbSaveCheckpoint(menteeEmail, cycleId, c){
+  return persistUpsert('checkpoints',
+    'mentee_email=eq.'+eqp(menteeEmail)+'&date=eq.'+eqp(c.date),
+    { id: rowId('chk'), mentee_email: menteeEmail, cycle_id: cycleId||null,
+      date: c.date, week: c.week ?? null, phase: c.phase || null,
+      energia: c.energia ?? null, conquista: c.conquista || '',
+      bloqueio: c.bloqueio || '', created_at: new Date().toISOString() });
+}
+
+async function sbLoadCheckpoints(menteeEmail){
+  try {
+    return await sbFetch('checkpoints?mentee_email=eq.'+eqp(menteeEmail)
+      +'&select=*&order=date.desc') || [];
+  } catch(e){ return []; }
+}
+
+// ── Diário (privado do mentorado) ─────────────────────────────────────
+async function sbSaveDiario(menteeEmail, cycleId, e){
+  return persist('diario', 'POST', {
+    id: rowId('dia'), mentee_email: menteeEmail, cycle_id: cycleId||null,
+    date: e.date, time: e.time||null, phase: e.phase||null,
+    mood: e.mood ?? null, texto: e.texto||'',
+    created_at: new Date().toISOString()
+  }, {silent:true});
+}
+
+async function sbLoadDiario(menteeEmail){
+  try {
+    return await sbFetch('diario?mentee_email=eq.'+eqp(menteeEmail)
+      +'&select=*&order=created_at.desc') || [];
+  } catch(e){ return []; }
+}
+
+// ── Competências: 4 séries (auto / mentor / 360 / aferido) ────────────
+async function sbSaveCompetenciaScore(menteeEmail, cycleId, comp, scores){
+  return persistUpsert('competencia_scores',
+    'mentee_email=eq.'+eqp(menteeEmail)+'&cycle_id=eq.'+eqp(cycleId||'null')
+      +'&competencia=eq.'+eqp(comp),
+    { id: rowId('cmp'), mentee_email: menteeEmail, cycle_id: cycleId||null,
+      competencia: comp,
+      score_auto:    scores.auto    ?? null,
+      score_mentor:  scores.mentor  ?? null,
+      score_360:     scores.p360    ?? null,
+      score_aferido: scores.aferido ?? null,
+      mentor_email:  scores.mentor_email || null,
+      calibrado_em:  scores.mentor != null ? new Date().toISOString() : null,
+      frozen:        !!scores.frozen,
+      updated_at:    new Date().toISOString() },
+    {silent:true});
+}
+
+async function sbLoadCompetenciaScores(menteeEmail, cycleId){
+  try {
+    let url = 'competencia_scores?mentee_email=eq.'+eqp(menteeEmail);
+    if(cycleId) url += '&cycle_id=eq.'+eqp(cycleId);
+    return await sbFetch(url + '&select=*') || [];
+  } catch(e){ return []; }
+}
+
+// ── DISC ──────────────────────────────────────────────────────────────
+async function sbSaveDISC(menteeEmail, cycleId, tipo, p){
+  const row = { id: rowId('disc'), mentee_email: menteeEmail,
+    cycle_id: tipo==='natural' ? null : (cycleId||null), tipo,
+    d: p.D ?? p.d ?? null, i: p.I ?? p.i ?? null,
+    s: p.S ?? p.s ?? null, c: p.C ?? p.c ?? null,
+    perfil: p.perfil || null, esforco: p.esforco || {}, raw: p,
+    locked: tipo === 'natural', created_at: new Date().toISOString() };
+  if(tipo === 'natural'){
+    return persistUpsert('disc_profiles',
+      'mentee_email=eq.'+eqp(menteeEmail)+'&tipo=eq.natural', row, {silent:true});
+  }
+  return persistUpsert('disc_profiles',
+    'mentee_email=eq.'+eqp(menteeEmail)+'&tipo=eq.adaptado&cycle_id=eq.'+eqp(cycleId||'null'),
+    row, {silent:true});
+}
+
+async function sbLoadDISC(menteeEmail){
+  try {
+    return await sbFetch('disc_profiles?mentee_email=eq.'+eqp(menteeEmail)+'&select=*') || [];
+  } catch(e){ return []; }
+}
+
+// ── NPS e Key Results ─────────────────────────────────────────────────
+async function sbSaveNPS(menteeEmail, cycleId, score, comment){
+  return persist('nps_registros', 'POST', {
+    id: rowId('nps'), mentee_email: menteeEmail, cycle_id: cycleId||null,
+    score, comment: comment||'', created_at: new Date().toISOString()
+  }, {silent:true});
+}
+
+async function sbSaveKeyResult(menteeEmail, cycleId, kr){
+  return persistUpsert('key_results',
+    'mentee_email=eq.'+eqp(menteeEmail)+'&cycle_id=eq.'+eqp(cycleId||'null')
+      +'&kr=eq.'+eqp(kr.kr||''),
+    { id: rowId('kr'), mentee_email: menteeEmail, cycle_id: cycleId||null,
+      objetivo: kr.objetivo||'', kr: kr.kr||'', meta: kr.meta||'',
+      atingido: kr.atingido ?? null, done: !!kr.done,
+      updated_at: new Date().toISOString() }, {silent:true});
+}
+
+// ── Observações do mentor (por instrumento / card) ────────────────────
+async function sbSaveMentorObs(mentorEmail, menteeEmail, cycleId, instrument, text, opts={}){
+  return persistUpsert('mentor_observations',
+    'mentee_email=eq.'+eqp(menteeEmail)+'&instrument=eq.'+eqp(instrument)
+      +'&target_id=eq.'+eqp(opts.targetId||'none')+'&cycle_id=eq.'+eqp(cycleId||'null'),
+    { mentor_email: mentorEmail, mentee_email: menteeEmail,
+      cycle_id: cycleId||null, instrument, target_id: opts.targetId||'none',
+      kind: opts.kind||'observacao', phase: opts.phase||null, text,
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+}
+
+async function sbLoadMentorObs(menteeEmail, cycleId){
+  try {
+    let url = 'mentor_observations?mentee_email=eq.'+eqp(menteeEmail);
+    if(cycleId) url += '&cycle_id=eq.'+eqp(cycleId);
+    return await sbFetch(url + '&select=*') || [];
+  } catch(e){ return []; }
+}
+
+// ── Auditoria ─────────────────────────────────────────────────────────
+async function sbAudit(action, entity, entityId, meta={}){
+  return persist('audit_log', 'POST', {
+    actor: currentUser?.email || 'anon', action, entity,
+    entity_id: String(entityId||''), meta,
+    created_at: new Date().toISOString()
+  }, {silent:true});
+}
+
 // ── CYCLE SELECTOR — shown at top of each instrument page ────────────────────
 async function renderCycleSelector(menteeEmail, onSelectCallback){
   const cycles = await loadCycles(menteeEmail);
@@ -8168,7 +8491,7 @@ async function getCurrentCycle(){
 // ── CYCLE MANAGER MODAL ───────────────────────────────────────────────────────
 async function showCycleManager(menteeEmail){
   const cycles = await loadCycles(menteeEmail);
-  const radars = DB.get('comp_radars') || [];
+  const radars = radarsRead();
 
   const modal = document.createElement('div');
   modal.id = 'cycle-modal';
@@ -8261,7 +8584,7 @@ async function createCycle(menteeEmail){
   if(!name){ toast('Informe o nome do ciclo','err'); return; }
 
   // Get current active radar competencias as starting point
-  const radars = DB.get('comp_radars') || [];
+  const radars = radarsRead();
   const activeRadar = radars.find(r=>r.id===DB.get('comp_active_radar')) || radars[0];
 
   const cycle = {
@@ -8728,6 +9051,7 @@ function saveCheckpoint(email, data){
   const all = getCheckpoints(email);
   all.unshift(data);
   DB.set('checkpoints_'+email, all);
+  sbSaveCheckpoint(email, getCurrentCycleId(), data);
 }
 
 function renderCheckpointWidget(){
@@ -8804,6 +9128,7 @@ function saveDiarioEntry(email, entry){
   const all = getDiario(email);
   all.unshift(entry);
   DB.set('diario_'+email, all);
+  sbSaveDiario(email, getCurrentCycleId(), entry);
 }
 
 function renderDiario(){
@@ -8958,7 +9283,7 @@ async function prepararSessaoIA(menteeId){
   const prog = getMenteeProgress(menteeId);
   const rel = getPhaseReleases(menteeId);
   const disc = DB.get('disc');
-  const mp = DB.get('microplano')||{};
+  const mp = mpRead();
 
   showIALoading('mentee-ia-result', 'Preparando sessão para '+mentee.name);
 
@@ -9371,6 +9696,7 @@ async function saveDISCProfile(email, profileData, tipo){
   // tipo: 'natural' | 'adaptado'
   const key = tipo === 'natural' ? 'disc_natural_'+email : 'disc_adaptado_'+email;
   DB.set(key, profileData);
+  await sbSaveDISC(email, getCurrentCycleId(), tipo, profileData);
   try {
     // Save to Supabase users table as JSONB fields
     const patch = {};
@@ -9882,6 +10208,9 @@ function bootApp(user){
     document.getElementById('role-switcher').style.display = 'none';
   }
   updateTopbar();
+  updateSyncBadge();
+  // Reenvia o que ficou pendente de sessões anteriores (offline, falha de rede)
+  syncQueueFlush().then(r=>{ if(r.sent) console.log('sync: '+r.sent+' operações reenviadas'); });
   switchRole(role);
   // If mentor and training not complete, redirect to training
   if(role === 'mentor' && !isTrainingComplete()){

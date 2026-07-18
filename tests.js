@@ -32,7 +32,7 @@ const structFailures = [];
     ...[...platformJs.matchAll(/getElementById\("([^"$]+)"\)/g)].map(m=>m[1]),
   ];
   // Elementos cosméticos conhecidos e sem impacto funcional (guardados com if(el))
-  const ALLOWLIST_COSMETIC = new Set(['platform-version-badge']);
+  const ALLOWLIST_COSMETIC = new Set([]);
   const missing = [...new Set(gets.filter(g => !allIds.has(g) && !ALLOWLIST_COSMETIC.has(g)))];
   if(missing.length){
     s00Pass = false;
@@ -58,6 +58,25 @@ let s02Pass = true;
   if(!fnSrc.includes('refletir') && !fnSrc.includes('crítica')){ s02Pass = false; structFailures.push('S02 prompt da prova não orienta reflexão crítica'); }
 })();
 
+// ── S03: TODA escrita na tabela `users` deve passar por sanitizeUserPayload/sbPatchUser/
+// sbUpsertUser — impede para sempre a classe de bug "PGRST204 column not found" causada
+// por um campo local sem coluna correspondente no Supabase vazar para o banco.
+let s03Pass = true;
+(function checkAllUserWritesSanitized(){
+  const callRe = /sbFetch\(\s*'users[^']*'(?:\s*\+[^,]+?)?\s*,\s*'(POST|PATCH)'\s*,\s*([^)]+?)\)/g;
+  let m;
+  while((m = callRe.exec(platformJs))){
+    const arg = m[2];
+    const safe = arg.includes('sanitizeUserPayload') || /^clean\b/.test(arg.trim());
+    const context = platformJs.slice(Math.max(0,m.index-200), m.index);
+    const insideSbPatchUser = /async function sbPatchUser\([^)]*\)\{[^}]*$/.test(context.slice(-250));
+    if(!safe && !insideSbPatchUser){
+      s03Pass = false;
+      structFailures.push('S03 escrita não sanitizada em users: sbFetch(\'users...\',\''+m[1]+'\',' + arg.trim().slice(0,40) + ')');
+    }
+  }
+})();
+
 // ── I01-I25 / J01-J25(+J05b): testes de lógica em ambiente Node isolado ──
 const self = fs.readFileSync(__filename, 'utf8');
 const stubs = self.split('//STUBS_'+'START')[1].split('//STUBS_'+'END')[0];
@@ -73,13 +92,14 @@ console.log('── Auditoria estrutural (análise estática do HTML/JS real, se
 console.log(s00Pass ? "✅ S00 todo getElementById aponta para um elemento que existe de verdade" : "❌ S00 há getElementById apontando para elemento inexistente");
 console.log(s01Pass ? "✅ S01 nenhuma função duplicada" : "❌ S01 há função(ões) duplicada(s)");
 console.log(s02Pass ? "✅ S02 prova pede campo de explicação para análise crítica" : "❌ S02 prova sem campo de explicação");
+console.log(s03Pass ? "✅ S03 toda escrita em users passa por sanitizeUserPayload" : "❌ S03 há escrita em users sem sanitização");
 structFailures.forEach(f => console.log('   ↳ '+f));
 
 console.log('\n── Testes de lógica (ambiente Node com stubs) ──');
 process.stdout.write(r.stdout||''); process.stderr.write(r.stderr||'');
 
-const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0);
-const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1);
+const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0) + (s03Pass?1:0);
+const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1) + (s03Pass?0:1);
 const finalPass = logicPass + structPassCount;
 const finalFail = logicFail + structFailCount;
 console.log('\n════ RESULTADO FINAL: PASS='+finalPass+' FAIL='+finalFail+' ════');

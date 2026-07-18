@@ -797,6 +797,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
     <button onclick="toggleNotifPanel()" style="background:none;border:1px solid var(--border);border-radius:50%;width:32px;height:32px;cursor:pointer;color:var(--text2);font-size:14px;position:relative;" title="Notificações">◔<span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:8px;font-weight:700;min-width:14px;height:14px;border-radius:7px;align-items:center;justify-content:center;padding:0 3px;">0</span></button>
     <div id="notif-panel" style="display:none;position:absolute;top:40px;right:0;width:340px;max-height:420px;overflow-y:auto;background:var(--bg1);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 12px 40px rgba(0,0,0,.6);z-index:300;"></div>
   </div>
+  <div id="platform-version-badge" style="font-size:9px;color:var(--text4);font-family:'Space Mono',monospace;margin-right:10px;" title="Versão publicada — recarregue com Ctrl+Shift+R se este número parecer desatualizado"></div>
   <div class="user-info">
     <div onclick="toggleProfileMenu()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 8px;border-radius:20px;transition:background .15s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='none'">
       <div class="avatar-xs" id="top-av">AI</div>
@@ -1287,7 +1288,7 @@ function switchRole(role){
 // ══════════════════════════════════════════════
 // PLATFORM VERSION & CHANGELOG
 // ══════════════════════════════════════════════
-const PLATFORM_VERSION = '1.2.0';
+const PLATFORM_VERSION = '1.3.0';
 const PLATFORM_BUILD_DATE = '2026-05-02';
 
 function getChangelog(){
@@ -4553,8 +4554,8 @@ function updateCurrentUser(fields){
   const users = DB.get('users')||[];
   const idx = users.findIndex(u=>u.id===currentUser.id);
   if(idx>=0){ users[idx]={...users[idx],...fields}; DB.set('users',users); }
-  // Update Supabase async (fire and forget)
-  sbFetch('users?id=eq.'+currentUser.id, 'PATCH', fields).catch(()=>{});
+  // Update Supabase async (fire and forget) — sanitizado para nunca vazar campo sem coluna
+  sbFetch('users?id=eq.'+currentUser.id, 'PATCH', sanitizeUserPayload(fields)).catch(()=>{});
 }
 
 
@@ -5030,7 +5031,7 @@ function changeUserEmpresa(userId, empresaId){
   u.empresa_id = empresaId||null;
   DB.set('users', users);
   // Update Supabase
-  sbFetch('users?id=eq.'+userId,'PATCH',{empresa_id:empresaId||null}).catch(()=>{});
+  sbFetch('users?id=eq.'+userId,'PATCH',sanitizeUserPayload({empresa_id:empresaId||null})).catch(()=>{});
   toast('Empresa atualizada','suc');
 }
 
@@ -9226,7 +9227,7 @@ function startHealthCheck(){
 const USERS_TABLE_COLUMNS = new Set([
   'id','name','email','role','plan','active','phase','week','created',
   'password','mentor_id','empresa_id','mentorados',
-  'curriculo_texto','curriculo_arquivo','curriculo_data',
+  'curriculo_texto','curriculo_arquivo','curriculo_data','photo',
 ]);
 
 function sanitizeUserPayload(u){
@@ -9882,11 +9883,10 @@ function bootApp(user){
   if(role === 'mentor' && !isTrainingComplete()){
     setTimeout(()=>showPage('training'), 100);
   }
-  // Show version badge for admin
-  if(role === 'admin'){
-    const badge = document.getElementById('platform-version-badge');
-    if(badge){ badge.textContent = 'v'+PLATFORM_VERSION; badge.style.display='block'; }
-  }
+  // Mostra a versão publicada sempre — permite confirmar em qualquer print se
+  // o navegador está rodando o deploy mais recente ou uma versão em cache.
+  const badge = document.getElementById('platform-version-badge');
+  if(badge) badge.textContent = 'v'+PLATFORM_VERSION;
   startHealthCheck();
   setTimeout(updatePendingBadge, 500);
   setTimeout(refreshNotifBadge, 900);
@@ -9966,9 +9966,9 @@ window.approveReg = async function(id){
         // Upsert — se já existe atualiza, se não insere
         const existing = await sbFetch('users?email=eq.'+encodeURIComponent(reg.email)+'&select=id');
         if(existing && existing.length > 0){
-          await sbFetch('users?email=eq.'+encodeURIComponent(reg.email), 'PATCH', {active:true, password: newUser.password, role: newUser.role});
+          await sbFetch('users?email=eq.'+encodeURIComponent(reg.email), 'PATCH', sanitizeUserPayload({active:true, password: newUser.password, role: newUser.role}));
         } else {
-          await sbFetch('users', 'POST', newUser);
+          await sbFetch('users', 'POST', sanitizeUserPayload(newUser));
         }
       } catch(e){}
 

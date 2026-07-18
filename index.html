@@ -931,20 +931,21 @@ DB.init();
 // ══════════════════════════════════════════════
 
 async function sbPatchUser(email, fields){
-  try { await sbFetch('users?email=eq.'+encodeURIComponent(email),'PATCH',fields); return true; }
+  try { await sbFetch('users?email=eq.'+encodeURIComponent(email),'PATCH',sanitizeUserPayload(fields)); return true; }
   catch(e){ console.warn('sbPatchUser falhou (dado mantido localmente):', e.message); return false; }
 }
 
 async function sbUpsertUser(userData){
+  const clean = sanitizeUserPayload(userData);
   try {
     // on_conflict=email é essencial: sem isso, o Postgrest só detecta conflito pela
     // chave primária (id), que é sempre nova (timestamp) — nunca colide sozinha.
     // Com on_conflict=email, o banco de fato impede duas linhas com o mesmo e-mail
     // (requer UNIQUE constraint em users.email — ver SQL de setup).
-    await sbFetch('users?on_conflict=email','POST',userData,{'Prefer':'resolution=merge-duplicates,return=representation'});
+    await sbFetch('users?on_conflict=email','POST',clean,{'Prefer':'resolution=merge-duplicates,return=representation'});
     return true;
   } catch(e){
-    try { await sbFetch('users?email=eq.'+encodeURIComponent(userData.email),'PATCH',userData); return true; }
+    try { await sbFetch('users?email=eq.'+encodeURIComponent(clean.email),'PATCH',clean); return true; }
     catch(e2){ console.warn('sbUpsertUser falhou (usuário existe só localmente):', e2.message); return false; }
   }
 }
@@ -9216,6 +9217,23 @@ function startHealthCheck(){
   }, 3000);
 }
 
+
+// Lista canônica das colunas que de fato existem na tabela `users` do Supabase.
+// Qualquer campo local que exista no objeto do usuário mas NÃO esteja aqui é
+// removido antes do envio — evita o erro "Could not find the 'X' column of
+// 'users' in the schema cache" (PGRST204) sempre que o app local acumular um
+// campo novo que ainda não tem coluna correspondente no banco.
+const USERS_TABLE_COLUMNS = new Set([
+  'id','name','email','role','plan','active','phase','week','created',
+  'password','mentor_id','empresa_id','mentorados',
+  'curriculo_texto','curriculo_arquivo','curriculo_data',
+]);
+
+function sanitizeUserPayload(u){
+  const clean = {};
+  Object.keys(u||{}).forEach(k=>{ if(USERS_TABLE_COLUMNS.has(k)) clean[k] = u[k]; });
+  return clean;
+}
 
 async function syncAllUsersToSupabase(){
   const users = DB.get('users')||[];

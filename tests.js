@@ -77,6 +77,55 @@ let s03Pass = true;
   }
 })();
 
+// ── S04: nenhum dado de mentorado gravado em chave GLOBAL ──
+// Backend forte: dado de pessoa nunca pode viver numa chave sem escopo,
+// senão vaza entre usuários e não há como sincronizar por dono.
+const GLOBAL_FORBIDDEN = ['swot','vf_history','grow_sessions','microplano',
+  'comp_radars','fase_a','inicio_ciclo','disc_scores','disc_result_full'];
+let s04Pass = true;
+(function(){
+  for(const key of GLOBAL_FORBIDDEN){
+    const hits   = (platformJs.match(new RegExp("DB\\.set\\('"+key+"'", 'g'))||[]).length;
+    const seeded = (platformJs.match(new RegExp("if\\(!this\\.get\\('"+key+"'\\)\\) this\\.set\\('"+key+"'", 'g'))||[]).length;
+    if(hits > seeded){
+      s04Pass = false;
+      structFailures.push("S04 dado de mentorado em chave global: DB.set('"+key+"') — use DB.setScoped()");
+    }
+  }
+})();
+
+// ── S05: todo writer de instrumento replica no backend ──
+let s05Pass = true;
+(function(){
+  const writers = ['swotWrite','vfWrite','growWrite','mpWrite','radarsWrite'];
+  for(const w of writers){
+    const m = new RegExp("function "+w+"\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n\\}").exec(platformJs);
+    if(!m){ s05Pass = false; structFailures.push('S05 writer não encontrado: '+w); continue; }
+    if(!/sbSave/.test(m[1])){
+      s05Pass = false;
+      structFailures.push('S05 '+w+' grava local sem replicar no Supabase');
+    }
+  }
+})();
+
+// ── S06: nenhum campo atribuído a `patch.X` antes de sbPatchUser fica
+// de fora da whitelist — senão o PATCH sai vazio e o dado nunca chega ao
+// servidor, silenciosamente. Foi um bug real (disc_natural/disc_adaptado).
+let s06Pass = true;
+(function(){
+  const whitelistMatch = /const USERS_TABLE_COLUMNS = new Set\(\[([\s\S]*?)\]\)/.exec(platformJs);
+  const whitelist = whitelistMatch
+    ? [...whitelistMatch[1].matchAll(/'([a-zA-Z0-9_]+)'/g)].map(m=>m[1])
+    : [];
+  const assigns = [...platformJs.matchAll(/\bpatch\.([a-zA-Z0-9_]+)\s*=/g)].map(m=>m[1]);
+  for(const field of assigns){
+    if(!whitelist.includes(field)){
+      s06Pass = false;
+      structFailures.push("S06 patch."+field+" é atribuído mas não está em USERS_TABLE_COLUMNS — PATCH sairia vazio");
+    }
+  }
+})();
+
 // ── I01-I25 / J01-J25(+J05b): testes de lógica em ambiente Node isolado ──
 const self = fs.readFileSync(__filename, 'utf8');
 const stubs = self.split('//STUBS_'+'START')[1].split('//STUBS_'+'END')[0];
@@ -93,13 +142,16 @@ console.log(s00Pass ? "✅ S00 todo getElementById aponta para um elemento que e
 console.log(s01Pass ? "✅ S01 nenhuma função duplicada" : "❌ S01 há função(ões) duplicada(s)");
 console.log(s02Pass ? "✅ S02 prova pede campo de explicação para análise crítica" : "❌ S02 prova sem campo de explicação");
 console.log(s03Pass ? "✅ S03 toda escrita em users passa por sanitizeUserPayload" : "❌ S03 há escrita em users sem sanitização");
+console.log(s04Pass ? "✅ S04 nenhum dado de mentorado em chave global" : "❌ S04 há dado de mentorado em chave global (vaza entre usuários)");
+console.log(s05Pass ? "✅ S05 todo instrumento replica no Supabase" : "❌ S05 há instrumento gravando só em local");
+console.log(s06Pass ? "✅ S06 nenhum campo de users fora da whitelist é gravado" : "❌ S06 há campo de users que nunca chega ao servidor");
 structFailures.forEach(f => console.log('   ↳ '+f));
 
 console.log('\n── Testes de lógica (ambiente Node com stubs) ──');
 process.stdout.write(r.stdout||''); process.stderr.write(r.stderr||'');
 
-const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0) + (s03Pass?1:0);
-const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1) + (s03Pass?0:1);
+const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0) + (s03Pass?1:0) + (s04Pass?1:0) + (s05Pass?1:0) + (s06Pass?1:0);
+const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1) + (s03Pass?0:1) + (s04Pass?0:1) + (s05Pass?0:1) + (s06Pass?0:1);
 const finalPass = logicPass + structPassCount;
 const finalFail = logicFail + structFailCount;
 console.log('\n════ RESULTADO FINAL: PASS='+finalPass+' FAIL='+finalFail+' ════');
@@ -350,7 +402,8 @@ reset(); const cy = seed();
 await TA('J06 renderInicioCiclo executa', async()=>{ await renderInicioCiclo(); });
 T('J07 mentee assina o termo', ()=>{ signAcordo('cy1','mentee'); if(!getAcordoSignatures('cy1').mentee) throw new Error('x'); });
 T('J08 mentor assina — acordo completo', ()=>{ currentUser.role='mentor'; signAcordo('cy1','mentor'); currentUser.role='mentorado'; if(!isAcordoFullySigned('cy1')) throw new Error('x'); });
-T('J09 DISC fim salva natural travado', ()=>{ discAnswers=DISC_BLOCKS.map(()=>({most:0,least:1})); discShuffled=DISC_BLOCKS.map(b=>({...b,opts:[...b.opts]})); discPage=DISC_BLOCKS.length-1; discNavigate(1); const full=DB.get('disc_result_full'); if(!full||!full.natural||!full.adaptado||!full.effort) throw new Error('x'); });
+T('J09 DISC fim salva natural travado', ()=>{ discAnswers=DISC_BLOCKS.map(()=>({most:0,least:1})); discShuffled=DISC_BLOCKS.map(b=>({...b,opts:[...b.opts]})); discPage=DISC_BLOCKS.length-1; discNavigate(1); const full=discFullRead(); if(!full||!full.natural||!full.adaptado||!full.effort) throw new Error('x'); });
+T('J09b resultado DISC fica escopado ao mentorado, não em chave global', ()=>{ if(DB.get('disc_result_full')) throw new Error('DISC gravado em chave global — vazaria entre usuários'); if(!DB.getScoped('disc_result_full', currentUser.email, getCurrentCycleId(), false)) throw new Error('DISC não gravado na chave escopada'); });
 T('J10 perfil natural persistido por email', ()=>{ if(!getDISCNatural('my@t.com')) throw new Error('x'); });
 T('J11 refazer DISC não sobrescreve natural', ()=>{ const before=JSON.stringify(getDISCNatural('my@t.com')); discPage=DISC_BLOCKS.length-1; discNavigate(1); if(JSON.stringify(getDISCNatural('my@t.com'))!==before) throw new Error('sobrescreveu'); });
 T('J12 seleciona 5 competências', ()=>{ ['Liderança','Comunicação','Visão','Negociação','Execução'].forEach(addCompByName); if(DB.get('cycles_my@t.com')[0].competencias.length!==5) throw new Error('x'); });
@@ -479,6 +532,262 @@ T('J36 gabarito não expõe "resposta correta" redundante quando o mentor já ac
   const correctBlockCount = (html.match(/Resposta correta/g)||[]).length;
   if(correctBlockCount !== 0) throw new Error('mostrou "Resposta correta" mesmo tendo acertado');
 });
+// ── K: ISOLAMENTO DE INSTRUMENTOS POR MENTORADO ──
+T('K01 DB.scopedKey compõe chave por email e ciclo', ()=>{
+  if(DB.scopedKey('swot','a@t.com') !== 'swot__a@t.com') throw new Error('chave sem ciclo errada');
+  if(DB.scopedKey('swot','a@t.com','cy1') !== 'swot__a@t.com__cy1') throw new Error('chave com ciclo errada');
+});
+T('K02 setScoped recusa gravação sem email (evita vazamento global)', ()=>{
+  reset();
+  const ok = DB.setScoped('swot', null, null, {f:['x']});
+  if(ok !== false) throw new Error('deveria recusar gravação sem email');
+  if(DB.get('swot')) throw new Error('gravou na chave global mesmo sem email');
+});
+T('K03 SWOT de dois mentorados não se misturam', ()=>{
+  reset();
+  DB.setScoped('swot','a@t.com',null,{f:['forca-A'],fr:[],o:[],a:[]});
+  DB.setScoped('swot','b@t.com',null,{f:['forca-B'],fr:[],o:[],a:[]});
+  const a = DB.getScoped('swot','a@t.com',null,false);
+  const b = DB.getScoped('swot','b@t.com',null,false);
+  if(a.f[0] !== 'forca-A') throw new Error('SWOT de A corrompido: '+JSON.stringify(a));
+  if(b.f[0] !== 'forca-B') throw new Error('SWOT de B corrompido: '+JSON.stringify(b));
+});
+T('K04 Visão de Futuro de dois mentorados não se misturam', ()=>{
+  reset();
+  DB.setScoped('vf_history','a@t.com',null,[{txt:'visao-A'}]);
+  DB.setScoped('vf_history','b@t.com',null,[{txt:'visao-B'}]);
+  if(DB.getScoped('vf_history','a@t.com',null,false)[0].txt !== 'visao-A') throw new Error('VF de A corrompida');
+  if(DB.getScoped('vf_history','b@t.com',null,false)[0].txt !== 'visao-B') throw new Error('VF de B corrompida');
+});
+T('K05 Sessões GROW de dois mentorados não se misturam', ()=>{
+  reset();
+  DB.setScoped('grow_sessions','a@t.com','cy1',[{goal:'meta-A'}]);
+  DB.setScoped('grow_sessions','b@t.com','cy1',[{goal:'meta-B'}]);
+  if(DB.getScoped('grow_sessions','a@t.com','cy1',false)[0].goal !== 'meta-A') throw new Error('GROW de A corrompido');
+  if(DB.getScoped('grow_sessions','b@t.com','cy1',false)[0].goal !== 'meta-B') throw new Error('GROW de B corrompido');
+});
+T('K06 fallback legado só é lido quando não há dado escopado', ()=>{
+  reset();
+  DB.set('swot',{f:['legado'],fr:[],o:[],a:[]});
+  const semDado = DB.getScoped('swot','a@t.com',null,true);
+  if(semDado.f[0] !== 'legado') throw new Error('fallback legado não funcionou na primeira leitura');
+  DB.setScoped('swot','a@t.com',null,{f:['novo'],fr:[],o:[],a:[]});
+  const comDado = DB.getScoped('swot','a@t.com',null,true);
+  if(comDado.f[0] !== 'novo') throw new Error('fallback sobrepôs dado escopado — migração perderia edições');
+});
+T('K07 mentor lendo instrumento do mentorado não recebe o próprio dado', ()=>{
+  reset();
+  DB.setScoped('swot','mentor@t.com',null,{f:['swot-do-mentor'],fr:[],o:[],a:[]});
+  DB.setScoped('swot','mentorado@t.com',null,{f:['swot-do-mentorado'],fr:[],o:[],a:[]});
+  const visaoDoMentor = DB.getScoped('swot','mentorado@t.com',null,false);
+  if(visaoDoMentor.f[0] !== 'swot-do-mentorado') throw new Error('mentor veria o próprio SWOT no painel do mentorado');
+});
+
+await TA('K08 persist enfileira quando o backend falha (nada é perdido)', async()=>{
+  reset();
+  const orig = global.fetch;
+  global.fetch = async()=>{ throw new Error('rede caiu'); };
+  await persist('checkpoints','POST',{id:'x'},{silent:true});
+  global.fetch = orig;
+  const q = DB.get('sync_queue')||[];
+  if(q.length !== 1) throw new Error('operação não foi enfileirada; dado seria perdido');
+  if(q[0].path !== 'checkpoints') throw new Error('fila gravou path errado');
+});
+await TA('K09 syncQueueFlush reenvia e limpa a fila quando o backend volta', async()=>{
+  reset();
+  DB.set('sync_queue',[{path:'checkpoints',method:'POST',body:{id:'x'},attempts:0}]);
+  const r = await syncQueueFlush();
+  if(r.sent !== 1) throw new Error('não reenviou');
+  if((DB.get('sync_queue')||[]).length !== 0) throw new Error('fila não foi limpa após sucesso');
+});
+await TA('K10 syncQueueFlush mantém na fila o que continua falhando', async()=>{
+  reset();
+  DB.set('sync_queue',[{path:'checkpoints',method:'POST',body:{id:'x'},attempts:0}]);
+  const orig = global.fetch;
+  global.fetch = async()=>{ throw new Error('ainda offline'); };
+  const r = await syncQueueFlush();
+  global.fetch = orig;
+  if(r.failed !== 1) throw new Error('deveria reportar falha');
+  const q = DB.get('sync_queue');
+  if(q.length !== 1) throw new Error('perdeu a operação que falhou');
+  if(q[0].attempts !== 1) throw new Error('não contou a tentativa');
+});
+T('K11 checkpoint grava local E dispara replicação no backend', ()=>{
+  reset(); seed();
+  _fetchLog = [];
+  saveCheckpoint('my@t.com',{date:today(),conquista:'a',bloqueio:'b',energia:4});
+  if(!getCheckpoints('my@t.com').length) throw new Error('não gravou local');
+  const hit = _fetchLog.some(f=>String(f.url).includes('checkpoints'));
+  if(!hit) throw new Error('não replicou no Supabase — dado ficaria só em cache');
+});
+T('K12 SWOT grava local E dispara replicação no backend', ()=>{
+  reset(); seed();
+  _fetchLog = [];
+  swotWrite({f:['x'],fr:[],o:[],a:[]});
+  if(!DB.getScoped('swot','my@t.com','cy1',false)) throw new Error('não gravou local');
+  const hit = _fetchLog.some(f=>String(f.url).includes('instrument_data'));
+  if(!hit) throw new Error('não replicou no Supabase');
+});
+await TA('K13 sbSaveInstrument marca versão anterior como não-vigente (histórico acumula)', async()=>{
+  reset(); seed();
+  _fetchLog = [];
+  await sbSaveInstrument('swot','my@t.com','cy1',{f:['v2']});
+  const patch = _fetchLog.find(f=>f.method==='PATCH' && String(f.url).includes('is_current'));
+  if(!patch) throw new Error('não desmarcou a versão anterior — histórico ficaria ambíguo');
+  const post = _fetchLog.find(f=>f.method==='POST' && String(f.url).includes('instrument_data'));
+  if(!post) throw new Error('não inseriu a nova versão');
+});
+
+await TA('K14 login usa o role do Supabase quando o cache local está desatualizado', async()=>{
+  reset();
+  // Cache local diz "mentorado" (desatualizado); Supabase diz "mentor" (correto)
+  DB.set('users',[{id:'u9',name:'Fulano',email:'f@t.com',role:'mentorado',active:true}]);
+  const orig = global.fetch;
+  global.fetch = async(url)=>{
+    if(String(url).includes('users')) return {ok:true,status:200,
+      json:async()=>[{id:'u9',name:'Fulano',email:'f@t.com',role:'mentor',active:true}],
+      text:async()=>JSON.stringify([{id:'u9',name:'Fulano',email:'f@t.com',role:'mentor',active:true}])};
+    return {ok:true,status:200,json:async()=>[],text:async()=>''};
+  };
+  const u = await resolveUserForLogin('f@t.com');
+  global.fetch = orig;
+  if(!u) throw new Error('não resolveu o usuário');
+  if(u.role !== 'mentor') throw new Error('login usou role do cache local ('+u.role+') em vez do Supabase (mentor)');
+});
+await TA('K15 login funciona offline usando o cache local', async()=>{
+  reset();
+  DB.set('users',[{id:'u9',name:'Fulano',email:'f@t.com',role:'mentor',active:true}]);
+  const orig = global.fetch;
+  global.fetch = async()=>{ throw new Error('offline'); };
+  const u = await resolveUserForLogin('f@t.com');
+  global.fetch = orig;
+  if(!u || u.role !== 'mentor') throw new Error('login quebrou sem rede — deve cair no cache local');
+});
+
+// ── P: BATERIA DE PLATAFORMA — regras de negócio centrais ──
+
+T('P01 calculateStreak conta semanas consecutivas mais recentes', ()=>{
+  const now = new Date();
+  const w = n => { const d=new Date(now); d.setDate(d.getDate()-n*7); return d.toISOString().slice(0,10); };
+  const streak = calculateStreak([{date:w(0)},{date:w(1)},{date:w(2)}]);
+  if(streak !== 3) throw new Error('esperado 3, veio '+streak);
+});
+T('P02 calculateStreak quebra corretamente ao pular uma semana (regressão)', ()=>{
+  const now = new Date();
+  const w = n => { const d=new Date(now); d.setDate(d.getDate()-n*7); return d.toISOString().slice(0,10); };
+  // semana 0 e 1 preenchidas, semana 2 pulada, semana 3 preenchida
+  const streak = calculateStreak([{date:w(0)},{date:w(1)},{date:w(3)}]);
+  if(streak !== 2) throw new Error('esperado 2 (quebra na semana pulada), veio '+streak+' — bug de streak voltou');
+});
+T('P03 calculateStreak zera se o checkpoint mais recente é de mais de 1 semana atrás', ()=>{
+  const now = new Date();
+  const w = n => { const d=new Date(now); d.setDate(d.getDate()-n*7); return d.toISOString().slice(0,10); };
+  const streak = calculateStreak([{date:w(3)}]);
+  if(streak !== 0) throw new Error('esperado 0, veio '+streak);
+});
+T('P04 calculateStreak funciona independente da ordem de entrada', ()=>{
+  const now = new Date();
+  const w = n => { const d=new Date(now); d.setDate(d.getDate()-n*7); return d.toISOString().slice(0,10); };
+  const streak = calculateStreak([{date:w(2)},{date:w(0)},{date:w(1)}]); // fora de ordem
+  if(streak !== 3) throw new Error('esperado 3 mesmo fora de ordem, veio '+streak);
+});
+
+T('P05 USERS_TABLE_COLUMNS não contém colunas mortas (disc_natural/adaptado removidas)', ()=>{
+  if(USERS_TABLE_COLUMNS.has('disc_natural') || USERS_TABLE_COLUMNS.has('disc_adaptado'))
+    throw new Error('colunas mortas voltaram à whitelist — disc_profiles é a fonte agora');
+});
+await TA('P06 saveDISCProfile não tenta mais patch morto em users (usa disc_profiles)', async()=>{
+  reset(); seed();
+  _fetchLog = [];
+  await saveDISCProfile('my@t.com', {D:5,I:3,S:2,C:1}, 'natural');
+  const userPatch = _fetchLog.find(f=>f.method==='PATCH' && String(f.url).includes('/users?'));
+  if(userPatch) throw new Error('ainda tenta PATCH em users — deveria ter sido removido');
+  const discWrite = _fetchLog.find(f=>String(f.url).includes('disc_profiles'));
+  if(!discWrite) throw new Error('não gravou em disc_profiles');
+});
+
+T('P07 isTrainingComplete exige todas as aulas concluídas para mentor', ()=>{
+  reset(); seed();
+  currentUser = {email:'mentor@t.com', role:'mentor'};
+  DB.set('training_progress_mentor@t.com', {completed:[], updated:[]});
+  if(isTrainingComplete()) throw new Error('não deveria estar completo sem nenhuma aula feita');
+});
+T('P08 isTrainingComplete é sempre true para não-mentor (não bloqueia mentorado/admin)', ()=>{
+  currentUser = {email:'x@t.com', role:'mentorado'};
+  if(!isTrainingComplete()) throw new Error('mentorado não deveria ser bloqueado por treinamento de mentor');
+});
+T('P09 isLessonUnlocked: aula 1 sempre liberada, demais exigem a anterior concluída', ()=>{
+  currentUser = {email:'mentor2@t.com', role:'mentor'};
+  DB.set('training_progress_mentor2@t.com', {completed:[], updated:[]});
+  if(!isLessonUnlocked(1)) throw new Error('aula 1 deveria estar sempre liberada');
+  if(isLessonUnlocked(2)) throw new Error('aula 2 não deveria liberar sem a 1 concluída');
+});
+
+await TA('P10 approveReg sincroniza o usuário aprovado no Supabase', async()=>{
+  reset(); seed();
+  DB.set('registrations',[{id:'r1',name:'Novo Mentorado',email:'novo@t.com',role:'mentorado',plan:'x',status:'pending'}]);
+  _fetchLog = [];
+  await approveReg('r1');
+  const upsert = _fetchLog.find(f=>String(f.url).includes('/users') && (f.method==='POST'||f.method==='PATCH'));
+  if(!upsert) throw new Error('aprovação não tentou sincronizar o usuário no backend');
+});
+
+await TA('P11 cleanupDuplicateUsersInSupabase mantém o registro mais completo', async()=>{
+  reset();
+  const savedFetch = global.fetch;
+  const rows = [
+    {id:'a', email:'dup@t.com', name:'Dup', role:null, phase:null},
+    {id:'b', email:'dup@t.com', name:'Dup', role:'mentor', phase:'G'}
+  ];
+  global.fetch = async(url,opts)=>{
+    if(String(url).includes('users?select=')){
+      return {ok:true, status:200, json:async()=>rows, text:async()=>JSON.stringify(rows)};
+    }
+    _fetchLog.push({url:String(url),method:(opts&&opts.method)||'GET'});
+    return {ok:true, status:200, json:async()=>([]), text:async()=>'[]'};
+  };
+  _fetchLog = [];
+  await cleanupDuplicateUsersInSupabase();
+  global.fetch = savedFetch;
+  const del = _fetchLog.find(f=>f.method==='DELETE' && String(f.url).includes('id=eq.a'));
+  if(!del) throw new Error('deveria ter removido o registro menos completo (id=a), não o mais completo (id=b)');
+});
+
+T('P12 sanitizeUserPayload nunca deixa passar campo fora da whitelist (defesa em profundidade)', ()=>{
+  const dirty = {id:'u1', name:'X', campo_inventado:'não deveria ir', mentorados:['a','b']};
+  const clean = sanitizeUserPayload(dirty);
+  if('campo_inventado' in clean) throw new Error('campo inventado vazou pela sanitização');
+  if('mentorados' in clean) throw new Error('campo mentorados (removido de propósito) vazou');
+});
+
+T('P13 discScoresWrite/discFullRead ficam isolados por mentorado (regressão do vazamento original)', ()=>{
+  reset(); seed();
+  currentUser = {email:'a@t.com'};
+  discScoresWrite({D:5}, {natural:{D:5}});
+  currentUser = {email:'b@t.com'};
+  discScoresWrite({D:1}, {natural:{D:1}});
+  currentUser = {email:'a@t.com'};
+  const a = discFullRead();
+  if(a.natural.D !== 5) throw new Error('mentor leria o DISC do outro usuário — vazamento voltou');
+});
+
+T('P14 mpRead/radarsRead nunca retornam null mesmo sem dado gravado (evita crash de render)', ()=>{
+  reset(); seed();
+  currentUser = {email:'novo@t.com'};
+  const mp = mpRead();
+  const rad = radarsRead();
+  if(!mp || typeof mp !== 'object') throw new Error('mpRead deveria retornar objeto default, não '+JSON.stringify(mp));
+  if(!Array.isArray(rad)) throw new Error('radarsRead deveria retornar array default');
+});
+
+T('P15 syncQueueAdd nunca perde uma operação anterior ao enfileirar outra', ()=>{
+  reset();
+  syncQueueAdd({path:'checkpoints',method:'POST',body:{id:1}});
+  syncQueueAdd({path:'diario',method:'POST',body:{id:2}});
+  const q = DB.get('sync_queue');
+  if(q.length !== 2) throw new Error('fila deveria ter 2 operações, tem '+q.length);
+});
+
 // ── RESULTADO ──
 console.log('PASS='+pass+' FAIL='+fail);
 if(failures.length){ failures.forEach(f=>console.log('❌ '+f)); process.exit(1); }

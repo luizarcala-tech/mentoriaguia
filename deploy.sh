@@ -42,7 +42,13 @@ fi
 echo "✅ Auditoria estrutural + testes de lógica — tudo passou"
 
 echo "📦 Commitando em main..."
-git add index.html
+# index.html é o entregável, mas tests.js (a suíte que acabou de validar
+# o deploy) e supabase_schema.sql precisam ir junto — senão a próxima
+# sessão herda uma suíte desatualizada e acha que está tudo coberto
+# quando não está. Foi um bug real: 3 deploys seguidos publicaram só
+# index.html e deixaram tests.js órfão, sem ninguém perceber.
+git add index.html tests.js audit.sh deploy.sh
+[ -f supabase_schema.sql ] && git add supabase_schema.sql
 git commit -m "$MSG"
 git push origin main
 

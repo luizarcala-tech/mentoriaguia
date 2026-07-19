@@ -126,6 +126,35 @@ let s06Pass = true;
   }
 })();
 
+// ── S07: painel twin do mentor está de fato ligado (não fica órfão) ──
+let s07Pass = true;
+(function(){
+  if(!/renderMentorTwinInto\(menteeEmail, activeCycle\?\.id\|\|null\);/.test(platformJs)){
+    s07Pass = false;
+    structFailures.push('S07 renderMentorMenteeDash não dispara renderMentorTwinInto — o painel twin nunca apareceria na tela');
+  }
+})();
+
+// ── S08: twin do mentor nunca escreve nos instrumentos do mentorado ──
+// Twin observa (sbLoad*, sbSaveMentorObs, sbSaveCompetenciaScore para a
+// série score_mentor); jamais deve chamar os escritores do dado do
+// mentorado (sbSaveInstrument, swotWrite, vfWrite, growWrite, mpWrite).
+let s08Pass = true;
+(function(){
+  const m = /async function renderMentorTwinInto\([^)]*\)\s*\{([\s\S]*?)\n\}\n\nfunction toggleTwinCardComment/.exec(platformJs);
+  if(!m){
+    s08Pass = false;
+    structFailures.push('S08 função renderMentorTwinInto não encontrada para auditar');
+  } else {
+    const forbidden = ['sbSaveInstrument(', 'swotWrite(', 'vfWrite(', 'growWrite(', 'mpWrite('];
+    const violations = forbidden.filter(f => m[1].includes(f));
+    if(violations.length){
+      s08Pass = false;
+      structFailures.push('S08 twin do mentor grava no instrumento do mentorado: '+violations.join(', '));
+    }
+  }
+})();
+
 // ── I01-I25 / J01-J25(+J05b): testes de lógica em ambiente Node isolado ──
 const self = fs.readFileSync(__filename, 'utf8');
 const stubs = self.split('//STUBS_'+'START')[1].split('//STUBS_'+'END')[0];
@@ -145,13 +174,15 @@ console.log(s03Pass ? "✅ S03 toda escrita em users passa por sanitizeUserPaylo
 console.log(s04Pass ? "✅ S04 nenhum dado de mentorado em chave global" : "❌ S04 há dado de mentorado em chave global (vaza entre usuários)");
 console.log(s05Pass ? "✅ S05 todo instrumento replica no Supabase" : "❌ S05 há instrumento gravando só em local");
 console.log(s06Pass ? "✅ S06 nenhum campo de users fora da whitelist é gravado" : "❌ S06 há campo de users que nunca chega ao servidor");
+console.log(s07Pass ? "✅ S07 painel twin do mentor está ligado ao dashboard" : "❌ S07 painel twin não é chamado — ficaria órfão");
+console.log(s08Pass ? "✅ S08 twin do mentor nunca escreve no instrumento do mentorado" : "❌ S08 twin do mentor grava onde não deveria");
 structFailures.forEach(f => console.log('   ↳ '+f));
 
 console.log('\n── Testes de lógica (ambiente Node com stubs) ──');
 process.stdout.write(r.stdout||''); process.stderr.write(r.stderr||'');
 
-const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0) + (s03Pass?1:0) + (s04Pass?1:0) + (s05Pass?1:0) + (s06Pass?1:0);
-const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1) + (s03Pass?0:1) + (s04Pass?0:1) + (s05Pass?0:1) + (s06Pass?0:1);
+const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0) + (s03Pass?1:0) + (s04Pass?1:0) + (s05Pass?1:0) + (s06Pass?1:0) + (s07Pass?1:0) + (s08Pass?1:0);
+const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1) + (s03Pass?0:1) + (s04Pass?0:1) + (s05Pass?0:1) + (s06Pass?0:1) + (s07Pass?0:1) + (s08Pass?0:1);
 const finalPass = logicPass + structPassCount;
 const finalFail = logicFail + structFailCount;
 console.log('\n════ RESULTADO FINAL: PASS='+finalPass+' FAIL='+finalFail+' ════');
@@ -787,6 +818,107 @@ T('P15 syncQueueAdd nunca perde uma operação anterior ao enfileirar outra', ()
   const q = DB.get('sync_queue');
   if(q.length !== 2) throw new Error('fila deveria ter 2 operações, tem '+q.length);
 });
+
+// ── T (Twin): painel do mentor — somente leitura + observações + calibração ──
+
+await TA('T01 sbSaveMentorObs é append-only — não sobrescreve observação anterior', async()=>{
+  reset(); seed();
+  _fetchLog = [];
+  await sbSaveMentorObs('mentor@t.com','my@t.com','cy1','swot','primeira observação',{kind:'observacao'});
+  await sbSaveMentorObs('mentor@t.com','my@t.com','cy1','swot','segunda observação',{kind:'observacao'});
+  const deletes = _fetchLog.filter(f=>f.method==='DELETE');
+  const posts = _fetchLog.filter(f=>f.method==='POST' && String(f.url).includes('mentor_observations'));
+  if(deletes.length) throw new Error('mentor_observations não deveria apagar histórico — twin precisa do acumulado para o relatório final');
+  if(posts.length !== 2) throw new Error('esperava 2 inserções (histórico completo), veio '+posts.length);
+});
+
+await TA('T02 sbSaveMentorObs distingue observação de recomendação pelo kind', async()=>{
+  reset(); seed();
+  const savedFetch = global.fetch;
+  let capturedBody = null;
+  global.fetch = async(url,opts)=>{
+    if(String(url).includes('mentor_observations')) capturedBody = JSON.parse(opts.body);
+    return {ok:true, status:200, json:async()=>([]), text:async()=>'[]'};
+  };
+  await sbSaveMentorObs('mentor@t.com','my@t.com','cy1','grow','sugiro focar em X',{kind:'recomendacao'});
+  global.fetch = savedFetch;
+  if(!capturedBody) throw new Error('não gravou');
+  if(capturedBody.kind !== 'recomendacao') throw new Error('kind não foi persistido corretamente, veio '+capturedBody.kind);
+});
+
+await TA('T03 saveTwinCalibration grava score_mentor sem alterar score_auto/360/aferido existentes', async()=>{
+  reset(); seed();
+  currentUser = {email:'mentor@t.com', role:'mentor'};
+  window._twinMenteeEmail = 'my@t.com';
+  window._twinCompScores = [{competencia:'Liderança', score_auto:4, score_360:3.5, score_aferido:null}];
+  _elems['twin-calib-Lideran_a'] = {value:'5'};
+  const savedFetch = global.fetch;
+  let capturedBody = null;
+  global.fetch = async(url,opts)=>{
+    if(String(url).includes('competencia_scores')) capturedBody = JSON.parse(opts.body);
+    return {ok:true, status:200, json:async()=>([]), text:async()=>'[]'};
+  };
+  await saveTwinCalibration('Liderança','cy1');
+  global.fetch = savedFetch;
+  if(!capturedBody) throw new Error('não tentou gravar calibração');
+  if(capturedBody.score_mentor !== 5) throw new Error('score_mentor não foi 5, veio '+capturedBody.score_mentor);
+  if(capturedBody.score_auto !== 4) throw new Error('calibração do mentor sobrescreveu score_auto do mentorado — twin deveria só observar, nunca editar');
+  if(capturedBody.score_360 !== 3.5) throw new Error('calibração do mentor sobrescreveu score_360 — twin deveria só observar, nunca editar');
+});
+
+await TA('T04 saveTwinCalibration rejeita valor fora do intervalo 1-5', async()=>{
+  reset(); seed();
+  currentUser = {email:'mentor@t.com', role:'mentor'};
+  window._twinMenteeEmail = 'my@t.com';
+  window._twinCompScores = [{competencia:'Foco', score_auto:3}];
+  _elems['twin-calib-Foco'] = {value:'9'};
+  _fetchLog = [];
+  await saveTwinCalibration('Foco','cy1');
+  const post = _fetchLog.find(f=>f.method==='POST' && String(f.url).includes('competencia_scores'));
+  if(post) throw new Error('deveria ter recusado calibração fora de 1-5, mas gravou mesmo assim');
+});
+
+T('T05 twinObsList filtra por instrumento e target_id corretamente', ()=>{
+  const rows = [
+    {instrument:'swot', target_id:'none', text:'a', created_at:'2026-01-01'},
+    {instrument:'grow', target_id:'none', text:'b', created_at:'2026-01-02'},
+    {instrument:'microplano', target_id:'card1', text:'c', created_at:'2026-01-03'},
+    {instrument:'microplano', target_id:'card2', text:'d', created_at:'2026-01-04'},
+  ];
+  const swotOnly = twinObsList(rows,'swot','none');
+  if(swotOnly.length !== 1 || swotOnly[0].text !== 'a') throw new Error('filtro de instrumento falhou');
+  const card1Only = twinObsList(rows,'microplano','card1');
+  if(card1Only.length !== 1 || card1Only[0].text !== 'c') throw new Error('filtro de target_id (card) falhou — comentários de cards diferentes vazariam entre si');
+});
+
+T('T06 twinObsList ordena do mais recente para o mais antigo', ()=>{
+  const rows = [
+    {instrument:'swot', target_id:'none', text:'antiga', created_at:'2026-01-01'},
+    {instrument:'swot', target_id:'none', text:'nova', created_at:'2026-06-01'},
+  ];
+  const sorted = twinObsList(rows,'swot','none');
+  if(sorted[0].text !== 'nova') throw new Error('não está mostrando a observação mais recente primeiro');
+});
+
+await TA('T07 saveTwinCardComment grava com target_id do card específico (não vaza entre cards)', async()=>{
+  reset(); seed();
+  currentUser = {email:'mentor@t.com', role:'mentor'};
+  window._twinMenteeEmail = 'my@t.com';
+  window._twinCycleId = 'cy1';
+  _elems['twin-obs-input-card_abc123'] = {value:'comentário no card certo'};
+  const savedFetch = global.fetch;
+  let capturedBody = null;
+  global.fetch = async(url,opts)=>{
+    if(String(url).includes('mentor_observations')) capturedBody = JSON.parse(opts.body);
+    return {ok:true, status:200, json:async()=>([]), text:async()=>'[]'};
+  };
+  await saveTwinCardComment('abc123','card_abc123');
+  global.fetch = savedFetch;
+  if(!capturedBody) throw new Error('não gravou comentário do card');
+  if(capturedBody.target_id !== 'abc123') throw new Error('target_id errado — comentário vazaria para outro card');
+  if(capturedBody.kind !== 'comentario_card') throw new Error('kind deveria ser comentario_card');
+});
+
 
 // ── RESULTADO ──
 console.log('PASS='+pass+' FAIL='+fail);

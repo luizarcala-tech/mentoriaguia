@@ -8489,14 +8489,16 @@ async function sbSaveKeyResult(menteeEmail, cycleId, kr){
 }
 
 // ── Observações do mentor (por instrumento / card) ────────────────────
+// Observações/recomendações do mentor por instrumento (ou card específico).
+// Append-only de propósito: "ir incluindo observações" no pedido original
+// significa histórico acumulado, não um campo que se sobrescreve — é o que
+// vai compor o relatório final do mentorado.
 async function sbSaveMentorObs(mentorEmail, menteeEmail, cycleId, instrument, text, opts={}){
-  return persistUpsert('mentor_observations',
-    'mentee_email=eq.'+eqp(menteeEmail)+'&instrument=eq.'+eqp(instrument)
-      +'&target_id=eq.'+eqp(opts.targetId||'none')+'&cycle_id=eq.'+eqp(cycleId||'null'),
-    { mentor_email: mentorEmail, mentee_email: menteeEmail,
-      cycle_id: cycleId||null, instrument, target_id: opts.targetId||'none',
-      kind: opts.kind||'observacao', phase: opts.phase||null, text,
-      created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+  return persist('mentor_observations', 'POST', {
+    mentor_email: mentorEmail, mentee_email: menteeEmail,
+    cycle_id: cycleId||null, instrument, target_id: opts.targetId||'none',
+    kind: opts.kind||'observacao', phase: opts.phase||null, text,
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
 }
 
 async function sbLoadMentorObs(menteeEmail, cycleId){
@@ -10039,6 +10041,200 @@ function setMenteeView(email){
   renderMentorMenteeDash(email);
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// TWIN DO MENTOR — visão consolidada e somente-leitura dos instrumentos
+// do mentorado, com espaço de observação/recomendação por instrumento,
+// calibração de competências (4ª série) e comentário em card do Kanban.
+// O mentor NUNCA edita o que o mentorado preencheu — só observa e anota.
+// Tudo aqui alimenta o relatório final do mentorado no futuro.
+// ══════════════════════════════════════════════════════════════════════
+
+function twinObsList(obsRows, instrument, targetId='none'){
+  return (obsRows||[])
+    .filter(o=>o.instrument===instrument && (o.target_id||'none')===targetId)
+    .sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+}
+
+function twinObsHtml(obsRows, instrument, targetId, emptyLabel){
+  const notes = twinObsList(obsRows, instrument, targetId);
+  if(!notes.length) return `<div style="font-size:11px;color:var(--text4);font-style:italic;">${emptyLabel||'Nenhuma observação registrada ainda.'}</div>`;
+  return notes.map(n=>`
+    <div style="padding:6px 0;border-bottom:1px solid var(--border);">
+      <div style="font-size:9px;color:var(--text4);margin-bottom:2px;">${new Date(n.created_at).toLocaleString('pt-BR')}${n.kind==='recomendacao'?' · recomendação':''}</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.5;">${(n.text||'').replace(/</g,'&lt;')}</div>
+    </div>`).join('');
+}
+
+function twinObsPanel(title, icon, instrument, targetId, obsRows, dataHtml, emptyDataLabel){
+  const uid = (instrument+'_'+targetId).replace(/[^a-zA-Z0-9]/g,'_');
+  return `
+  <div class="panel" style="margin-bottom:14px;">
+    <div class="panel-title"><div class="panel-title-dot"></div> ${icon} ${title} <span style="font-size:9px;color:var(--text4);font-weight:400;margin-left:6px;">somente leitura</span></div>
+    ${dataHtml || `<div style="font-size:12px;color:var(--text4);">${emptyDataLabel||'O mentorado ainda não preencheu este instrumento.'}</div>`}
+    <div style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--border);">
+      <div style="font-size:10px;font-weight:700;color:var(--text4);letter-spacing:.05em;margin-bottom:6px;">MINHAS OBSERVAÇÕES E RECOMENDAÇÕES</div>
+      <div id="twin-obs-list-${uid}">${twinObsHtml(obsRows, instrument, targetId)}</div>
+      <textarea id="twin-obs-input-${uid}" class="form-input" rows="2" placeholder="Adicionar observação ou recomendação..." style="resize:vertical;margin-top:8px;font-size:12px;"></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;">
+        <button class="btn btn-outline btn-xs" onclick="saveTwinObs('${instrument}','${targetId}','observacao','${uid}')">+ Observação</button>
+        <button class="btn btn-outline btn-xs" onclick="saveTwinObs('${instrument}','${targetId}','recomendacao','${uid}')">+ Recomendação</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveTwinObs(instrument, targetId, kind, uid){
+  const input = document.getElementById('twin-obs-input-'+uid);
+  const text = (input?.value||'').trim();
+  if(!text){ toast('Escreva algo antes de salvar','err'); return; }
+  const menteeEmail = window._twinMenteeEmail, cycleId = window._twinCycleId;
+  const ok = await sbSaveMentorObs(currentUser.email, menteeEmail, cycleId, instrument, text, {kind, targetId});
+  if(ok){
+    toast(kind==='recomendacao'?'Recomendação registrada':'Observação registrada','suc');
+    input.value = '';
+    await renderMentorTwinInto(menteeEmail, cycleId);
+  } else {
+    toast('Salvo localmente — sincronização pendente','warn');
+  }
+}
+
+async function saveTwinCalibration(comp, cycleId){
+  const menteeEmail = window._twinMenteeEmail;
+  const uid = comp.replace(/[^a-zA-Z0-9]/g,'_');
+  const input = document.getElementById('twin-calib-'+uid);
+  const val = parseFloat(input?.value);
+  if(!val || val < 1 || val > 5){ toast('A calibração precisa ser um número entre 1 e 5','err'); return; }
+  const existing = (window._twinCompScores||[]).find(c=>c.competencia===comp) || {};
+  const ok = await sbSaveCompetenciaScore(menteeEmail, cycleId, comp, {
+    auto: existing.score_auto, p360: existing.score_360, aferido: existing.score_aferido,
+    mentor: val, mentor_email: currentUser.email, frozen: existing.frozen
+  });
+  toast(ok ? 'Calibração salva' : 'Salvo localmente — sincronização pendente', ok?'suc':'warn');
+  await renderMentorTwinInto(menteeEmail, cycleId);
+}
+
+async function saveTwinCardComment(cardId, uid){
+  const input = document.getElementById('twin-obs-input-'+uid);
+  const text = (input?.value||'').trim();
+  if(!text){ toast('Escreva algo antes de salvar','err'); return; }
+  const menteeEmail = window._twinMenteeEmail, cycleId = window._twinCycleId;
+  const ok = await sbSaveMentorObs(currentUser.email, menteeEmail, cycleId, 'microplano', text, {kind:'comentario_card', targetId: cardId});
+  toast(ok ? 'Comentário adicionado ao card' : 'Salvo localmente — sincronização pendente', ok?'suc':'warn');
+  await renderMentorTwinInto(menteeEmail, cycleId);
+}
+
+async function renderMentorTwinInto(menteeEmail, cycleId){
+  const el = document.getElementById('mentor-twin-container');
+  if(!el) return;
+  el.innerHTML = '<div style="font-size:12px;color:var(--text4);padding:20px;text-align:center;">Carregando dados do mentorado...</div>';
+
+  window._twinMenteeEmail = menteeEmail;
+  window._twinCycleId = cycleId;
+
+  const [swot, vf, grow, microplano, compScores, discRows, obsRows] = await Promise.all([
+    sbLoadInstrument('swot', menteeEmail, cycleId),
+    sbLoadInstrument('vf', menteeEmail, cycleId),
+    sbLoadInstrument('grow', menteeEmail, cycleId),
+    sbLoadInstrument('microplano', menteeEmail, cycleId),
+    sbLoadCompetenciaScores(menteeEmail, cycleId),
+    sbLoadDISC(menteeEmail),
+    sbLoadMentorObs(menteeEmail, cycleId)
+  ]);
+  window._twinCompScores = compScores;
+
+  // ── SWOT ──
+  const swotHtml = swot ? `
+    <div class="grid-2" style="gap:8px;">
+      ${[['f','Forças','var(--green)'],['fr','Fraquezas','var(--red)'],['o','Oportunidades','var(--gold)'],['a','Ameaças','var(--amber)']].map(([k,label,color])=>`
+      <div>
+        <div style="font-size:10px;font-weight:700;color:${color};margin-bottom:4px;">${label.toUpperCase()}</div>
+        ${(swot[k]||[]).length ? swot[k].map(i=>`<div style="font-size:11px;color:var(--text2);padding:2px 0;">· ${i}</div>`).join('') : '<div style="font-size:11px;color:var(--text4);">—</div>'}
+      </div>`).join('')}
+    </div>` : null;
+
+  // ── Visão de Futuro ──
+  const vfEntry = Array.isArray(vf) ? vf[0] : vf;
+  const vfHtml = vfEntry ? `<div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap;">${(vfEntry.txt||vfEntry.texto||JSON.stringify(vfEntry)).toString().replace(/</g,'&lt;')}</div>` : null;
+
+  // ── GROW (última sessão) ──
+  const growList = Array.isArray(grow) ? grow : [];
+  const growHtml = growList.length ? `
+    <div style="font-size:10px;color:var(--text4);margin-bottom:8px;">${growList.length} sessão(ões) registrada(s) — mostrando a mais recente</div>
+    ${['goal','reality','options','will'].map(k=>growList[0][k] ? `
+    <div style="margin-bottom:6px;"><span style="font-size:10px;font-weight:700;color:var(--gold);">${{goal:'GOAL',reality:'REALITY',options:'OPTIONS',will:'WILL'}[k]}</span>
+    <div style="font-size:12px;color:var(--text2);">${growList[0][k]}</div></div>` : '').join('')}
+    ` : null;
+
+  // ── Kanban ──
+  const kanban = microplano?.kanban || {todo:[],doing:[],done:[]};
+  const kanbanHasCards = (kanban.todo?.length||0) + (kanban.doing?.length||0) + (kanban.done?.length||0) > 0;
+  const kanbanHtml = kanbanHasCards ? `
+    <div class="grid-2" style="gap:8px;grid-template-columns:1fr 1fr 1fr;">
+      ${[['todo','A fazer'],['doing','Fazendo'],['done','Feito']].map(([col,label])=>`
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text4);margin-bottom:6px;">${label.toUpperCase()} (${(kanban[col]||[]).length})</div>
+        ${(kanban[col]||[]).map(card=>{
+          const cardId = card.id || card.title || JSON.stringify(card).slice(0,20);
+          const cardUid = ('card_'+cardId).replace(/[^a-zA-Z0-9]/g,'_');
+          const comments = twinObsList(obsRows, 'microplano', cardId);
+          return `
+          <div style="background:var(--bg3);border-radius:6px;padding:8px;margin-bottom:6px;">
+            <div style="font-size:11px;color:var(--text);margin-bottom:4px;">${card.title||card.text||'(sem título)'}</div>
+            <div style="font-size:9px;color:var(--text4);cursor:pointer;" onclick="toggleTwinCardComment('${cardUid}')">💬 ${comments.length ? comments.length+' comentário(s)' : 'comentar'}</div>
+            <div id="twin-card-panel-${cardUid}" style="display:none;margin-top:6px;">
+              ${comments.map(c=>`<div style="font-size:10px;color:var(--text3);padding:2px 0;border-top:1px solid var(--border);">${new Date(c.created_at).toLocaleDateString('pt-BR')}: ${(c.text||'').replace(/</g,'&lt;')}</div>`).join('')}
+              <textarea id="twin-obs-input-${cardUid}" class="form-input" rows="2" style="font-size:11px;margin-top:4px;resize:vertical;" placeholder="Comentar este card..."></textarea>
+              <button class="btn btn-outline btn-xs" style="margin-top:4px;" onclick="saveTwinCardComment('${cardId}','${cardUid}')">Salvar comentário</button>
+            </div>
+          </div>`;
+        }).join('') || '<div style="font-size:10px;color:var(--text4);">vazio</div>'}
+      </div>`).join('')}
+    </div>` : null;
+
+  // ── Competências — calibração (4ª série) ──
+  const compHtml = compScores.length ? `
+    <table style="width:100%;font-size:11px;border-collapse:collapse;">
+      <thead><tr style="text-align:left;color:var(--text4);font-size:9px;">
+        <th style="padding:4px 0;">Competência</th><th>Auto</th><th>360°</th><th>Aferido</th><th>Calibração (mentor)</th>
+      </tr></thead>
+      <tbody>
+        ${compScores.map(c=>{
+          const uid = c.competencia.replace(/[^a-zA-Z0-9]/g,'_');
+          return `
+          <tr style="border-top:1px solid var(--border);">
+            <td style="padding:6px 0;color:var(--text);">${c.competencia}</td>
+            <td style="color:var(--gold);">${c.score_auto ?? '—'}</td>
+            <td style="color:var(--text3);">${c.score_360 ?? '—'}</td>
+            <td style="color:var(--text3);">${c.score_aferido ?? '—'}</td>
+            <td>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <input id="twin-calib-${uid}" type="number" min="1" max="5" step="0.5"
+                  value="${c.score_mentor ?? ''}" class="form-input" style="width:52px;padding:3px 6px;font-size:11px;">
+                <button class="btn btn-outline btn-xs" onclick="saveTwinCalibration('${c.competencia}','${cycleId||''}')">salvar</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>` : null;
+
+  el.innerHTML = `
+    ${twinObsPanel('SWOT Pessoal', '🔲', 'swot', 'none', obsRows, swotHtml, 'O mentorado ainda não preencheu o SWOT.')}
+    ${twinObsPanel('Visão de Futuro', '🔭', 'vf', 'none', obsRows, vfHtml, 'O mentorado ainda não registrou a Visão de Futuro.')}
+    ${twinObsPanel('Sessões GROW', '🎯', 'grow', 'none', obsRows, growHtml, 'Nenhuma sessão GROW registrada ainda.')}
+    ${twinObsPanel('Kanban / Microplano', '📋', 'microplano', 'none', obsRows, kanbanHtml, 'O Kanban está vazio.')}
+    <div class="panel" style="margin-bottom:14px;">
+      <div class="panel-title"><div class="panel-title-dot"></div> 📊 Calibração de Competências</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">Sua nota de calibração compõe uma 4ª série no radar, ao lado da autoavaliação, do 360° e da aferição — não substitui nenhuma delas.</div>
+      ${compHtml || '<div style="font-size:12px;color:var(--text4);">Nenhuma competência definida neste ciclo ainda.</div>'}
+    </div>`;
+}
+
+function toggleTwinCardComment(cardUid){
+  const p = document.getElementById('twin-card-panel-'+cardUid);
+  if(p) p.style.display = p.style.display==='none' ? 'block' : 'none';
+}
+
 async function renderMentorMenteeDash(menteeEmail){
   const users = DB.get('users')||[];
   const mentee = users.find(u=>u.email===menteeEmail);
@@ -10099,6 +10295,13 @@ async function renderMentorMenteeDash(menteeEmail){
     </div>
   </div>
 
+  <!-- 🪞 TWIN — visão consolidada e somente-leitura do mentorado -->
+  <div class="panel" style="margin-bottom:14px;background:var(--bg2);border:1px solid var(--gold-border);">
+    <div class="panel-title" style="color:var(--gold);"><div class="panel-title-dot" style="background:var(--gold);"></div> 🪞 Visão do Mentorado</div>
+    <div style="font-size:11px;color:var(--text3);">Twin dos instrumentos que o mentorado preenche — você nunca edita o conteúdo dele aqui, só observa e registra suas próprias notas.</div>
+  </div>
+  <div id="mentor-twin-container"></div>
+
   <div class="grid-2">
     <div>
       <!-- Pulse chart -->
@@ -10157,21 +10360,7 @@ async function renderMentorMenteeDash(menteeEmail){
     </div>
 
     <div>
-      <!-- Competencias snapshot -->
-      <div class="panel" style="margin-bottom:14px;">
-        <div class="panel-title"><div class="panel-title-dot"></div> Competências do ciclo</div>
-        ${frozenComps.length ? frozenComps.map(c=>`
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
-          <div style="font-size:12px;color:var(--text);">${c.name}</div>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <span style="font-size:10px;color:var(--text4);">Auto: <strong style="color:var(--gold);">${c.me||'—'}</strong></span>
-            <span style="font-size:10px;color:var(--text4);">Mentor: <strong style="color:#3266ad;">${c.mentor||'—'}</strong></span>
-          </div>
-        </div>`).join('') : comps.length ? `
-        <div style="font-size:11px;color:var(--amber);">Competências não congeladas ainda.</div>
-        ${comps.map(c=>`<div style="padding:4px 0;font-size:12px;color:var(--text2);">· ${c.name}</div>`).join('')}
-        ` : '<div style="font-size:12px;color:var(--text4);">Nenhuma competência definida.</div>'}
-      </div>
+      <!-- Competências: ver seção "🪞 Visão do Mentorado" abaixo, com calibração real -->
 
       <!-- 360 status -->
       <div class="panel" style="margin-bottom:14px;">
@@ -10205,6 +10394,8 @@ async function renderMentorMenteeDash(menteeEmail){
       </div>
     </div>
   </div>`;
+
+  renderMentorTwinInto(menteeEmail, activeCycle?.id||null);
 }
 
 function saveMentorObs(menteeId, phase){

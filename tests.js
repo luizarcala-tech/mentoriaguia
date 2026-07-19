@@ -164,6 +164,35 @@ let s09Pass = true;
   }
 })();
 
+// ── S10: menu do mentor não contém páginas de instrumento do mentorado ──
+// Este é o bug exato relatado: o mentor via as mesmas telas editáveis do
+// mentorado (Competências, DISC, SWOT etc.) no próprio menu, em vez de
+// só Dashboard + Twin + Treinamento.
+let s10Pass = true;
+(function(){
+  const m = /mentor:\[([\s\S]*?)\],\n  mentorado:/.exec(platformJs);
+  if(!m){
+    s10Pass = false;
+    structFailures.push('S10 não encontrou MENUS.mentor para auditar');
+  } else {
+    const forbidden = ["id:'disc'", "id:'comp'", "id:'peer360'", "id:'swot'", "id:'vf'", "id:'mapa-obj'", "id:'microplano'", "id:'diario'", "id:'fase-a'", "id:'inicio-ciclo'"];
+    const leaked = forbidden.filter(f => m[1].includes(f));
+    if(leaked.length){
+      s10Pass = false;
+      structFailures.push('S10 menu do mentor ainda contém páginas de instrumento do mentorado: '+leaked.join(', '));
+    }
+  }
+})();
+
+// ── S11: admin consegue converter usuário para papel duplo ──
+let s11Pass = true;
+(function(){
+  if(!/value="mentor_mentorado"/.test(platformJs)){
+    s11Pass = false;
+    structFailures.push('S11 formulário admin não oferece a opção Mentor e Mentorado');
+  }
+})();
+
 // ── I01-I25 / J01-J25(+J05b): testes de lógica em ambiente Node isolado ──
 const self = fs.readFileSync(__filename, 'utf8');
 const stubs = self.split('//STUBS_'+'START')[1].split('//STUBS_'+'END')[0];
@@ -186,13 +215,15 @@ console.log(s06Pass ? "✅ S06 nenhum campo de users fora da whitelist é gravad
 console.log(s07Pass ? "✅ S07 painel twin do mentor está ligado ao dashboard" : "❌ S07 painel twin não é chamado — ficaria órfão");
 console.log(s08Pass ? "✅ S08 twin do mentor nunca escreve no instrumento do mentorado" : "❌ S08 twin do mentor grava onde não deveria");
 console.log(s09Pass ? "✅ S09 allowlist de QA é explícita" : "❌ S09 allowlist de QA é genérica demais");
+console.log(s10Pass ? "✅ S10 menu do mentor não vaza páginas de instrumento do mentorado" : "❌ S10 menu do mentor vaza páginas de instrumento do mentorado");
+console.log(s11Pass ? "✅ S11 admin pode criar conta de papel duplo" : "❌ S11 admin não consegue criar conta de papel duplo");
 structFailures.forEach(f => console.log('   ↳ '+f));
 
 console.log('\n── Testes de lógica (ambiente Node com stubs) ──');
 process.stdout.write(r.stdout||''); process.stderr.write(r.stderr||'');
 
-const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0) + (s03Pass?1:0) + (s04Pass?1:0) + (s05Pass?1:0) + (s06Pass?1:0) + (s07Pass?1:0) + (s08Pass?1:0) + (s09Pass?1:0);
-const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1) + (s03Pass?0:1) + (s04Pass?0:1) + (s05Pass?0:1) + (s06Pass?0:1) + (s07Pass?0:1) + (s08Pass?0:1) + (s09Pass?0:1);
+const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0) + (s03Pass?1:0) + (s04Pass?1:0) + (s05Pass?1:0) + (s06Pass?1:0) + (s07Pass?1:0) + (s08Pass?1:0) + (s09Pass?1:0) + (s10Pass?1:0) + (s11Pass?1:0);
+const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1) + (s03Pass?0:1) + (s04Pass?0:1) + (s05Pass?0:1) + (s06Pass?0:1) + (s07Pass?0:1) + (s08Pass?0:1) + (s09Pass?0:1) + (s10Pass?0:1) + (s11Pass?0:1);
 const finalPass = logicPass + structPassCount;
 const finalFail = logicFail + structFailCount;
 console.log('\n════ RESULTADO FINAL: PASS='+finalPass+' FAIL='+finalFail+' ════');
@@ -750,11 +781,13 @@ await TA('P06 saveDISCProfile não tenta mais patch morto em users (usa disc_pro
 T('P07 isTrainingComplete exige todas as aulas concluídas para mentor', ()=>{
   reset(); seed();
   currentUser = {email:'mentor@t.com', role:'mentor'};
+  currentRole = 'mentor';
   DB.set('training_progress_mentor@t.com', {completed:[], updated:[]});
   if(isTrainingComplete()) throw new Error('não deveria estar completo sem nenhuma aula feita');
 });
 T('P08 isTrainingComplete é sempre true para não-mentor (não bloqueia mentorado/admin)', ()=>{
   currentUser = {email:'x@t.com', role:'mentorado'};
+  currentRole = 'mentorado';
   if(!isTrainingComplete()) throw new Error('mentorado não deveria ser bloqueado por treinamento de mentor');
 });
 T('P09 isLessonUnlocked: aula 1 sempre liberada, demais exigem a anterior concluída', ()=>{
@@ -940,6 +973,7 @@ T('Q01 isQACertifiedAccount reconhece só o e-mail listado', ()=>{
 T('Q02 isTrainingComplete é sempre true para a conta de QA, mesmo sem nenhuma aula feita', ()=>{
   reset(); seed();
   currentUser = {id:'qa1', email:'luizarcala@gmail.com', role:'mentor'};
+  currentRole = 'mentor';
   DB.set('training_progress_qa1', {completed:[], scores:{}, updated:[]});
   if(!isTrainingComplete()) throw new Error('conta de QA deveria estar sempre certificada');
 });
@@ -947,6 +981,7 @@ T('Q02 isTrainingComplete é sempre true para a conta de QA, mesmo sem nenhuma a
 T('Q03 isTrainingComplete continua exigindo aulas de um mentor comum (regressão — não pode vazar)', ()=>{
   reset(); seed();
   currentUser = {id:'mentor2', email:'mentor.normal@t.com', role:'mentor'};
+  currentRole = 'mentor';
   DB.set('training_progress_mentor2', {completed:[], scores:{}, updated:[]});
   if(isTrainingComplete()) throw new Error('CRÍTICO: a certificação de QA vazou para um mentor comum');
 });
@@ -977,6 +1012,39 @@ await TA('Q06 ensureQACertification não faz nada para conta fora da allowlist (
   if(DB.get('training_progress_mentor3')) throw new Error('não deveria ter criado progresso fake para conta comum');
   const posts = _fetchLog.filter(f=>f.method==='POST' && String(f.url).includes('training_progress'));
   if(posts.length) throw new Error('não deveria ter gravado nada no Supabase para conta fora da allowlist');
+});
+
+// ── D: papel duplo (mentor_mentorado) ──
+
+T('D01 hasMentorRole reconhece mentor puro e conta dupla', ()=>{
+  if(!hasMentorRole({role:'mentor'})) throw new Error('deveria reconhecer mentor puro');
+  if(!hasMentorRole({role:'mentor_mentorado'})) throw new Error('deveria reconhecer conta dupla como mentor');
+  if(hasMentorRole({role:'mentorado'})) throw new Error('não deveria reconhecer mentorado puro como mentor');
+});
+
+T('D02 hasMentoradoRole reconhece mentorado puro e conta dupla', ()=>{
+  if(!hasMentoradoRole({role:'mentorado'})) throw new Error('deveria reconhecer mentorado puro');
+  if(!hasMentoradoRole({role:'mentor_mentorado'})) throw new Error('deveria reconhecer conta dupla como mentorado');
+  if(hasMentoradoRole({role:'mentor'})) throw new Error('não deveria reconhecer mentor puro como mentorado');
+});
+
+T('D03 conta dupla ativa como mentor é bloqueada pelo treinamento como qualquer mentor (regressão do vazamento)', ()=>{
+  reset(); seed();
+  // currentUser.role é 'mentor_mentorado' — literal, nunca === 'mentor'.
+  // Antes da correção, isTrainingComplete checava currentUser.role
+  // diretamente e essa comparação nunca batia, liberando a conta sem
+  // treinamento nenhum. O que precisa valer aqui é currentRole (o papel
+  // ATIVO da sessão, escolhido na tela de login).
+  currentUser = {id:'dual1', email:'dual@t.com', role:'mentor_mentorado'};
+  currentRole = 'mentor';
+  DB.set('training_progress_dual1', {completed:[], scores:{}, updated:[]});
+  if(isTrainingComplete()) throw new Error('CRÍTICO: conta dupla entrando como mentor pulou o treinamento');
+});
+
+T('D04 conta dupla ativa como mentorado não é afetada pelo gate de treinamento de mentor', ()=>{
+  currentUser = {id:'dual1', email:'dual@t.com', role:'mentor_mentorado'};
+  currentRole = 'mentorado';
+  if(!isTrainingComplete()) throw new Error('gate de treinamento de mentor vazou para a sessão de mentorado');
 });
 
 // ── RESULTADO ──

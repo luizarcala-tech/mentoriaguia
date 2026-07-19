@@ -1136,7 +1136,7 @@ async function computeNotifications(){
 
     if(role === 'mentor' || role === 'admin'){
       const users = DB.get('users')||[];
-      const mentees = users.filter(u=>u.role==='mentorado' && (role==='admin' || u.mentor_id===currentUser.id || u.mentor===currentUser.id));
+      const mentees = users.filter(u=>hasMentoradoRole(u) && (role==='admin' || u.mentor_id===currentUser.id || u.mentor===currentUser.id));
       for(const m of mentees){
         const cycles = DB.get('cycles_'+m.email)||[];
         cycles.forEach(cy=>{
@@ -1452,26 +1452,14 @@ const MENUS = {
     {section:'Sistema'},
     {id:'admin-config',icon:'◫',label:'Configurações'},
   ],
+  // Menu do mentor: só Dashboard (que contém o seletor de mentorado e o
+  // twin), Treinamento e Conta. O mentor NÃO tem jornada própria de
+  // instrumentos GUIA aqui — essa é a jornada do mentorado. Se a conta
+  // também for mentorado (role mentor_mentorado), a jornada própria fica
+  // acessível trocando de perfil no topo, não misturada neste menu.
   mentor:[
     {type:'top',id:'training',icon:'◉',label:'Treinamento Mentor',badge:''},
     {type:'top',id:'dash',icon:'◈',label:'Dashboard'},
-    {type:'phase',letter:'G',label:'Gestar Acordo'},
-    {id:'inicio-ciclo',icon:'◎',label:'Gestar Acordo'},
-    {type:'phase',letter:'U',label:'Unir Diagnóstico'},
-    {id:'disc',icon:'◌',label:'Perfil DISC'},
-    {id:'comp',icon:'◎',label:'Competências'},
-    {id:'peer360',icon:'◷',label:'Feedback 360°'},
-    {id:'swot',icon:'◫',label:'SWOT Pessoal'},
-    {id:'vf',icon:'◈',label:'Visão de Futuro'},
-    {id:'mapa-obj',icon:'◉',label:'Mapa de Objetivos'},
-    {type:'phase',letter:'I',label:'Implementar'},
-    {id:'microplano',icon:'◱',label:'Plano de Ação'},
-    {id:'diario',icon:'◷',label:'Diário de Bordo'},
-    {type:'phase',letter:'A',label:'Aferir e Ajustar'},
-    {id:'fase-a',icon:'◈',label:'Aferir e Ajustar (A)'},
-    {type:'section',label:'Inteligência'},
-    {id:'ia-main',icon:'✦',label:'IA GUIA ✦ Análise Integrada'},
-    {id:'nps-dash',icon:'◊',label:'NPS & Progresso'},
     {type:'section',label:'Conta'},
     {id:'perfil',icon:'◉',label:'Meu Perfil'},
   ],
@@ -1572,7 +1560,7 @@ function showPage(id){
     return;
   }
   // Block mentor from accessing platform features until training is complete
-  if(currentUser && currentUser.role === 'mentor' && !isTrainingComplete()){
+  if(currentUser && currentRole === 'mentor' && !isTrainingComplete()){
     const allowedForUntrained = ['training','lesson','perfil'];
     if(!allowedForUntrained.includes(id)){
       toast('Conclua o treinamento de mentor antes de acessar este recurso','err');
@@ -1580,7 +1568,7 @@ function showPage(id){
     }
   }
   // Block mentorado from accessing unreleased phases
-  if(currentUser && currentUser.role === 'mentorado' && !canMenteeAccess(id)){
+  if(currentUser && currentRole === 'mentorado' && !canMenteeAccess(id)){
     const phaseMap = {'disc':'U','comp':'U','swot':'U','vf':'U','peer360':'U','microplano':'I','fase-a':'A'};
     const needed = phaseMap[id];
     const phaseNames = {U:'Unir Diagnóstico (U)',I:'Implementar (I)',A:'Aferir e Ajustar (A)'};
@@ -4920,7 +4908,7 @@ async function renderInicioCiclo(){
 
   // Lembrete de currículo (evita template literal aninhado)
   const nudgeSlot = document.getElementById('curriculo-nudge-slot');
-  if(nudgeSlot && currentUser && currentUser.role==='mentorado'){
+  if(nudgeSlot && currentUser && currentRole==='mentorado'){
     const c = getCurriculo(currentUser.email);
     nudgeSlot.innerHTML = (c && c.texto) ? '' :
       '<div style="background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
@@ -5125,7 +5113,7 @@ function renderAdminEmpresas(){
                 <div style="font-weight:600;color:var(--text)">${u.name}</div>
                 <div style="color:var(--text4);font-size:10px">${u.email}</div>
               </td>
-              <td style="text-align:center"><span class="pill ${u.role==='mentor'?'pill-mentor':'pill-mentorado'}">${u.role.toUpperCase()}</span></td>
+              <td style="text-align:center"><span class="pill ${u.role==='mentor'?'pill-mentor':u.role==='mentor_mentorado'?'pill-mentor':'pill-mentorado'}">${u.role==='mentor_mentorado'?'MENTOR + MENTORADO':(u.role||'').toUpperCase()}</span></td>
               <td style="text-align:center;font-weight:700;color:var(--gold);font-family:'Space Mono',monospace">${u.phase||'G'}</td>
               <td style="text-align:center"><div class="toggle ${u.active?'on':''}" onclick="toggleUserAccess('${u.id}',this)"></div></td>
               <td style="text-align:center">
@@ -5504,6 +5492,14 @@ function isQACertifiedAccount(email){
   return QA_ALWAYS_CERTIFIED.has((email||'').toLowerCase());
 }
 
+// Conta dupla (mentor_mentorado) precisa aparecer nas duas listas — como
+// mentor disponível para associação E como mentorado disponível para
+// receber um mentor. Comparação de string exata (u.role==='mentor')
+// nunca bate para essa conta, então todo filtro por papel que decide
+// "isto é um mentor" ou "isto é um mentorado" deve passar por aqui.
+function hasMentorRole(u){ return !!u && (u.role==='mentor' || u.role==='mentor_mentorado'); }
+function hasMentoradoRole(u){ return !!u && (u.role==='mentorado' || u.role==='mentor_mentorado'); }
+
 // Garante nota 10 em todas as aulas para a conta de QA — local e Supabase.
 // Idempotente: seguro chamar toda vez que a conta faz login.
 async function ensureQACertification(user){
@@ -5537,7 +5533,11 @@ function saveTrainingProgress(p){
 }
 
 function isTrainingComplete(){
-  if(!currentUser || currentUser.role !== 'mentor') return true;
+  // currentRole é o papel ATIVO desta sessão. Para conta dupla
+  // (mentor_mentorado), currentUser.role nunca é literalmente 'mentor' —
+  // checar currentRole é o que realmente diz se a pessoa está navegando
+  // como mentor agora, o que é o que importa para o gate.
+  if(!currentUser || currentRole !== 'mentor') return true;
   if(isQACertifiedAccount(currentUser.email)) return true;
   const p = getTrainingProgress();
   // Must complete all lessons AND have no pending updates
@@ -7852,8 +7852,8 @@ async function renderAdminMatch(){
   
   const users = await loadAllUsers();
   const norm = u => (u.role||'').toLowerCase().trim();
-  const mentors  = users.filter(u=>['mentor','admin'].includes(norm(u)));
-  const mentees  = users.filter(u=>norm(u)==='mentorado');
+  const mentors  = users.filter(u=>hasMentorRole(u) || norm(u)==='admin');
+  const mentees  = users.filter(u=>hasMentoradoRole(u));
 
   // Build current pairs
   const pairs = [];
@@ -9848,6 +9848,7 @@ async function renderAdminUsers(){
         <select class="form-select" id="nu-role">
           <option value="mentorado" ${editing?.role==='mentorado'?'selected':''}>Mentorado</option>
           <option value="mentor" ${editing?.role==='mentor'?'selected':''}>Mentor</option>
+          <option value="mentor_mentorado" ${editing?.role==='mentor_mentorado'?'selected':''}>Mentor e Mentorado</option>
           ${editing?.role==='admin'?'<option value="admin" selected>Admin</option>':''}
         </select>
       </div>
@@ -10621,17 +10622,59 @@ async function doSignup(){
 function bootApp(user){
   currentUser = user;
   document.getElementById('auth-screen').style.display = 'none';
+
+  // Conta dupla: pergunta com qual perfil entrar antes de montar qualquer
+  // dashboard. A escolha vale só para esta sessão — pode trocar depois
+  // pelo seletor no topo, sem precisar deslogar.
+  if(user.role === 'mentor_mentorado'){
+    showDualRoleChooser(user);
+    return;
+  }
+
   const role = user.role === 'admin' ? 'admin' : user.role === 'mentor' ? 'mentor' : 'mentorado';
   if(role !== 'admin'){
     document.getElementById('role-switcher').style.display = 'none';
   }
+  finishBootApp(role);
+}
+
+// Tela de escolha exibida uma vez, no login, para contas com os dois papéis.
+function showDualRoleChooser(user){
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="dual-role-chooser" style="position:fixed;inset:0;background:var(--bg1);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;">
+      <div style="text-align:center;">
+        <div style="font-size:20px;font-weight:600;color:var(--text);margin-bottom:6px;">Como você quer entrar, ${(user.name||'').split(' ')[0]}?</div>
+        <div style="font-size:12px;color:var(--text3);">Sua conta tem os dois perfis. Você pode trocar depois sem deslogar.</div>
+      </div>
+      <div style="display:flex;gap:16px;">
+        <button class="btn btn-gold" style="padding:16px 28px;font-size:14px;" onclick="chooseDualRole('mentor')">Entrar como Mentor</button>
+        <button class="btn btn-outline" style="padding:16px 28px;font-size:14px;" onclick="chooseDualRole('mentorado')">Entrar como Mentorado</button>
+      </div>
+    </div>`);
+}
+
+function chooseDualRole(role){
+  document.getElementById('dual-role-chooser')?.remove();
+  window._isDualRoleUser = true;
+  // Mostra o seletor no topo (reaproveitado do admin) mas só com as duas
+  // opções relevantes — sem o botão Admin, que não se aplica a esta conta.
+  const rb = document.getElementById('role-switcher');
+  rb.style.display = 'flex';
+  const adminBtn = document.getElementById('rb-admin');
+  if(adminBtn) adminBtn.style.display = 'none';
+  finishBootApp(role);
+}
+
+function finishBootApp(role){
   updateTopbar();
   updateSyncBadge();
   ensureQACertification(currentUser);
   // Reenvia o que ficou pendente de sessões anteriores (offline, falha de rede)
   syncQueueFlush().then(r=>{ if(r.sent) console.log('sync: '+r.sent+' operações reenviadas'); });
   switchRole(role);
-  // If mentor and training not complete, redirect to training
+  // Bloqueia o mentor até completar o treinamento — usa o papel ATIVO da
+  // sessão (currentRole), não currentUser.role, porque uma conta dupla
+  // pode estar navegando como mentorado agora e como mentor depois.
   if(role === 'mentor' && !isTrainingComplete()){
     setTimeout(()=>showPage('training'), 100);
   }

@@ -667,6 +667,24 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .dot.mentor-fill{background:#3266ad;border-color:#3266ad;color:#fff;}
 .dot.aferido-fill{background:#7c4dff;border-color:#7c4dff;color:#fff;}
 
+/* Vitrine wizard — Gestar Acordo (Fase G) */
+.ic-progress{height:3px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-bottom:28px;}
+.ic-progress-fill{height:100%;background:linear-gradient(90deg,var(--gold-dim),var(--gold));border-radius:3px;transition:width .4s cubic-bezier(.4,0,.2,1);}
+.ic-kicker{font-family:var(--font-mono);color:var(--gold);font-size:11px;letter-spacing:.16em;margin-bottom:10px;text-transform:uppercase;text-align:center;}
+.ic-step{display:none;}
+.ic-step.active{display:block;animation:fadeIn .45s ease;}
+.ic-step-hero{text-align:center;padding:20px 0 6px;max-width:640px;margin:0 auto;}
+.ic-step-title{font-family:var(--font-display);font-weight:700;color:var(--text);font-size:32px;letter-spacing:-.01em;margin-bottom:8px;}
+.ic-step-sub{font-size:13px;color:var(--text3);max-width:480px;margin:0 auto;line-height:1.6;}
+.ic-timeline-row{display:flex;align-items:flex-start;justify-content:center;gap:0;margin:30px 0 6px;flex-wrap:wrap;}
+.ic-tl-item{display:flex;flex-direction:column;align-items:center;gap:8px;width:140px;}
+.ic-tl-letter{font-family:var(--font-mono);font-weight:700;font-size:34px;color:var(--text4);transition:all .2s;}
+.ic-tl-letter.on{color:var(--gold);text-shadow:0 0 16px rgba(240,192,64,.3);}
+.ic-tl-name{font-size:11px;color:var(--text4);text-align:center;line-height:1.4;}
+.ic-tl-name.on{color:var(--text);font-weight:600;}
+.ic-tl-line{height:2px;width:40px;background:var(--border);margin-top:17px;}
+.ic-nav{display:flex;justify-content:space-between;align-items:center;margin-top:24px;gap:10px;flex-wrap:wrap;}
+.ic-signbox{flex:1;padding:16px 18px;border-radius:var(--radius);background:var(--bg2);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;min-width:200px;}
 </style>
 </head>
 <body>
@@ -4683,6 +4701,29 @@ async function renderInicioCiclo(){
     <div class="page-sub">Gestar acordo · Alinhar escopo, metas e papéis · Semana 1</div>
   </div>
 
+  <div class="ic-progress"><div class="ic-progress-fill" id="ic-progress-fill" style="width:25%;"></div></div>
+
+  <div class="ic-step active" data-step="0">
+    <div class="ic-kicker">JORNADA DE MENTORIA</div>
+    <div class="ic-step-hero">
+      <div class="ic-step-title">Gestar Acordo</div>
+      <div class="ic-step-sub">A primeira fase do ciclo de 12 semanas: alinhar escopo, metas e papéis antes de seguir para o diagnóstico.</div>
+    </div>
+    <div class="ic-timeline-row">
+      <div class="ic-tl-item"><div class="ic-tl-letter on">G</div><div class="ic-tl-name on">Gestar Acordo</div></div>
+      <div class="ic-tl-line"></div>
+      <div class="ic-tl-item"><div class="ic-tl-letter">U</div><div class="ic-tl-name">Unir Diagnóstico</div></div>
+      <div class="ic-tl-line"></div>
+      <div class="ic-tl-item"><div class="ic-tl-letter">I</div><div class="ic-tl-name">Implementar</div></div>
+      <div class="ic-tl-line"></div>
+      <div class="ic-tl-item"><div class="ic-tl-letter">A</div><div class="ic-tl-name">Aferir e Ajustar</div></div>
+    </div>
+    <div class="ic-nav" style="justify-content:center;">
+      <button class="btn btn-gold" onclick="icNext()">Iniciar acordo</button>
+    </div>
+  </div>
+
+  <div class="ic-step" data-step="1">
   <div id="curriculo-nudge-slot"></div>
 
   <!-- CICLO ATIVO -->
@@ -4753,6 +4794,13 @@ async function renderInicioCiclo(){
     </div>
   </div>
 
+  <div class="ic-nav">
+    <button class="btn btn-outline" onclick="icPrev()">‹ Voltar</button>
+    <button class="btn btn-gold" onclick="icNext()">Avançar ›</button>
+  </div>
+  </div>
+
+  <div class="ic-step" data-step="2">
   <!-- Papéis e Responsabilidades -->
   <div class="panel" style="margin-bottom:16px;">
     <div class="panel-title"><div class="panel-title-dot"></div> Papéis e Responsabilidades</div>
@@ -4772,6 +4820,13 @@ async function renderInicioCiclo(){
     </div>
   </div>
 
+  <div class="ic-nav">
+    <button class="btn btn-outline" onclick="icPrev()">‹ Voltar</button>
+    <button class="btn btn-gold" onclick="icNext()">Avançar ›</button>
+  </div>
+  </div>
+
+  <div class="ic-step" data-step="3">
   <!-- Termo de Mentoria -->
   <div class="panel" style="margin-bottom:16px;">
     <div class="panel-title"><div class="panel-title-dot"></div> Termo de Mentoria</div>
@@ -4834,7 +4889,8 @@ async function renderInicioCiclo(){
     </div>
   </div>
 
-  <div style="display:flex;gap:10px;">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <button class="btn btn-outline" onclick="icPrev()">‹ Voltar</button>
     <button class="btn btn-gold" onclick="saveInicioCiclo()">Salvar e assinar termo</button>
     ${activeCycle ? (() => {
       const sigs = getAcordoSignatures(activeCycle.id);
@@ -4859,6 +4915,7 @@ async function renderInicioCiclo(){
     <button class="btn btn-outline" onclick="analyzeInicioCicloWithIA()">✦ IA GUIA ✦ Plano de Ciclo ↗</button>
   </div>
   <div id="ic-ia-result" style="margin-top:16px;display:none;"></div>
+  </div>
   `;
 
   // Lembrete de currículo (evita template literal aninhado)
@@ -4872,6 +4929,21 @@ async function renderInicioCiclo(){
       '</div>';
   }
 }
+
+const IC_TOTAL_STEPS = 4;
+let icStep = 0;
+function icShowStep(n){
+  icStep = Math.max(0, Math.min(IC_TOTAL_STEPS-1, n));
+  document.querySelectorAll('.ic-step').forEach(el=>{
+    el.classList.toggle('active', Number(el.dataset.step)===icStep);
+  });
+  const fill = document.getElementById('ic-progress-fill');
+  if(fill) fill.style.width = ((icStep+1)/IC_TOTAL_STEPS*100)+'%';
+  const stage = document.querySelector('.page-header');
+  if(stage) stage.scrollIntoView({behavior:'smooth', block:'start'});
+}
+function icNext(){ icShowStep(icStep+1); }
+function icPrev(){ icShowStep(icStep-1); }
 
 function saveInicioCiclo(){
   const aceite = document.getElementById('ic-aceite')?.checked;

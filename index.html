@@ -5487,6 +5487,45 @@ const _origAddUser = addUser;
 // ══════════════════════════════════════════════
 // TRAINING MODULE — Mentor Training System
 // ══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+// QA — contas de teste sempre certificadas com nota máxima
+// Existe para permitir testar a plataforma inteira sem precisar refazer
+// o treinamento de mentor a cada sessão de QA. Só vale para os e-mails
+// explicitamente listados aqui — nunca é um comportamento padrão.
+// Continua gravando dados REAIS (local + Supabase), não é uma ilusão só
+// de tela: se você olhar o painel admin ou a tabela training_progress,
+// a nota 10 está lá de verdade.
+// ══════════════════════════════════════════════════════════════════════
+const QA_ALWAYS_CERTIFIED = new Set([
+  'luizarcala@gmail.com',
+]);
+
+function isQACertifiedAccount(email){
+  return QA_ALWAYS_CERTIFIED.has((email||'').toLowerCase());
+}
+
+// Garante nota 10 em todas as aulas para a conta de QA — local e Supabase.
+// Idempotente: seguro chamar toda vez que a conta faz login.
+async function ensureQACertification(user){
+  if(!user || !isQACertifiedAccount(user.email)) return;
+  const allIds = LESSONS.map(l=>l.id);
+  const p = {
+    completed: [...allIds],
+    scores: Object.fromEntries(allIds.map(id=>[id, 10])),
+    updated: [],
+    completedVersions: Object.fromEntries(LESSONS.map(l=>[l.id, l.version]))
+  };
+  DB.set('training_progress_'+user.id, p);
+  for(const id of allIds){
+    await persistUpsert('training_progress',
+      'user_email=eq.'+eqp(user.email)+'&lesson_id=eq.'+eqp(id),
+      { id: 'qa_'+user.id+'_'+id, user_email: user.email, lesson_id: id,
+        completed: true, score: 10, answers: {qa_seeded:true},
+        updated_at: new Date().toISOString() },
+      {silent:true});
+  }
+}
+
 function getTrainingProgress(){
   const userId = currentUser?.id || 'guest';
   return DB.get('training_progress_'+userId) || {completed:[], scores:{}, updated:[]};
@@ -5499,12 +5538,14 @@ function saveTrainingProgress(p){
 
 function isTrainingComplete(){
   if(!currentUser || currentUser.role !== 'mentor') return true;
+  if(isQACertifiedAccount(currentUser.email)) return true;
   const p = getTrainingProgress();
   // Must complete all lessons AND have no pending updates
   return p.completed.length >= LESSONS.length && p.updated.length === 0;
 }
 
 function isLessonUnlocked(lessonId){
+  if(isQACertifiedAccount(currentUser?.email)) return true;
   const p = getTrainingProgress();
   if(lessonId === 1) return true;
   // Must have completed previous lesson
@@ -5512,6 +5553,7 @@ function isLessonUnlocked(lessonId){
 }
 
 function isLessonCompleted(lessonId){
+  if(isQACertifiedAccount(currentUser?.email)) return true;
   const p = getTrainingProgress();
   return p.completed.includes(lessonId) && !p.updated.includes(lessonId);
 }
@@ -10585,6 +10627,7 @@ function bootApp(user){
   }
   updateTopbar();
   updateSyncBadge();
+  ensureQACertification(currentUser);
   // Reenvia o que ficou pendente de sessões anteriores (offline, falha de rede)
   syncQueueFlush().then(r=>{ if(r.sent) console.log('sync: '+r.sent+' operações reenviadas'); });
   switchRole(role);

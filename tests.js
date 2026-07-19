@@ -155,6 +155,15 @@ let s08Pass = true;
   }
 })();
 
+// ── S09: allowlist de QA é explícita e pequena, não um padrão genérico ──
+let s09Pass = true;
+(function(){
+  if(!/const QA_ALWAYS_CERTIFIED = new Set\(\[/.test(platformJs)){
+    s09Pass = false;
+    structFailures.push('S09 a allowlist de certificação de QA precisa ser um Set literal explícito, não uma condição genérica que poderia vazar para qualquer conta');
+  }
+})();
+
 // ── I01-I25 / J01-J25(+J05b): testes de lógica em ambiente Node isolado ──
 const self = fs.readFileSync(__filename, 'utf8');
 const stubs = self.split('//STUBS_'+'START')[1].split('//STUBS_'+'END')[0];
@@ -176,13 +185,14 @@ console.log(s05Pass ? "✅ S05 todo instrumento replica no Supabase" : "❌ S05 
 console.log(s06Pass ? "✅ S06 nenhum campo de users fora da whitelist é gravado" : "❌ S06 há campo de users que nunca chega ao servidor");
 console.log(s07Pass ? "✅ S07 painel twin do mentor está ligado ao dashboard" : "❌ S07 painel twin não é chamado — ficaria órfão");
 console.log(s08Pass ? "✅ S08 twin do mentor nunca escreve no instrumento do mentorado" : "❌ S08 twin do mentor grava onde não deveria");
+console.log(s09Pass ? "✅ S09 allowlist de QA é explícita" : "❌ S09 allowlist de QA é genérica demais");
 structFailures.forEach(f => console.log('   ↳ '+f));
 
 console.log('\n── Testes de lógica (ambiente Node com stubs) ──');
 process.stdout.write(r.stdout||''); process.stderr.write(r.stderr||'');
 
-const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0) + (s03Pass?1:0) + (s04Pass?1:0) + (s05Pass?1:0) + (s06Pass?1:0) + (s07Pass?1:0) + (s08Pass?1:0);
-const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1) + (s03Pass?0:1) + (s04Pass?0:1) + (s05Pass?0:1) + (s06Pass?0:1) + (s07Pass?0:1) + (s08Pass?0:1);
+const structPassCount = (s00Pass?1:0) + (s01Pass?1:0) + (s02Pass?1:0) + (s03Pass?1:0) + (s04Pass?1:0) + (s05Pass?1:0) + (s06Pass?1:0) + (s07Pass?1:0) + (s08Pass?1:0) + (s09Pass?1:0);
+const structFailCount = (s00Pass?0:1) + (s01Pass?0:1) + (s02Pass?0:1) + (s03Pass?0:1) + (s04Pass?0:1) + (s05Pass?0:1) + (s06Pass?0:1) + (s07Pass?0:1) + (s08Pass?0:1) + (s09Pass?0:1);
 const finalPass = logicPass + structPassCount;
 const finalFail = logicFail + structFailCount;
 console.log('\n════ RESULTADO FINAL: PASS='+finalPass+' FAIL='+finalFail+' ════');
@@ -919,6 +929,55 @@ await TA('T07 saveTwinCardComment grava com target_id do card específico (não 
   if(capturedBody.kind !== 'comentario_card') throw new Error('kind deveria ser comentario_card');
 });
 
+
+// ── Q: certificação de QA para conta de teste ──
+
+T('Q01 isQACertifiedAccount reconhece só o e-mail listado', ()=>{
+  if(!isQACertifiedAccount('luizarcala@gmail.com')) throw new Error('deveria reconhecer a conta de QA');
+  if(isQACertifiedAccount('outro@t.com')) throw new Error('não deveria certificar e-mail fora da lista — vazaria para qualquer mentor');
+});
+
+T('Q02 isTrainingComplete é sempre true para a conta de QA, mesmo sem nenhuma aula feita', ()=>{
+  reset(); seed();
+  currentUser = {id:'qa1', email:'luizarcala@gmail.com', role:'mentor'};
+  DB.set('training_progress_qa1', {completed:[], scores:{}, updated:[]});
+  if(!isTrainingComplete()) throw new Error('conta de QA deveria estar sempre certificada');
+});
+
+T('Q03 isTrainingComplete continua exigindo aulas de um mentor comum (regressão — não pode vazar)', ()=>{
+  reset(); seed();
+  currentUser = {id:'mentor2', email:'mentor.normal@t.com', role:'mentor'};
+  DB.set('training_progress_mentor2', {completed:[], scores:{}, updated:[]});
+  if(isTrainingComplete()) throw new Error('CRÍTICO: a certificação de QA vazou para um mentor comum');
+});
+
+T('Q04 isLessonUnlocked libera todas as aulas para a conta de QA independente de progresso', ()=>{
+  currentUser = {id:'qa1', email:'luizarcala@gmail.com', role:'mentor'};
+  DB.set('training_progress_qa1', {completed:[], scores:{}, updated:[]});
+  if(!isLessonUnlocked(6)) throw new Error('aula 6 deveria estar liberada para QA mesmo sem completar as anteriores');
+});
+
+await TA('Q05 ensureQACertification grava nota 10 em todas as aulas, local e no Supabase', async()=>{
+  reset(); seed();
+  const user = {id:'qa1', email:'luizarcala@gmail.com', role:'mentor'};
+  _fetchLog = [];
+  await ensureQACertification(user);
+  const p = DB.get('training_progress_qa1');
+  if(p.completed.length !== LESSONS.length) throw new Error('não marcou todas as aulas como completas localmente');
+  if(Object.values(p.scores).some(s=>s!==10)) throw new Error('nem toda aula ficou com nota 10 localmente');
+  const posts = _fetchLog.filter(f=>f.method==='POST' && String(f.url).includes('training_progress'));
+  if(posts.length !== LESSONS.length) throw new Error('esperava '+LESSONS.length+' gravações no Supabase, veio '+posts.length+' — nota 10 não seria visível no painel admin');
+});
+
+await TA('Q06 ensureQACertification não faz nada para conta fora da allowlist (regressão)', async()=>{
+  reset(); seed();
+  const user = {id:'mentor3', email:'mentor.normal@t.com', role:'mentor'};
+  _fetchLog = [];
+  await ensureQACertification(user);
+  if(DB.get('training_progress_mentor3')) throw new Error('não deveria ter criado progresso fake para conta comum');
+  const posts = _fetchLog.filter(f=>f.method==='POST' && String(f.url).includes('training_progress'));
+  if(posts.length) throw new Error('não deveria ter gravado nada no Supabase para conta fora da allowlist');
+});
 
 // ── RESULTADO ──
 console.log('PASS='+pass+' FAIL='+fail);
